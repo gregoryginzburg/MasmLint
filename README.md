@@ -1,26 +1,26 @@
-[![ci](https://github.com/gregoryginzburg/RealSky/actions/workflows/ci-windows.yml/badge.svg)](https://github.com/gregoryginzburg/RealSky/actions/workflows/ci-windows.yml)
-[![ci](https://github.com/gregoryginzburg/RealSky/actions/workflows/ci-linux.yml/badge.svg)](https://github.com/gregoryginzburg/RealSky/actions/workflows/ci-linux.yml)
+[![ci](https://github.com/gregoryginzburg/MasmLint/actions/workflows/ci-windows.yml/badge.svg)](https://github.com/gregoryginzburg/MasmLint/actions/workflows/ci-windows.yml)
+[![ci](https://github.com/gregoryginzburg/MasmLint/actions/workflows/ci-linux.yml/badge.svg)](https://github.com/gregoryginzburg/MasmLint/actions/workflows/ci-linux.yml)
 
-# Realistic Sky Generator for Blender
 
-A Blender addon written in C++ for generating realistic skies.
+# MasmLint - Linter for MASM Assembly Code
+
+A lightweight linter for detecting common issues in MASM (Microsoft Macro Assembler) code.
 
 ## Features
 
-- Generates realistic skies with dynamic lighting
-- Customizable sky parameters such as cloud density, sun position, etc.
+- Identifies common mistakes in MASM assembly code
 
 ## Installation
 
-1. Clone the repository
+1. Clone the repository:
     ```bash
-    git clone https://github.com/gregoryginzburg/RealSky
+    git clone https://github.com/yourusername/MasmLint
     ```
-2. Navigate to the project directory and create a build folder
+2. Navigate to the project directory:
     ```bash
-    cd RealSky
+    cd MasmLint
     ```
-3. Generate the build system using CMake
+3. Generate the build system using CMake:
     ```bash
     cmake -S . -B build -G "Ninja Multi-Config"  # For Ninja
     # OR
@@ -28,7 +28,7 @@ A Blender addon written in C++ for generating realistic skies.
     # OR
     cmake -S . -B build -G "Unix Makefiles"  # For Makefile
     ```
-4. Build the project
+4. Build the project:
     ```bash
     cmake --build build
     ```
@@ -37,16 +37,12 @@ A Blender addon written in C++ for generating realistic skies.
 
 - GCC or Clang or MSVC
 - CMake
-- Ninja, Visual Studio, or Makefile (depending on your build system)
+- Ninja, Visual Studio, or Makefile (depending on your preferred build system)
 
 ## Dependencies
-- imgui
-- glew
-- glfw
-- glm
-- doctest
-- spdlog
 
+- doctest (for unit testing)
+- spdlog (for logging)
 
 ## Tooling
 
@@ -58,16 +54,7 @@ A Blender addon written in C++ for generating realistic skies.
 
 ### Build System
 
-- CMake (Generates for Ninja, Visual Studio, Makefile)
-
-### Version Control
-
-- Git
-
-### Debuggers
-
-- GDB (GNU Debugger)
-- Microsoft Visual Studio Debugger
+- CMake (Supports Ninja, Visual Studio, Makefile)
 
 ### Static Analysis
 
@@ -80,7 +67,6 @@ A Blender addon written in C++ for generating realistic skies.
 - ThreadSanitizer
 - UndefinedBehaviorSanitizer
 - MemorySanitizer
-- Cuda Sanitizer
 
 ### Code Formatting
 
@@ -101,41 +87,8 @@ A Blender addon written in C++ for generating realistic skies.
 
 ---
 
-_later_ **Fuzz Testing:** ?
+### License
 
-_later_ **Mutation Testing:** ?
+This project is licensed under the MIT License.
 
-_later_ **Documentation:**
-
-- Doxygen (hdoc?)
-
-_later_ **Licensing:**
-
-- spdf
-
-_later_ **Profiling Tools**:
-
-- gprof
-- perf
-- Intel VTune Amplifier
-- Valgrind's Callgrind and Cachegrind
-- VerySleepy
-- Nsight Compute
-- more?
-
-_later_ **Benchmarking:**
-
-- google benchmark?
-
-_later_ **Extra Tools:**
-
-- [https://learn.microsoft.com/en-us/sysinternals/downloads/vmmap](https://learn.microsoft.com/en-us/sysinternals/downloads/vmmap "smartCard-inline")
-- [https://learn.microsoft.com/en-us/sysinternals/downloads/process-explorer](https://learn.microsoft.com/en-us/sysinternals/downloads/process-explorer "smartCard-inline")
-- more?
-
-_later_ **Ship with hardening enabled:**
-
-- Control Flow Guard - [https://learn.microsoft.com/en-us/cpp/build/reference/guard-enable-control-flow-guard?view=msvc-170](https://learn.microsoft.com/en-us/cpp/build/reference/guard-enable-control-flow-guard?view=msvc-170 "smartCard-inline")
-- \_FORITFY\_SOURCE - [https://developers.redhat.com/articles/2022/09/17/gccs-new-fortification-level](https://developers.redhat.com/articles/2022/09/17/gccs-new-fortification-level "smartCard-inline")
-- Stack Protector - [https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html](https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html "smartCard-inline")
-- UBSan "Minimal runtime" mode - [https://clang.llvm.org/docs/UndefinedBehaviorSanitizer.html#minimal-runtime](https://clang.llvm.org/docs/UndefinedBehaviorSanitizer.html#minimal-runtime "smartCard-inline")
+---
