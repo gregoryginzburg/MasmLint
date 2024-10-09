@@ -1,0 +1,77 @@
+name: Windows CI
+
+# on:
+#   push:
+#     branches:
+#       - main
+
+on:
+  workflow_dispatch:
+
+env:
+  PROJECT_NAME: "MasmLint"
+  VERBOSE: 1
+  nproc: 4
+
+jobs:
+  Test:
+    runs-on: [self-hosted, windows]
+    strategy:
+      fail-fast: false
+
+      matrix:
+        compiler:
+          - msvc
+          - clang
+        generator:
+          - Visual Studio 17 2022
+          - Ninja Multi-Config
+        build_type:
+          - Debug
+          - Release
+
+        exclude:
+          - compiler: msvc
+            generator: Ninja Multi-Config
+
+          - compiler: clang
+            generator: Visual Studio 17 2022
+
+    steps:
+      - name: Print config
+        run: |
+          echo "os = Windows"
+          echo "compiler = ${{matrix.compiler}}"
+          echo "generator = ${{matrix.generator}}"
+          echo "build_type = ${{matrix.build_type}}"
+
+      # - name: Setup environment
+      #   run: |
+      #     choco install ninja
+      #     choco install llvm
+      #     choco install opencppcoverage
+
+      - uses: actions/checkout@v4
+        with:
+          set-safe-directory: "MasmLint"
+
+      - name: Configure CMake
+        run: |
+          cmake -S . -B ./build -G "${{matrix.generator}}" --preset ci-windows-${{matrix.compiler}}-${{matrix.build_type}}
+
+      - name: Build
+        # Execute the build.  You can specify a specific target with "--target <NAME>"
+        run: |
+          cmake --build ./build --config ${{matrix.build_type}}
+
+      - name: Windows - Test and Coverage
+        # On windows in Release mode - "Warning:  It seems there is an assertion failure or you call DebugBreak() in your program."
+        if: matrix.build_type == 'Debug'
+        run: |
+          OpenCppCoverage.exe --export_type cobertura:./build/coverage.xml --cover_children --excluded_sources "ext\*" --excluded_sources "tests\*" -- ctest -C ${{matrix.build_type}} --test-dir ./build
+
+      - name: Publish to codecov
+        if: matrix.build_type == 'Debug'
+        uses: codecov/codecov-action@v3
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

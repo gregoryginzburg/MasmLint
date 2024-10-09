@@ -1,0 +1,47 @@
+name: Fast Linux CI
+
+# on:
+#   push:
+#     branches:
+#       - main
+
+on:
+  workflow_dispatch:
+
+env:
+  PROJECT_NAME: "MasmLint"
+  VERBOSE: 1
+  nproc: 4
+
+jobs:
+  Test:
+    runs-on: [self-hosted, Linux]
+    strategy:
+      fail-fast: false
+
+      matrix:
+        include:
+          - compiler: gcc
+            generator: "Unix Makefiles"
+            build_type: Debug
+            gcov_executable: gcov
+
+    steps:
+      - name: Print config
+        run: |
+          echo "os = Linux"
+          echo "compiler = ${{matrix.compiler}}"
+          echo "generator = ${{matrix.generator}}"
+          echo "build_type = ${{matrix.build_type}}"
+          echo "gcov_executable = ${{matrix.gcov_executable}}"
+
+      - uses: actions/checkout@v4
+
+      - name: Configure CMake
+        run: |
+          cmake -S . -B ./build -G "${{matrix.generator}}" --preset ci-linux-${{matrix.compiler}}-${{matrix.build_type}}
+
+      - name: Build
+        # Execute the build.  You can specify a specific target with "--target <NAME>"
+        run: |
+          cmake --build ./build --config ${{matrix.build_type}}

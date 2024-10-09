@@ -1,0 +1,18 @@
+- path: src/add.h
+  clang-tidy: all
+  cppcheck: all
+  compiler-warnings: all
+
+- path: src/testing/*.cpp
+  clang-tidy:
+    - google-explicit-constructor
+    - "*-avoid-c-arrays"
+  cppcheck:
+    - memleak
+    - exceptNew
+  compiler-warnings:
+    - specific_warning_1
+
+# - path: yet/another/path
+#   clang-tidy:
+#     - specific_rule_3

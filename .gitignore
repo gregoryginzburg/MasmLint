@@ -1,0 +1,6 @@
+build/
+build_clang/
+.vscode/
+.vs/
+bin/
+output.txt

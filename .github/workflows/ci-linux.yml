@@ -1,0 +1,87 @@
+name: Linux CI
+
+# on:
+#   push:
+#     branches:
+#       - main
+
+on:
+  workflow_dispatch:
+
+env:
+  PROJECT_NAME: "MasmLint"
+  VERBOSE: 1
+  nproc: 4
+
+jobs:
+  Test:
+    runs-on: [self-hosted, Linux]
+    strategy:
+      fail-fast: false
+
+      matrix:
+        compiler:
+          - gcc
+          - clang
+        generator:
+          - Ninja Multi-Config
+        build_type:
+          - Debug
+          - Release
+
+        include:
+          # Settings for every matrix configuration with gcc
+          - compiler: gcc
+            gcov_executable: gcov
+          # Settings for every matrix configuration with clang
+          - compiler: clang
+            gcov_executable: llvm-cov gcov
+
+          # This exists solely to make sure a non-multiconfig build works
+          - compiler: gcc
+            generator: Unix Makefiles
+            build_type: Debug
+            gcov_executable: gcov
+
+    steps:
+      - name: Print config
+        run: |
+          echo "os = Linux"
+          echo "compiler = ${{matrix.compiler}}"
+          echo "generator = ${{matrix.generator}}"
+          echo "build_type = ${{matrix.build_type}}"
+          echo "gcov_executable = ${{matrix.gcov_executable}}"
+
+      # - name: Setup environment
+      #   run: |
+      #     sudo apt-get update -y
+      #     sudo apt install -y xorg-dev
+      #     sudo apt-get install -y cppcheck
+      #     sudo apt-get install -y ninja-build
+      #     sudo apt-get install -y clang
+      #     sudo apt-get install -y clang-tidy
+      #     pip install gcovr
+
+      - uses: actions/checkout@v4
+
+      - name: Configure CMake
+        run: |
+          cmake -S . -B ./build -G "${{matrix.generator}}" --preset ci-linux-${{matrix.compiler}}-${{matrix.build_type}}
+
+      - name: Build
+        # Execute the build.  You can specify a specific target with "--target <NAME>"
+        run: |
+          cmake --build ./build --config ${{matrix.build_type}}
+
+      - name: Linux - Test and Coverage
+        if: matrix.build_type == 'Debug'
+        working-directory: ./build
+        run: |
+          ctest -C ${{matrix.build_type}}
+          gcovr -j ${{env.nproc}} --delete --exclude '../ext/*' --exclude '../tests/*' --root ../ --print-summary --xml-pretty --xml coverage.xml . --gcov-executable '${{ matrix.gcov_executable }}'
+
+      - name: Publish to codecov
+        if: matrix.build_type == 'Debug'
+        uses: codecov/codecov-action@v3
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

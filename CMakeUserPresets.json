@@ -1,0 +1,139 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 19,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "binaryDir": "build",
+      "cacheVariables": {
+        "ML_ENABLE_COVERAGE": false,
+        "ML_ENABLE_COMPILER_WARNINGS": true,
+        "ML_ENABLE_CLANG_TIDY": true,
+        "ML_ENABLE_CPPCHECK": true,
+        "ML_ENABLE_SANITIZER_ADDRESS": true
+      }
+    },
+    {
+      "name": "linux-gcc",
+      "inherits": [
+        "base",
+        "linux",
+        "gcc"
+      ],
+      "description": "Linux builds with GCC",
+      "generator": "Ninja Multi-Config"
+    },
+    {
+      "name": "linux-clang",
+      "inherits": [
+        "base",
+        "linux",
+        "clang"
+      ],
+      "description": "Linux builds with Clang",
+      "generator": "Ninja Multi-Config"
+    },
+    {
+      "name": "windows-msvc",
+      "inherits": [
+        "base",
+        "windows",
+        "msvc"
+      ],
+      "description": "Windows builds with MSVC",
+      "generator": "Visual Studio 17 2022"
+    },
+    {
+      "name": "windows-clang",
+      "inherits": [
+        "base",
+        "windows",
+        "clang"
+      ],
+      "description": "Windows builds with Clang",
+      "generator": "Ninja Multi-Config",
+      "cacheVariables": {
+        "ML_ENABLE_SANITIZER_ADDRESS": false
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows-clang-debug",
+      "displayName": "Debug",
+      "configurePreset": "windows-clang",
+      "configuration": "Debug"
+    },
+    {
+      "name": "windows-clang-release",
+      "displayName": "Release",
+      "configurePreset": "windows-clang",
+      "configuration": "Release"
+    },
+    {
+      "name": "windows-clang-relwithdebinfo",
+      "displayName": "RelWithDebInfo",
+      "configurePreset": "windows-clang",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "windows-msvc-debug",
+      "displayName": "Debug",
+      "configurePreset": "windows-msvc",
+      "configuration": "Debug"
+    },
+    {
+      "name": "windows-msvc-release",
+      "displayName": "Release",
+      "configurePreset": "windows-msvc",
+      "configuration": "Release"
+    },
+    {
+      "name": "windows-msvc-relwithdebinfo",
+      "displayName": "RelWithDebInfo",
+      "configurePreset": "windows-msvc",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "linux-gcc-debug",
+      "displayName": "Debug",
+      "configurePreset": "linux-gcc",
+      "configuration": "Debug"
+    },
+    {
+      "name": "linux-gcc-release",
+      "displayName": "Release",
+      "configurePreset": "linux-gcc",
+      "configuration": "Release"
+    },
+    {
+      "name": "linux-gcc-relwithdebinfo",
+      "displayName": "RelWithDebInfo",
+      "configurePreset": "linux-gcc",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "linux-clang-debug",
+      "displayName": "Debug",
+      "configurePreset": "linux-clang",
+      "configuration": "Debug"
+    },
+    {
+      "name": "linux-clang-release",
+      "displayName": "Release",
+      "configurePreset": "linux-clang",
+      "configuration": "Release"
+    },
+    {
+      "name": "linux-clang-relwithdebinfo",
+      "displayName": "RelWithDebInfo",
+      "configurePreset": "linux-clang",
+      "configuration": "RelWithDebInfo"
+    }
+  ]
+}

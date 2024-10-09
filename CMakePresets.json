@@ -1,0 +1,192 @@
+{
+    "version": 3,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 19,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "ci-base",
+            "hidden": true,
+            "binaryDir": "build",
+            "cacheVariables": {
+                "BUILD_TESTING": true
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "$env{CI}",
+                "rhs": "true"
+            }
+        },
+        {
+            "name": "linux",
+            "hidden": true,
+            "cacheVariables": {
+                "ML_ENABLE_SANITIZER_ADDRESS": true,
+                "ML_ENABLE_SANITIZER_UNDEFINED": true
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
+        },
+        {
+            "name": "windows",
+            "hidden": true,
+            "cacheVariables": {
+                "ML_ENABLE_SANITIZER_ADDRESS": true
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
+        },
+        {
+            "name": "Debug",
+            "hidden": true,
+            "description": "Debug build",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "ML_ENABLE_IPO": false,
+                "ML_ENABLE_COVERAGE": true
+            }
+        },
+        {
+            "name": "Release",
+            "hidden": true,
+            "description": "Release build",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "ML_ENABLE_IPO": true,
+                "ML_ENABLE_COVERAGE": false
+            }
+        },
+        {
+            "name": "RelWithDebInfo",
+            "hidden": true,
+            "description": "Release build",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "ML_ENABLE_IPO": true,
+                "ML_ENABLE_COVERAGE": true
+            }
+        },
+        {
+            "name": "gcc",
+            "hidden": true,
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "gcc",
+                "CMAKE_CXX_COMPILER": "g++"
+            }
+        },
+        {
+            "name": "clang",
+            "hidden": true,
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++"
+            }
+        },
+        {
+            "name": "msvc",
+            "hidden": true,
+            "architecture": {
+                "value": "x64",
+                "strategy": "set"
+            },
+            "toolset": {
+                "value": "host=x64",
+                "strategy": "set"
+            }
+        },
+        {
+            "name": "ci-linux-gcc-Debug",
+            "inherits": [
+                "ci-base",
+                "linux",
+                "gcc",
+                "Debug"
+            ],
+            "description": "Linux Debug builds with GCC"
+        },
+        {
+            "name": "ci-linux-gcc-Release",
+            "inherits": [
+                "ci-base",
+                "linux",
+                "gcc",
+                "Release"
+            ],
+            "description": "Linux Release builds with GCC"
+        },
+        {
+            "name": "ci-linux-clang-Debug",
+            "inherits": [
+                "ci-base",
+                "linux",
+                "clang",
+                "Debug"
+            ],
+            "description": "Linux Debug builds with GCC"
+        },
+        {
+            "name": "ci-linux-clang-Release",
+            "inherits": [
+                "ci-base",
+                "linux",
+                "clang",
+                "Release"
+            ],
+            "description": "Linux Release builds with GCC"
+        },
+        {
+            "name": "ci-windows-msvc-Debug",
+            "inherits": [
+                "ci-base",
+                "windows",
+                "msvc",
+                "Debug"
+            ],
+            "description": "Windows Debug builds with MSVC"
+        },
+        {
+            "name": "ci-windows-msvc-Release",
+            "inherits": [
+                "ci-base",
+                "windows",
+                "msvc",
+                "Release"
+            ],
+            "description": "Windows Release builds with MSVC"
+        },
+        {
+            "name": "ci-windows-clang-Debug",
+            "inherits": [
+                "ci-base",
+                "windows",
+                "clang",
+                "Debug"
+            ],
+            "description": "Windows Debug builds with Clang",
+            "cacheVariables": {
+                "ML_ENABLE_SANITIZER_ADDRESS": false
+            }
+        },
+        {
+            "name": "ci-windows-clang-Release",
+            "inherits": [
+                "ci-base",
+                "windows",
+                "clang",
+                "Release"
+            ],
+            "description": "Windows Release builds with Clang",
+            "cacheVariables": {
+                "ML_ENABLE_SANITIZER_ADDRESS": false
+            }
+        }
+    ]
+}
