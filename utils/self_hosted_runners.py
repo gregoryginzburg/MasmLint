@@ -54,12 +54,12 @@ def start_windows_server():
     # run_powershell_command_as_admin("Set-ExecutionPolicy RemoteSigned")
 
     # Start the actions.runner.* services
-    run_powershell_command_as_admin('Start-Service "actions.runner.*"')
+    run_powershell_command_as_admin('Start-Service "actions.runner.gregoryginzburg-MasmLint.GREGORY"')
 
 
 def stop_windows_server():
     # Stop the actions.runner.* services
-    run_powershell_command_as_admin('Stop-Service "actions.runner.*"')
+    run_powershell_command_as_admin('Stop-Service "actions.runner.gregoryginzburg-MasmLint.GREGORY"')
 
     # Set execution policy back to Restricted
     # run_powershell_command_as_admin("Set-ExecutionPolicy Restricted")

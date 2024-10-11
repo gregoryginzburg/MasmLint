@@ -1,12 +1,27 @@
 set(SOURCES_LIST
     add.cpp
     log.cpp
-    log.h
+    context.cpp
+    error_reporter.cpp
+    input.cpp
+    parser.cpp
+    preprocessor.cpp
+    symbol_table.cpp
+    tokenize.cpp
+    
 )
 
 set(HEADERS_LIST
+    add.h
     log.h
     timer.h
+    context.h
+    error_reporter.h
+    input.h
+    parser.h
+    preprocessor.h
+    symbol_table.h
+    tokenize.h
 )
 
 add_library(masmlint_lib ${SOURCES_LIST} ${HEADERS_LIST})
