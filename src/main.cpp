@@ -10,7 +10,7 @@ int main(int argc, char *argv[])
 {
     Log::init();
 
-    std::string filename = "test.asm";
+    std::string filename = "examples/test.asm";
 
     ErrorReporter::init();
     SymbolTable::init();

@@ -29,17 +29,18 @@ std::unique_ptr<InputSource> &Context::topInputStack() { return inputStack.top()
 void Context::popInputStack()
 {
     inputStack.pop();
-    InputSource *InputSourcePtr = topInputStack().get();
-    FileInputSource *fileInputSourcePtr = dynamic_cast<FileInputSource *>(InputSourcePtr);
-    if (fileInputSourcePtr) {
-        currentFileName = fileInputSourcePtr->getSourceName();
+    if (!inputStack.empty()) {
+        InputSource *InputSourcePtr = topInputStack().get();
+        FileInputSource *fileInputSourcePtr = dynamic_cast<FileInputSource *>(InputSourcePtr);
+        if (fileInputSourcePtr) {
+            currentFileName = fileInputSourcePtr->getSourceName();
+        }
+    } else {
+        currentFileName = "";
     }
 }
 
-bool Context::emptyInputStack()
-{
-    return inputStack.empty();
-}
+bool Context::emptyInputStack() { return inputStack.empty(); }
 
 int Context::getLineNumber() { return currentLineNumber; }
 

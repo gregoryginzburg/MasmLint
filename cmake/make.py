@@ -80,9 +80,9 @@ def compile_project(args, configure_first=False):
 def run_program(args):
     build_type = args.build_type.lower()
     if build_type == "debug":
-        base_name = "masm_dbg"
+        base_name = "masmlint_dbg"
     else:
-        base_name = "masm"
+        base_name = "masmlint"
 
     if platform.system() == "Linux":
         run_command = f"cd bin && ./{base_name}"
@@ -107,7 +107,7 @@ def execute_command(command, cwd=None):
 
 def execute_commands(commands, cwd=None):
     for command in commands:
-        execute_command(command)
+        execute_command(command, cwd)
 
 
 def main():
@@ -146,7 +146,7 @@ def main():
     elif command == "run":
         commands = run_program(args)
         print(commands)
-        execute_commands(commands)
+        execute_commands(commands, cwd=os.getcwd())
     elif command == "compile_run":
         compile_commands = compile_project(args, configure_first=True)
         run_commands = run_program(args)

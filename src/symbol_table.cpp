@@ -1,6 +1,6 @@
 #include "symbol_table.h"
 
-static std::unordered_map<std::string, Symbol> symbols;
+std::unordered_map<std::string, Symbol> SymbolTable::symbols;
 
 void SymbolTable::init() {}
 

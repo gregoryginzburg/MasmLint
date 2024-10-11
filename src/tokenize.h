@@ -14,14 +14,12 @@ enum class TokenType {
     StringLiteral,
     Operator,
     Separator,
-    EndOfLine,
     EndOfFile,
     Comment,
-    // Add other necessary token types.
 };
 
 struct Token {
-    TokenType type;
+    enum TokenType type;
     std::string lexeme;
     int lineNumber;
     int columnNumber;
@@ -47,5 +45,5 @@ private:
     static void skipWhitespace();
     static Token lexToken();
 
-    static bool isReservedWord(const std::string &word, TokenType &type);
+    static bool isReservedWord(const std::string &word, enum TokenType &type);
 };

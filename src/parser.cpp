@@ -49,7 +49,8 @@ void Parser::advance()
     if (currentIndex < tokens.size()) {
         currentToken = tokens[currentIndex++];
     } else {
-        currentToken = {TokenType::EndOfFile, "", 0, 0, ""};
+        currentToken = {TokenType::EndOfFile, "", Context::getLineNumber(), static_cast<int>(currentIndex),
+                        Context::getFileName()};
     }
 }
 
@@ -60,9 +61,9 @@ void Parser::parseLine()
         if (currentIndex < tokens.size() && tokens[currentIndex].lexeme == ":") {
             // It's a label
             SymbolTable::addSymbol({currentToken.lexeme, Symbol::Type::Label});
-            advance();   // Move to the next token after ':'
-            advance();   // Move to the next token after the label
-            parseLine(); // Parse the rest of the line
+            advance();
+            advance();
+            parseLine();
         } else {
             // Treat as instruction or directive
             parseInstruction();
@@ -71,8 +72,6 @@ void Parser::parseLine()
         parseDirective();
     } else if (currentToken.type == TokenType::Instruction) {
         parseInstruction();
-    } else if (currentToken.type == TokenType::EndOfLine) {
-        // Empty line; do nothing
     } else if (currentToken.type == TokenType::Comment) {
         // Comment line; do nothing
     } else {
@@ -101,15 +100,13 @@ void Parser::parseInstruction()
 
 void Parser::parseOperandList()
 {
-    while (currentToken.type != TokenType::EndOfLine && currentToken.type != TokenType::EndOfFile) {
+    while (currentToken.type != TokenType::EndOfFile) {
         if (currentToken.type == TokenType::Identifier || currentToken.type == TokenType::Number ||
             currentToken.type == TokenType::Register || currentToken.type == TokenType::StringLiteral) {
             // Valid operand
             advance();
             if (currentToken.lexeme == ",") {
                 advance();
-            } else if (currentToken.type == TokenType::EndOfLine) {
-                break;
             } else {
                 reportError("Expected ',' or end of line, found: " + currentToken.lexeme);
                 break;
