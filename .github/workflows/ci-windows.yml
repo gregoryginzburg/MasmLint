@@ -70,10 +70,7 @@ jobs:
         run: |
           OpenCppCoverage.exe --export_type cobertura:./build/coverage.xml --cover_children --excluded_sources "ext\*" --excluded_sources "tests\*" -- ctest -C ${{matrix.build_type}} --test-dir ./build
 
-      - name: Publish to codecov
-        if: matrix.build_type == 'Debug'
-        uses: codecov/codecov-action@v4
-        with:
-          files: ./build/coverage.xml
+      - name: Upload coverage to Coveralls
+        run: coveralls --cobertura -i ./build/coverage.xml
         env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+          COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
