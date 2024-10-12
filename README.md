@@ -1,5 +1,6 @@
 [![ci](https://github.com/gregoryginzburg/MasmLint/actions/workflows/ci-windows.yml/badge.svg)](https://github.com/gregoryginzburg/MasmLint/actions/workflows/ci-windows.yml)
 [![ci](https://github.com/gregoryginzburg/MasmLint/actions/workflows/ci-linux.yml/badge.svg)](https://github.com/gregoryginzburg/MasmLint/actions/workflows/ci-linux.yml)
+[![Coverage Status](https://coveralls.io/repos/github/gregoryginzburg/MasmLint/badge.svg?branch=main)](https://coveralls.io/github/gregoryginzburg/MasmLint?branch=main)
 
 
 # MasmLint - Linter for MASM Assembly Code

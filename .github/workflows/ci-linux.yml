@@ -81,4 +81,5 @@ jobs:
           gcovr -j ${{env.nproc}} --delete --exclude '../ext/*' --exclude '../tests/*' --root ../ --print-summary --xml-pretty --xml coverage.xml . --gcov-executable '${{ matrix.gcov_executable }}'
 
       - name: Upload coverage to Coveralls
+        if: matrix.build_type == 'Debug'
         uses: coverallsapp/github-action@v2
