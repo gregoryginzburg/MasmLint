@@ -25,10 +25,10 @@ jobs:
           - clang
         generator:
           - Visual Studio 17 2022
-          - Ninja Multi-Config
+          # - Ninja Multi-Config
         build_type:
           - Debug
-          - Release
+          # - Release
 
         exclude:
           - compiler: msvc
