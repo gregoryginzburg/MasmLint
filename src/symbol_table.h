@@ -6,7 +6,7 @@
 
 struct Symbol {
     std::string name;
-    enum class Type { Label, Variable, Macro };
+    enum class Type { Label, Variable, Macro, Segment };
     Type type;
     int lineNumber;
     std::string fileName;

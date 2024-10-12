@@ -19,7 +19,6 @@ int main(int argc, char *argv[])
     Parser parser;
     parser.parse();
 
-    // Step 3: Check and display errors
     if (ErrorReporter::hasErrors()) {
         ErrorReporter::displayErrors();
     } else {
