@@ -80,8 +80,5 @@ jobs:
           ctest -C ${{matrix.build_type}}
           gcovr -j ${{env.nproc}} --delete --exclude '../ext/*' --exclude '../tests/*' --root ../ --print-summary --xml-pretty --xml coverage.xml . --gcov-executable '${{ matrix.gcov_executable }}'
 
-      - name: Publish to codecov
-        if: matrix.build_type == 'Debug'
-        uses: codecov/codecov-action@v3
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+      - name: Upload coverage to Coveralls
+        uses: coverallsapp/github-action@v2
