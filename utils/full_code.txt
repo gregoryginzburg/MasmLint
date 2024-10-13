@@ -1,0 +1,752 @@
+File add.cpp:
+
+int add(int aaa, int bbb) { return aaa + bbb; }
+
+int mul(int aaa, int bbb) { return aaa * bbb; }
+File add.h:
+
+#pragma once
+
+int add(int a, int b);
+int mul(int a, int b);
+File context.cpp:
+
+#include "context.h"
+
+std::string Context::currentFileName;
+int Context::currentLineNumber;
+std::stack<std::unique_ptr<InputSource>> Context::inputStack;
+
+void Context::init(const std::string &filename)
+{
+    bool success;
+    auto fileInput = std::make_unique<FileInputSource>(filename, success);
+    if (success) {
+        pushInputStack(std::move(fileInput));
+    } else {
+        ErrorReporter::reportError("Failed to open file '" + filename + "'", 0, 0, "", filename);
+    }
+}
+
+void Context::pushInputStack(std::unique_ptr<InputSource> inputSrc)
+{
+    inputStack.push(std::move(inputSrc));
+    FileInputSource *fileInputSourcePtr = dynamic_cast<FileInputSource *>(inputSrc.get());
+    if (fileInputSourcePtr) {
+        currentFileName = fileInputSourcePtr->getSourceName();
+    }
+}
+
+std::unique_ptr<InputSource> &Context::topInputStack() { return inputStack.top(); }
+
+void Context::popInputStack()
+{
+    inputStack.pop();
+    if (!inputStack.empty()) {
+        InputSource *InputSourcePtr = topInputStack().get();
+        FileInputSource *fileInputSourcePtr = dynamic_cast<FileInputSource *>(InputSourcePtr);
+        if (fileInputSourcePtr) {
+            currentFileName = fileInputSourcePtr->getSourceName();
+        }
+    } else {
+        currentFileName = "";
+    }
+}
+
+bool Context::emptyInputStack() { return inputStack.empty(); }
+
+int Context::getLineNumber() { return currentLineNumber; }
+
+std::string Context::getFileName() { return currentFileName; }
+
+File context.h:
+
+#pragma once
+
+#include "input.h"
+#include "error_reporter.h"
+#include <string>
+#include <vector>
+#include <stack>
+#include <unordered_map>
+#include <memory>
+
+class Context {
+public:
+    static void init(const std::string &filename);
+    static void pushInputStack(std::unique_ptr<InputSource> inputSrc);
+    static std::unique_ptr<InputSource> &topInputStack();
+    static bool emptyInputStack();
+    static void popInputStack();
+    static int getLineNumber();
+    static std::string getFileName();
+
+private:
+    static std::string currentFileName;
+    static int currentLineNumber;
+    static std::stack<std::unique_ptr<InputSource>> inputStack;
+};
+
+File error_reporter.cpp:
+
+#include "error_reporter.h"
+#include <iostream>
+
+std::vector<ErrorReporter::Error> ErrorReporter::errors;
+
+void ErrorReporter::init() {}
+
+void ErrorReporter::reportError(const std::string &message, int line, int column, const std::string &lineContent,
+                                const std::string &fileName)
+{
+    errors.push_back({Error::Level::Error, message, line, column, lineContent, fileName});
+}
+
+void ErrorReporter::reportWarning(const std::string &message, int line, int column, const std::string &lineContent,
+                                  const std::string &fileName)
+{
+    errors.push_back({Error::Level::Warning, message, line, column, lineContent, fileName});
+}
+
+bool ErrorReporter::hasErrors()
+{
+    for (const auto &error : errors) {
+        if (error.level == Error::Level::Error) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void ErrorReporter::displayErrors()
+{
+    for (const auto &error : errors) {
+        std::string levelStr = (error.level == Error::Level::Error) ? "Error" : "Warning";
+        std::cout << levelStr << " [File: " << error.fileName << ", Line " << error.line << ", Column " << error.column
+                  << "]: " << error.message << "\n";
+        if (!error.lineContent.empty()) {
+            std::cout << "    " << error.lineContent << "\n";
+            std::cout << "    ";
+            for (int i = 0; i < error.column; ++i) {
+                std::cout << " ";
+            }
+            std::cout << "^\n";
+        }
+    }
+}
+
+File error_reporter.h:
+
+#pragma once
+
+#include <string>
+#include <vector>
+#include "context.h"
+
+class ErrorReporter {
+public:
+    static void init(); 
+    static void reportError(const std::string &message, int line, int column, const std::string &lineContent,
+                     const std::string &fileName);
+    static void reportWarning(const std::string &message, int line, int column, const std::string &lineContent,
+                       const std::string &fileName);
+    static bool hasErrors();
+    static void displayErrors();
+
+private:
+    struct Error {
+        enum class Level { Error, Warning };
+        Level level;
+        std::string message;
+        int line;
+        int column;
+        std::string lineContent;
+        std::string fileName;
+    };
+
+    static std::vector<Error> errors;
+};
+
+File input.cpp:
+
+#include "input.h"
+
+// File input
+FileInputSource::FileInputSource(const std::string &filename, bool &success) : lineNumber(0), filename(filename)
+{
+    fileStream.open(filename);
+    success = fileStream.is_open();
+}
+
+bool FileInputSource::getNextLine(std::string &line)
+{
+    if (std::getline(fileStream, line)) {
+        ++lineNumber;
+        return true;
+    }
+    return false;
+}
+
+int FileInputSource::getCurrentLineNumber() const { return lineNumber; }
+
+std::string FileInputSource::getSourceName() const { return filename; }
+
+
+
+// Macro Input
+
+MacroInputSource::MacroInputSource(const std::string &macroName) : macroName(macroName), currentLineIndex(0) 
+{
+    // TODO: implement look up from table of macros (symbols)
+}
+
+bool MacroInputSource::getNextLine(std::string &line)
+{
+    // TODO: implement
+    return false;
+}
+
+int MacroInputSource::getCurrentLineNumber() const { return currentLineIndex; }
+
+std::string MacroInputSource::getSourceName() const { return "<macro:" + macroName + ">"; }
+
+File input.h:
+
+#pragma once
+
+#include <string>
+#include <vector>
+#include <fstream>
+#include <memory>
+
+class InputSource {
+public:
+    virtual ~InputSource() = default;
+    virtual bool getNextLine(std::string& line) = 0;
+    virtual int getCurrentLineNumber() const = 0;
+    virtual std::string getSourceName() const = 0;
+};
+
+class FileInputSource : public InputSource {
+public:
+    explicit FileInputSource(const std::string& filename, bool& success);
+    bool getNextLine(std::string& line) override;
+    int getCurrentLineNumber() const override;
+    std::string getSourceName() const override;
+
+private:
+    std::ifstream fileStream;
+    int lineNumber;
+    std::string filename;
+};
+
+class MacroInputSource : public InputSource {
+public:
+    MacroInputSource(const std::string& macroName);
+    bool getNextLine(std::string& line) override;
+    int getCurrentLineNumber() const override;
+    std::string getSourceName() const override;
+
+private:
+    int currentLineIndex;
+    std::string macroName;
+};
+
+
+
+File log.cpp:
+
+#include <spdlog/spdlog.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
+#include <memory>
+#include "log.h"
+
+std::shared_ptr<spdlog::logger> Log::s_core_logger;
+const char *Log::format_string = "%^%v%$";
+spdlog::level::level_enum Log::log_level = spdlog::level::trace;
+
+void Log::init()
+{
+    // https://github.com/gabime/spdlog/wiki/3.-Custom-formatting
+    spdlog::set_pattern(format_string);
+    s_core_logger = spdlog::stdout_color_mt("MasmLint");
+    s_core_logger->set_level(log_level);
+}
+
+void Log::add_sink(const spdlog::sink_ptr &new_sink)
+{
+    new_sink->set_pattern(format_string);
+    new_sink->set_level(log_level);
+    s_core_logger->sinks().push_back(new_sink);
+}
+File log.h:
+
+#pragma once
+
+#include <spdlog/spdlog.h>
+#include <memory>
+
+class Log {
+public:
+    static void init();
+    static void add_sink(const spdlog::sink_ptr &new_sink);
+
+    static std::shared_ptr<spdlog::logger> &get_core_logger() { return s_core_logger; }
+
+private:
+    static const char *format_string;
+    static spdlog::level::level_enum log_level;
+    static std::shared_ptr<spdlog::logger> s_core_logger;
+    // std::shared_ptr<spdlog::logger> s_client_logger;
+};
+
+// Regular logging macros
+#define LOG_TRACE(...) Log::get_core_logger()->trace(__VA_ARGS__)
+#define LOG_INFO(...) Log::get_core_logger()->info(__VA_ARGS__)
+#define LOG_WARN(...) Log::get_core_logger()->warn(__VA_ARGS__)
+#define LOG_ERROR(...) Log::get_core_logger()->error(__VA_ARGS__)
+
+// Detailed logging macros
+#if defined(__clang__)
+#    define PRETTY_FUNCTION __PRETTY_FUNCTION__
+#elif defined(__GNUC__) || defined(__GNUG__)
+#    define PRETTY_FUNCTION __PRETTY_FUNCTION__
+#elif defined(_MSC_VER)
+#    define PRETTY_FUNCTION __FUNCSIG__
+#else
+#    define PRETTY_FUNCTION __func__
+#endif
+
+#define LOG_FORMAT_DETAILED(message, file, line, function) "[{}:{} ({})] {}", file, line, function, message
+
+#define LOG_DETAILED_TRACE(...)                                                                                        \
+    Log::get_core_logger()->trace(LOG_FORMAT_DETAILED(fmt::format(__VA_ARGS__), __FILE__, __LINE__, PRETTY_FUNCTION))
+#define LOG_DETAILED_INFO(...)                                                                                         \
+    Log::get_core_logger()->info(LOG_FORMAT_DETAILED(fmt::format(__VA_ARGS__), __FILE__, __LINE__, PRETTY_FUNCTION))
+#define LOG_DETAILED_WARN(...)                                                                                         \
+    Log::get_core_logger()->warn(LOG_FORMAT_DETAILED(fmt::format(__VA_ARGS__), __FILE__, __LINE__, PRETTY_FUNCTION))
+#define LOG_DETAILED_ERROR(...)                                                                                        \
+    Log::get_core_logger()->error(LOG_FORMAT_DETAILED(fmt::format(__VA_ARGS__), __FILE__, __LINE__, PRETTY_FUNCTION))
+
+File main.cpp:
+
+#include "log.h"
+#include "input.h"
+#include "preprocessor.h"
+#include "symbol_table.h"
+#include "context.h"
+#include "parser.h"
+#include <iostream>
+
+int main(int argc, char *argv[])
+{
+    Log::init();
+
+    std::string filename = "examples/test.asm";
+
+    ErrorReporter::init();
+    SymbolTable::init();
+    Context::init(filename);
+
+    Parser parser;
+    parser.parse();
+
+    if (ErrorReporter::hasErrors()) {
+        ErrorReporter::displayErrors();
+    } else {
+        std::cout << "Parsing completed successfully with no errors.\n";
+    }
+
+    return 0;
+}
+
+File parser.cpp:
+
+#include "parser.h"
+#include "symbol_table.h"
+
+Token Parser::currentToken;
+std::vector<Token> Parser::tokens;
+size_t Parser::currentIndex = 0;
+
+bool Parser::getNextLine(std::string &line)
+{
+    while (!Context::emptyInputStack()) {
+        InputSource *currentSource = Context::topInputStack().get();
+        if (currentSource->getNextLine(line)) {
+            if (!line.empty()) {
+                return true;
+            }
+        } else {
+            // End of current input source
+            Context::popInputStack();
+        }
+    }
+    return false;
+}
+
+void Parser::init()
+{
+    tokens.clear();
+    currentIndex = 0;
+}
+
+void Parser::parse()
+{
+    std::string line;
+    while (getNextLine(line)) {
+        tokens = Tokenizer::tokenize(line);
+        currentIndex = 0;
+
+        while (currentIndex < tokens.size()) {
+            advance();
+            if (currentToken.type == TokenType::EndOfFile) {
+                return; // End parsing when EOF is reached
+            }
+            parseLine();
+        }
+    }
+}
+
+void Parser::advance()
+{
+    if (currentIndex < tokens.size()) {
+        currentToken = tokens[currentIndex++];
+    } else {
+        currentToken = {TokenType::EndOfFile, "", Context::getLineNumber(), static_cast<int>(currentIndex),
+                        Context::getFileName()};
+    }
+}
+
+void Parser::parseLine()
+{
+    if (currentToken.type == TokenType::Identifier) {
+        // Possible label or instruction
+        if (currentIndex < tokens.size() && tokens[currentIndex].lexeme == ":") {
+            // It's a label
+            SymbolTable::addSymbol({currentToken.lexeme, Symbol::Type::Label});
+            advance();
+            advance();
+            parseLine();
+        } else {
+            // Treat as instruction or directive
+            parseInstruction();
+        }
+    } else if (currentToken.type == TokenType::Directive) {
+        parseDirective();
+    } else if (currentToken.type == TokenType::Instruction) {
+        parseInstruction();
+    } else if (currentToken.type == TokenType::Comment) {
+        // Comment line; do nothing
+    } else {
+        // Syntax error
+        reportError("Unexpected token: " + currentToken.lexeme);
+    }
+}
+
+void Parser::parseDirective()
+{
+    if (currentToken.lexeme == "DB" || currentToken.lexeme == "DW" || currentToken.lexeme == "DD") {
+        advance();
+        parseOperandList();
+    } else {
+        reportError("Unknown directive: " + currentToken.lexeme);
+    }
+}
+
+void Parser::parseInstruction()
+{
+    std::string mnemonic = currentToken.lexeme;
+    advance();
+    parseOperandList();
+    // TODO: Validate instruction operands based on the instruction set
+}
+
+void Parser::parseOperandList()
+{
+    while (currentToken.type != TokenType::EndOfFile) {
+        if (currentToken.type == TokenType::Identifier || currentToken.type == TokenType::Number ||
+            currentToken.type == TokenType::Register || currentToken.type == TokenType::StringLiteral) {
+            // Valid operand
+            advance();
+            if (currentToken.lexeme == ",") {
+                advance();
+            } else {
+                reportError("Expected ',' or end of line, found: " + currentToken.lexeme);
+                break;
+            }
+        } else {
+            reportError("Invalid operand: " + currentToken.lexeme);
+            advance();
+        }
+    }
+}
+
+void Parser::reportError(const std::string &message)
+{
+    ErrorReporter::reportError(message, currentToken.lineNumber, currentToken.columnNumber, currentToken.lexeme,
+                               currentToken.fileName);
+}
+
+File parser.h:
+
+#pragma once
+
+#include "tokenize.h"
+#include "symbol_table.h"
+#include "error_reporter.h"
+#include "context.h"
+#include "preprocessor.h"
+
+class Parser {
+public:
+    static void init();
+    static void parse();
+
+private:
+    static std::vector<Token> tokens;
+    static size_t currentIndex;
+    static Token currentToken;
+
+    static bool getNextLine(std::string& line);
+
+    static void advance();
+    static void parseLine();
+    static void parseDirective();
+    static void parseInstruction();
+    static void parseOperandList();
+    static void reportError(const std::string &message);
+};
+File preprocessor.cpp:
+
+#include "preprocessor.h"
+#include <sstream>
+#include <algorithm>
+#include <stdexcept>
+
+void Preprocessor::init()
+{
+
+}
+std::string Preprocessor::processLine(std::string &line)
+{
+    // TODO
+    return line;
+}
+
+File preprocessor.h:
+
+#pragma once
+
+#include "input.h"
+#include "error_reporter.h"
+#include "tokenize.h"
+#include <string>
+#include <vector>
+#include <stack>
+#include <unordered_map>
+#include <memory>
+
+class Preprocessor {
+public:
+    static void init();
+    
+
+private:
+    static std::string processLine(std::string& line);
+};
+
+
+File symbol_table.cpp:
+
+#include "symbol_table.h"
+
+std::unordered_map<std::string, Symbol> SymbolTable::symbols;
+
+void SymbolTable::init() {}
+
+void SymbolTable::addSymbol(const Symbol &symbol)
+{
+    if (symbols.find(symbol.name) == symbols.end()) {
+        symbols[symbol.name] = symbol;
+    } else {
+        const Symbol &existingSymbol = symbols[symbol.name];
+        ErrorReporter::reportError("Symbol redefinition: " + symbol.name + " (Previously defined in " +
+                                      existingSymbol.fileName + " at line " +
+                                      std::to_string(existingSymbol.lineNumber) + ")",
+                                  symbol.lineNumber, 0, "no context", symbol.fileName);
+    }
+}
+
+Symbol *SymbolTable::findSymbol(const std::string &name)
+{
+    auto it = symbols.find(name);
+    if (it != symbols.end()) {
+        return &(it->second);
+    }
+    return nullptr;
+}
+
+File symbol_table.h:
+
+#pragma once
+
+#include "error_reporter.h"
+#include <string>
+#include <unordered_map>
+
+struct Symbol {
+    std::string name;
+    enum class Type { Label, Variable, Macro, Segment };
+    Type type;
+    int lineNumber;
+    std::string fileName;
+};
+
+class SymbolTable {
+public:
+    static void init();
+    static void addSymbol(const Symbol &symbol);
+    static Symbol *findSymbol(const std::string &name);
+
+private:
+    static std::unordered_map<std::string, Symbol> symbols;
+};
+
+File timer.h:
+
+#pragma once
+
+#include <chrono>
+#include <iostream>
+#include <string>
+
+class Timer {
+public:
+    Timer() { reset(); }
+
+    void reset() { m_start = std::chrono::high_resolution_clock::now(); }
+
+    float elapsed()
+    {
+        return static_cast<float>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                      std::chrono::high_resolution_clock::now() - m_start)
+                                      .count()) *
+               0.001f * 0.001f * 0.001f;
+    }
+
+    float elapsed_millis() { return elapsed() * 1000.0f; }
+
+private:
+    std::chrono::time_point<std::chrono::high_resolution_clock> m_start;
+};
+
+// class ScopedTimer
+// {
+// public:
+//     explicit ScopedTimer(const std::string &name) : m_name(name) {}
+//     ~ScopedTimer() // NOLINT(cppcoreguidelines-special-member-functions): not using heap allocated memory here
+//     {
+//         const float time = m_timer.elapsed_millis();
+//          LOG
+//     }
+
+// private:
+//     std::string m_name;
+//     Timer m_timer;
+// };
+File tokenize.cpp:
+
+#include "tokenize.h"
+#include <algorithm>
+#include <cctype>
+
+size_t Tokenizer::currentIndex;
+std::string Tokenizer::currentLine;
+
+std::unordered_set<std::string> Tokenizer::directives;
+std::unordered_set<std::string> Tokenizer::instructions;
+std::unordered_set<std::string> Tokenizer::registers;
+
+void Tokenizer::init() { currentIndex = 0; }
+
+
+std::vector<Token> Tokenizer::tokenize(const std::string &input)
+{
+    std::vector<Token> tokens{
+        Token(TokenType::Identifier, "label", 1, 1, "test.asm"),       // "label"
+        Token(TokenType::Separator, ":", 1, 6, "test.asm"),             // ":"
+        Token(TokenType::Instruction, "mov", 1, 8, "test.asm"),        // "mov
+        Token(TokenType::Register, "eax", 1, 12, "test.asm"),          // "eax"
+        Token(TokenType::Separator, ",", 1, 15, "test.asm"),            // ,
+        Token(TokenType::Number, "1", 1, 17, "test.asm"),              // "1"
+        Token(TokenType::EndOfFile, "", 1, 18, "test.asm")             // End of file token
+    };
+    return tokens;
+}
+
+
+File tokenize.h:
+
+#pragma once
+
+#include "context.h"
+#include <string>
+#include <deque>
+#include <unordered_set>
+
+enum class TokenType {
+    Identifier,
+    Directive,
+    Instruction,
+    Register,
+    Number,
+    StringLiteral,
+    Operator,
+    Separator,
+    EndOfFile,
+    Comment,
+};
+
+struct Token {
+    enum TokenType type;
+    std::string lexeme;
+    int lineNumber;
+    int columnNumber;
+    std::string fileName;
+};
+
+class Tokenizer {
+public:
+    static void init();
+    static std::vector<Token> tokenize(const std::string &input);
+
+private:
+    static size_t currentIndex;
+    static std::string currentLine;
+
+    static std::unordered_set<std::string> directives;
+    static std::unordered_set<std::string> instructions;
+    static std::unordered_set<std::string> registers;
+
+    static void loadReservedWords();
+    static char peekChar();
+    static char getChar();
+    static void skipWhitespace();
+    static Token lexToken();
+
+    static bool isReservedWord(const std::string &word, enum TokenType &type);
+};
+
+File test_add.cpp:
+
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+#include <doctest/doctest.h>
+#include "add.h"
+
+// int add(int a, int b) { return a + b; }
+
+TEST_CASE("testing the add function") {
+    CHECK(add(1, 2) == 3);
+    CHECK(add(2, 5) == 7);
+}
