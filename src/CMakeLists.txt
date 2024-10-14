@@ -33,6 +33,7 @@ target_link_libraries(
             ml_warnings
 
             spdlog_header_only
+            fmt
 )
 
 target_include_directories(masmlint_lib PUBLIC .)
@@ -54,6 +55,7 @@ target_link_libraries(
             ml_warnings
 
             spdlog_header_only
+            fmt
 )
 
 

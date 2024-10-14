@@ -15,6 +15,14 @@ block()
     # ----------------------
 endblock()
 
+# fmt library
+block()
+    add_subdirectory(fmt)
+    set_target_properties(fmt PROPERTIES SYSTEM ON)
+    set_target_properties(fmt PROPERTIES FOLDER "ext")
+endblock()
+
+
 
 block()
     # set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)

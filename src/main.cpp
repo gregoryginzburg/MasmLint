@@ -4,11 +4,15 @@
 #include "symbol_table.h"
 #include "context.h"
 #include "parser.h"
+
 #include <iostream>
+#include <fmt/core.h>
 
 int main(int argc, char *argv[])
 {
     Log::init();
+
+    fmt::print("Hello, world!\n");
 
     std::string filename = "examples/test.asm";
 
