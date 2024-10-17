@@ -1,13 +1,17 @@
 set(SOURCES_LIST
     add.cpp
     log.cpp
-    context.cpp
-    error_reporter.cpp
     input.cpp
     parser.cpp
     preprocessor.cpp
     symbol_table.cpp
     tokenize.cpp
+    source_map.cpp
+    span.cpp
+    session.cpp
+    diagnostic.cpp
+    emitter.cpp
+    diag_ctxt.cpp
     
 )
 
@@ -15,13 +19,16 @@ set(HEADERS_LIST
     add.h
     log.h
     timer.h
-    context.h
-    error_reporter.h
     input.h
     parser.h
     preprocessor.h
     symbol_table.h
     tokenize.h
+    source_map.h
+    span.h
+    diagnostic.h
+    emitter.h
+    diag_ctxt.h
 )
 
 add_library(masmlint_lib ${SOURCES_LIST} ${HEADERS_LIST})
@@ -32,8 +39,9 @@ target_link_libraries(
     PRIVATE ml_options
             ml_warnings
 
-            spdlog_header_only
+            spdlog
             fmt
+            utf8proc
 )
 
 target_include_directories(masmlint_lib PUBLIC .)
@@ -54,8 +62,9 @@ target_link_libraries(
             ml_options
             ml_warnings
 
-            spdlog_header_only
+            spdlog
             fmt
+            utf8proc
 )
 
 

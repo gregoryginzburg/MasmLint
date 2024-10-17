@@ -9,206 +9,321 @@ File add.h:
 
 int add(int a, int b);
 int mul(int a, int b);
-File context.cpp:
+File diagnostic.cpp:
 
-#include "context.h"
+#include "diagnostic.h"
 
-std::string Context::currentFileName;
-int Context::currentLineNumber;
-std::stack<std::unique_ptr<InputSource>> Context::inputStack;
-
-void Context::init(const std::string &filename)
+Diagnostic::Diagnostic(Level level, const std::string &message)
+    : level(level), message(message)
 {
-    bool success;
-    auto fileInput = std::make_unique<FileInputSource>(filename, success);
-    if (success) {
-        pushInputStack(std::move(fileInput));
-    } else {
-        ErrorReporter::reportError("Failed to open file '" + filename + "'", 0, 0, "", filename);
-    }
 }
 
-void Context::pushInputStack(std::unique_ptr<InputSource> inputSrc)
+void Diagnostic::addLabel(const Span &span, const std::string &labelMessage)
 {
-    inputStack.push(std::move(inputSrc));
-    FileInputSource *fileInputSourcePtr = dynamic_cast<FileInputSource *>(inputSrc.get());
-    if (fileInputSourcePtr) {
-        currentFileName = fileInputSourcePtr->getSourceName();
-    }
+    labels.emplace_back(span, labelMessage);
 }
 
-std::unique_ptr<InputSource> &Context::topInputStack() { return inputStack.top(); }
-
-void Context::popInputStack()
+void Diagnostic::addNote(const std::string &note)
 {
-    inputStack.pop();
-    if (!inputStack.empty()) {
-        InputSource *InputSourcePtr = topInputStack().get();
-        FileInputSource *fileInputSourcePtr = dynamic_cast<FileInputSource *>(InputSourcePtr);
-        if (fileInputSourcePtr) {
-            currentFileName = fileInputSourcePtr->getSourceName();
-        }
-    } else {
-        currentFileName = "";
-    }
+    notes.push_back(note);
 }
 
-bool Context::emptyInputStack() { return inputStack.empty(); }
+Diagnostic::Level Diagnostic::getLevel() const
+{
+    return level;
+}
 
-int Context::getLineNumber() { return currentLineNumber; }
+const std::string &Diagnostic::getMessage() const
+{
+    return message;
+}
 
-std::string Context::getFileName() { return currentFileName; }
+const std::vector<std::pair<Span, std::string>> &Diagnostic::getLabels() const
+{
+    return labels;
+}
 
-File context.h:
+const std::vector<std::string> &Diagnostic::getNotes() const
+{
+    return notes;
+}
+
+File diagnostic.h:
 
 #pragma once
 
-#include "input.h"
-#include "error_reporter.h"
 #include <string>
 #include <vector>
-#include <stack>
-#include <unordered_map>
 #include <memory>
 
-class Context {
+#include "span.h"
+
+class Diagnostic {
 public:
-    static void init(const std::string &filename);
-    static void pushInputStack(std::unique_ptr<InputSource> inputSrc);
-    static std::unique_ptr<InputSource> &topInputStack();
-    static bool emptyInputStack();
-    static void popInputStack();
-    static int getLineNumber();
-    static std::string getFileName();
+    enum class Level { Error, Warning, Note };
+
+    Diagnostic(Level level, const std::string &message);
+
+    void addLabel(const Span &span, const std::string &labelMessage);
+    void addNote(const std::string &note);
+
+    // Accessors
+    Level getLevel() const;
+    const std::string &getMessage() const;
+    const std::vector<std::pair<Span, std::string>> &getLabels() const;
+    const std::vector<std::string> &getNotes() const;
 
 private:
-    static std::string currentFileName;
-    static int currentLineNumber;
-    static std::stack<std::unique_ptr<InputSource>> inputStack;
+    Level level;
+    std::string message;
+    std::vector<std::pair<Span, std::string>> labels;
+    std::vector<std::string> notes;
 };
 
-File error_reporter.cpp:
 
-#include "error_reporter.h"
-#include <iostream>
+File diag_ctxt.cpp:
 
-std::vector<ErrorReporter::Error> ErrorReporter::errors;
+#include "diag_ctxt.h"
+#include "emitter.h"
 
-void ErrorReporter::init() {}
-
-void ErrorReporter::reportError(const std::string &message, int line, int column, const std::string &lineContent,
-                                const std::string &fileName)
+DiagCtxt::DiagCtxt(std::shared_ptr<Emitter> emitter)
+    : emitter(std::move(emitter))
 {
-    errors.push_back({Error::Level::Error, message, line, column, lineContent, fileName});
 }
 
-void ErrorReporter::reportWarning(const std::string &message, int line, int column, const std::string &lineContent,
-                                  const std::string &fileName)
+void DiagCtxt::addDiagnostic(const Diagnostic &diag)
 {
-    errors.push_back({Error::Level::Warning, message, line, column, lineContent, fileName});
+    diagnostics.push_back(diag);
 }
 
-bool ErrorReporter::hasErrors()
+bool DiagCtxt::hasErrors() const
 {
-    for (const auto &error : errors) {
-        if (error.level == Error::Level::Error) {
+    for (const auto &diag : diagnostics) {
+        if (diag.getLevel() == Diagnostic::Level::Error) {
             return true;
         }
     }
     return false;
 }
 
-void ErrorReporter::displayErrors()
+void DiagCtxt::emitDiagnostics()
 {
-    for (const auto &error : errors) {
-        std::string levelStr = (error.level == Error::Level::Error) ? "Error" : "Warning";
-        std::cout << levelStr << " [File: " << error.fileName << ", Line " << error.line << ", Column " << error.column
-                  << "]: " << error.message << "\n";
-        if (!error.lineContent.empty()) {
-            std::cout << "    " << error.lineContent << "\n";
-            std::cout << "    ";
-            for (int i = 0; i < error.column; ++i) {
-                std::cout << " ";
+    for (const auto &diag : diagnostics) {
+        emitter->emit(diag);
+    }
+}
+File diag_ctxt.h:
+
+#pragma once
+
+#include <vector>
+#include <memory>
+
+#include "emitter.h"
+
+class DiagCtxt {
+public:
+    DiagCtxt(std::shared_ptr<Emitter> emitter);
+
+    void addDiagnostic(const Diagnostic &diag);
+    bool hasErrors() const;
+    void emitDiagnostics();
+
+private:
+    std::vector<Diagnostic> diagnostics;
+    std::shared_ptr<Emitter> emitter;
+};
+File emitter.cpp:
+
+#include "emitter.h"
+#include "log.h"
+
+#include <fmt/core.h>
+#include <fmt/color.h>
+#include <fmt/ostream.h>
+#include <fmt/format.h>
+
+#include <utf8proc.h>
+
+Emitter::Emitter(std::shared_ptr<SourceMap> sourceMap, std::ostream &outStream, bool useColor)
+    : sourceMap(std::move(sourceMap)), out(outStream), useColor(useColor)
+{
+}
+
+void Emitter::emit(const Diagnostic &diag)
+{
+    printHeader(diag);
+    printLabels(diag);
+    printNotes(diag);
+}
+
+void Emitter::printHeader(const Diagnostic &diag)
+{
+    auto levelStr = formatLevel(diag.getLevel());
+    auto message = diag.getMessage();
+
+    fmt::memory_buffer buffer;
+    fmt::format_to(std::back_inserter(buffer), "{}: {}\n", levelStr, message);
+    out.write(buffer.data(), buffer.size());
+}
+
+void Emitter::printLabels(const Diagnostic &diag)
+{
+    for (const auto &labelPair : diag.getLabels()) {
+        const Span &span = labelPair.first;
+        const std::string &labelMsg = labelPair.second;
+
+        std::filesystem::path filePath;
+        std::size_t lineNumberZeroBased, columnNumberZeroBased;
+        sourceMap->spanToLocation(span, filePath, lineNumberZeroBased, columnNumberZeroBased);
+
+        auto sourceFile = sourceMap->lookupSourceFile(span.lo);
+        if (sourceFile) {
+            // Get line content using zero-based line number
+            std::string lineContent = sourceFile->getLine(lineNumberZeroBased);
+
+            // Get line start byte position
+            std::size_t lineStartByte = sourceFile->getLineStart(lineNumberZeroBased);
+
+            // Compute byte length of the span
+            std::size_t byteLength = span.hi - span.lo;
+
+            // Print location (convert to one-based for user display)
+            fmt::memory_buffer buffer;
+            fmt::format_to(std::back_inserter(buffer), "  --> {}:{}:{}\n", filePath.string(), lineNumberZeroBased + 1,
+                           columnNumberZeroBased + 1);
+            fmt::format_to(std::back_inserter(buffer), "   {} | {}\n", lineNumberZeroBased + 1, lineContent);
+
+            // Print underline
+            std::string underline = createUnderline(lineContent, lineStartByte, byteLength);
+            fmt::format_to(std::back_inserter(buffer), "     | {}\n", underline);
+
+            // Print label message
+            if (!labelMsg.empty()) {
+                fmt::format_to(std::back_inserter(buffer), "     = {}\n", labelMsg);
             }
-            std::cout << "^\n";
+
+            out.write(buffer.data(), buffer.size());
         }
     }
 }
 
-File error_reporter.h:
+void Emitter::printNotes(const Diagnostic &diag)
+{
+    for (const auto &note : diag.getNotes()) {
+        fmt::memory_buffer buffer;
+        if (useColor) {
+            fmt::format_to(std::back_inserter(buffer), "{}: {}\n",
+                           fmt::format(fmt::emphasis::bold | fg(fmt::color::cyan), "note"), note);
+        } else {
+            fmt::format_to(std::back_inserter(buffer), "note: {}\n", note);
+        }
+        out.write(buffer.data(), buffer.size());
+    }
+}
+
+std::string Emitter::formatLevel(Diagnostic::Level level)
+{
+    if (useColor) {
+        switch (level) {
+        case Diagnostic::Level::Error:
+            return fmt::format(fmt::emphasis::bold | fg(fmt::color::red), "error");
+        case Diagnostic::Level::Warning:
+            return fmt::format(fmt::emphasis::bold | fg(fmt::color::yellow), "warning");
+        case Diagnostic::Level::Note:
+            return fmt::format(fmt::emphasis::bold | fg(fmt::color::cyan), "note");
+        }
+    } else {
+        switch (level) {
+        case Diagnostic::Level::Error:
+            return "error";
+        case Diagnostic::Level::Warning:
+            return "warning";
+        case Diagnostic::Level::Note:
+            return "note";
+        }
+    }
+    return "unknown";
+}
+
+int Emitter::calculateDisplayWidth(const std::string &text)
+{
+    int width = 0;
+    const char *str = text.c_str();
+    utf8proc_ssize_t len = text.size();
+    utf8proc_ssize_t idx = 0;
+    utf8proc_int32_t codepoint;
+    while (idx < len) {
+        utf8proc_ssize_t charLen = utf8proc_iterate((const utf8proc_uint8_t *)(str + idx), len - idx, &codepoint);
+        if (charLen <= 0) {
+            LOG_DETAILED_ERROR("Invalid utf-8 formatting in calculateDisplayWidth");
+            break;
+        }
+
+        width += utf8proc_charwidth(codepoint);
+        idx += charLen;
+    }
+    return width;
+}
+
+std::string Emitter::createUnderline(const std::string &lineContent, std::size_t byteOffsetInLine,
+                                     std::size_t byteLength)
+{
+    // Extract substrings
+    std::string beforeUnderline = lineContent.substr(0, byteOffsetInLine);
+    std::string underlineText = lineContent.substr(byteOffsetInLine, byteLength);
+
+    int offsetWidth = calculateDisplayWidth(beforeUnderline);
+    int underlineWidth = calculateDisplayWidth(underlineText);
+
+    // Create the underline string
+    std::string underline(offsetWidth, ' ');
+    std::string carets(underlineWidth > 0 ? underlineWidth : 1, '^'); // Ensure at least one caret
+
+    if (useColor) {
+        underline += fmt::format(fmt::emphasis::bold | fg(fmt::color::red), "{}", carets);
+    } else {
+        underline += carets;
+    }
+    return underline;
+}
+File emitter.h:
 
 #pragma once
 
-#include <string>
-#include <vector>
-#include "context.h"
+#include "source_map.h"
+#include "diagnostic.h"
 
-class ErrorReporter {
+#include <memory>
+#include <ostream>
+#include <iostream>
+
+
+class Emitter {
 public:
-    static void init(); 
-    static void reportError(const std::string &message, int line, int column, const std::string &lineContent,
-                     const std::string &fileName);
-    static void reportWarning(const std::string &message, int line, int column, const std::string &lineContent,
-                       const std::string &fileName);
-    static bool hasErrors();
-    static void displayErrors();
+    Emitter(std::shared_ptr<SourceMap> sourceMap, std::ostream &outStream = std::cout, bool useColor = true);
+
+    void emit(const Diagnostic &diag);
 
 private:
-    struct Error {
-        enum class Level { Error, Warning };
-        Level level;
-        std::string message;
-        int line;
-        int column;
-        std::string lineContent;
-        std::string fileName;
-    };
+    std::shared_ptr<SourceMap> sourceMap;
+    std::ostream &out;
+    bool useColor;
 
-    static std::vector<Error> errors;
+    void printHeader(const Diagnostic &diag);
+    void printLabels(const Diagnostic &diag);
+    void printNotes(const Diagnostic &diag);
+
+    std::string formatLevel(Diagnostic::Level level);
+    std::string formatMessage(const std::string &message);
+    std::string formatLocation(const std::filesystem::path &path, std::size_t line, std::size_t column);
+    std::string createUnderline(const std::string &lineContent, std::size_t byteOffsetInLine, std::size_t byteLength);
+    int calculateDisplayWidth(const std::string &text);
 };
+
 
 File input.cpp:
 
-#include "input.h"
-
-// File input
-FileInputSource::FileInputSource(const std::string &filename, bool &success) : lineNumber(0), filename(filename)
-{
-    fileStream.open(filename);
-    success = fileStream.is_open();
-}
-
-bool FileInputSource::getNextLine(std::string &line)
-{
-    if (std::getline(fileStream, line)) {
-        ++lineNumber;
-        return true;
-    }
-    return false;
-}
-
-int FileInputSource::getCurrentLineNumber() const { return lineNumber; }
-
-std::string FileInputSource::getSourceName() const { return filename; }
-
-
-
-// Macro Input
-
-MacroInputSource::MacroInputSource(const std::string &macroName) : macroName(macroName), currentLineIndex(0) 
-{
-    // TODO: implement look up from table of macros (symbols)
-}
-
-bool MacroInputSource::getNextLine(std::string &line)
-{
-    // TODO: implement
-    return false;
-}
-
-int MacroInputSource::getCurrentLineNumber() const { return currentLineIndex; }
-
-std::string MacroInputSource::getSourceName() const { return "<macro:" + macroName + ">"; }
 
 File input.h:
 
@@ -218,39 +333,6 @@ File input.h:
 #include <vector>
 #include <fstream>
 #include <memory>
-
-class InputSource {
-public:
-    virtual ~InputSource() = default;
-    virtual bool getNextLine(std::string& line) = 0;
-    virtual int getCurrentLineNumber() const = 0;
-    virtual std::string getSourceName() const = 0;
-};
-
-class FileInputSource : public InputSource {
-public:
-    explicit FileInputSource(const std::string& filename, bool& success);
-    bool getNextLine(std::string& line) override;
-    int getCurrentLineNumber() const override;
-    std::string getSourceName() const override;
-
-private:
-    std::ifstream fileStream;
-    int lineNumber;
-    std::string filename;
-};
-
-class MacroInputSource : public InputSource {
-public:
-    MacroInputSource(const std::string& macroName);
-    bool getNextLine(std::string& line) override;
-    int getCurrentLineNumber() const override;
-    std::string getSourceName() const override;
-
-private:
-    int currentLineIndex;
-    std::string macroName;
-};
 
 
 
@@ -334,29 +416,59 @@ File main.cpp:
 #include "input.h"
 #include "preprocessor.h"
 #include "symbol_table.h"
-#include "context.h"
 #include "parser.h"
-#include <iostream>
+#include "session.h"
 
-int main(int argc, char *argv[])
+#include <iostream>
+#include <memory>
+#include <fmt/core.h>
+#include <filesystem>
+
+#ifdef _WIN32
+    #include <windows.h>
+    #include <io.h>
+    #include <fcntl.h>
+#endif
+
+void setupConsoleForUtf8() {
+#ifdef _WIN32
+    // Set console output code page to UTF-8 on Windows
+    SetConsoleOutputCP(CP_UTF8);
+    // Set output mode to handle UTF-8 text properly
+    // _setmode(_fileno(stdout), _O_U8TEXT);
+#endif
+}
+
+int main(/* int argc, char *argv[]*/)
 {
+    setupConsoleForUtf8();
     Log::init();
 
-    std::string filename = "examples/test.asm";
+    std::filesystem::path filename = "examples/test.asm";
 
-    ErrorReporter::init();
-    SymbolTable::init();
-    Context::init(filename);
+    auto parseSess = std::make_shared<ParseSession>();
+    auto sourceFile = parseSess->sourceMap->loadFile(filename);
 
-    Parser parser;
+    auto tokenizer = Tokenizer(parseSess, sourceFile->getSource(), 0);
+    auto preprocessor = Preprocessor(parseSess);
+
+    std::vector<Token> tokens = tokenizer.tokenize();
+    tokens = preprocessor.preprocess(tokens);
+    Parser parser(parseSess, tokens);
     parser.parse();
 
-    if (ErrorReporter::hasErrors()) {
-        ErrorReporter::displayErrors();
-    } else {
-        std::cout << "Parsing completed successfully with no errors.\n";
-    }
+    std::string errMsg = "hey";
 
+    Diagnostic diag(Diagnostic::Level::Error, errMsg);
+    diag.addLabel(Span(6, 7, nullptr), "Unexpected token here");
+
+    parseSess->dcx->addDiagnostic(diag);
+
+    if (parseSess->dcx->hasErrors()) {
+        parseSess->dcx->emitDiagnostics();
+    } else {
+        fmt::print("Parsing completed successfully with no errors.\n");
+    }
     return 0;
 }
 
@@ -364,47 +476,24 @@ File parser.cpp:
 
 #include "parser.h"
 #include "symbol_table.h"
+#include "diag_ctxt.h"
 
-Token Parser::currentToken;
-std::vector<Token> Parser::tokens;
-size_t Parser::currentIndex = 0;
+// #include <fmt/core.h>
 
-bool Parser::getNextLine(std::string &line)
+Parser::Parser(std::shared_ptr<ParseSession> parseSession, const std::vector<Token> &tokens)
+    : parseSess(parseSession), tokens(tokens)
 {
-    while (!Context::emptyInputStack()) {
-        InputSource *currentSource = Context::topInputStack().get();
-        if (currentSource->getNextLine(line)) {
-            if (!line.empty()) {
-                return true;
-            }
-        } else {
-            // End of current input source
-            Context::popInputStack();
-        }
-    }
-    return false;
-}
-
-void Parser::init()
-{
-    tokens.clear();
-    currentIndex = 0;
 }
 
 void Parser::parse()
 {
-    std::string line;
-    while (getNextLine(line)) {
-        tokens = Tokenizer::tokenize(line);
-        currentIndex = 0;
-
-        while (currentIndex < tokens.size()) {
-            advance();
-            if (currentToken.type == TokenType::EndOfFile) {
-                return; // End parsing when EOF is reached
-            }
-            parseLine();
+    currentIndex = 0;
+    while (currentIndex < tokens.size()) {
+        advance();
+        if (currentToken.type == TokenType::EndOfFile) {
+            return; // End parsing when EOF is reached
         }
+        parseLine();
     }
 }
 
@@ -413,8 +502,7 @@ void Parser::advance()
     if (currentIndex < tokens.size()) {
         currentToken = tokens[currentIndex++];
     } else {
-        currentToken = {TokenType::EndOfFile, "", Context::getLineNumber(), static_cast<int>(currentIndex),
-                        Context::getFileName()};
+        currentToken = {TokenType::EndOfFile, "", Span(1, 2, nullptr)};
     }
 }
 
@@ -424,68 +512,30 @@ void Parser::parseLine()
         // Possible label or instruction
         if (currentIndex < tokens.size() && tokens[currentIndex].lexeme == ":") {
             // It's a label
-            SymbolTable::addSymbol({currentToken.lexeme, Symbol::Type::Label});
+            parseSess->symbolTable->addSymbol({currentToken.lexeme, Symbol::Type::Label});
             advance();
             advance();
-            parseLine();
+            // parseLine();
         } else {
             // Treat as instruction or directive
-            parseInstruction();
+            // parseInstruction();
         }
     } else if (currentToken.type == TokenType::Directive) {
-        parseDirective();
+        // parseDirective();
     } else if (currentToken.type == TokenType::Instruction) {
-        parseInstruction();
+        // parseInstruction();
     } else if (currentToken.type == TokenType::Comment) {
         // Comment line; do nothing
     } else {
         // Syntax error
-        reportError("Unexpected token: " + currentToken.lexeme);
+        // Syntax error
+        // std::string errMsg = fmt::format("Unexpected token: {}", currentToken.lexeme);
+
+        // Diagnostic diag(Diagnostic::Level::Error, errMsg);
+        // diag.addLabel(currentToken.span, "Unexpected token here");
+
+        // parseSess->dcx->addDiagnostic(diag);
     }
-}
-
-void Parser::parseDirective()
-{
-    if (currentToken.lexeme == "DB" || currentToken.lexeme == "DW" || currentToken.lexeme == "DD") {
-        advance();
-        parseOperandList();
-    } else {
-        reportError("Unknown directive: " + currentToken.lexeme);
-    }
-}
-
-void Parser::parseInstruction()
-{
-    std::string mnemonic = currentToken.lexeme;
-    advance();
-    parseOperandList();
-    // TODO: Validate instruction operands based on the instruction set
-}
-
-void Parser::parseOperandList()
-{
-    while (currentToken.type != TokenType::EndOfFile) {
-        if (currentToken.type == TokenType::Identifier || currentToken.type == TokenType::Number ||
-            currentToken.type == TokenType::Register || currentToken.type == TokenType::StringLiteral) {
-            // Valid operand
-            advance();
-            if (currentToken.lexeme == ",") {
-                advance();
-            } else {
-                reportError("Expected ',' or end of line, found: " + currentToken.lexeme);
-                break;
-            }
-        } else {
-            reportError("Invalid operand: " + currentToken.lexeme);
-            advance();
-        }
-    }
-}
-
-void Parser::reportError(const std::string &message)
-{
-    ErrorReporter::reportError(message, currentToken.lineNumber, currentToken.columnNumber, currentToken.lexeme,
-                               currentToken.fileName);
 }
 
 File parser.h:
@@ -494,44 +544,37 @@ File parser.h:
 
 #include "tokenize.h"
 #include "symbol_table.h"
-#include "error_reporter.h"
-#include "context.h"
+#include "diag_ctxt.h"
 #include "preprocessor.h"
+#include "session.h"
 
 class Parser {
 public:
-    static void init();
-    static void parse();
+    Parser(std::shared_ptr<ParseSession> parseSession, const std::vector<Token> &tokens);
+    void parse();
 
 private:
-    static std::vector<Token> tokens;
-    static size_t currentIndex;
-    static Token currentToken;
+    std::shared_ptr<ParseSession> parseSess;
 
-    static bool getNextLine(std::string& line);
+    Token currentToken;
+    const std::vector<Token> &tokens;
+    int currentIndex;
 
-    static void advance();
-    static void parseLine();
-    static void parseDirective();
-    static void parseInstruction();
-    static void parseOperandList();
-    static void reportError(const std::string &message);
+    void advance();
+    void parseLine();
 };
 File preprocessor.cpp:
 
 #include "preprocessor.h"
+#include "tokenize.h"
 #include <sstream>
 #include <algorithm>
 #include <stdexcept>
 
-void Preprocessor::init()
-{
-
-}
-std::string Preprocessor::processLine(std::string &line)
+std::vector<Token> Preprocessor::preprocess(const std::vector<Token> &tokens)
 {
     // TODO
-    return line;
+    return tokens;
 }
 
 File preprocessor.h:
@@ -539,8 +582,9 @@ File preprocessor.h:
 #pragma once
 
 #include "input.h"
-#include "error_reporter.h"
+#include "diag_ctxt.h"
 #include "tokenize.h"
+#include "session.h"
 #include <string>
 #include <vector>
 #include <stack>
@@ -549,33 +593,403 @@ File preprocessor.h:
 
 class Preprocessor {
 public:
-    static void init();
-    
-
+    Preprocessor(std::shared_ptr<ParseSession> parseSess) : parseSess(parseSess) {}
+    std::vector<Token> preprocess(const std::vector<Token>& tokens);
 private:
-    static std::string processLine(std::string& line);
+    std::shared_ptr<ParseSession> parseSess;
 };
 
+File session.cpp:
 
+#include "session.h"
+
+#include <iostream>
+
+ParseSession::ParseSession()
+{
+    sourceMap = std::make_shared<SourceMap>();
+    // bool useColor = !isOutputRedirected(std::cout);
+    bool useColor = true;
+    auto emitter = std::make_shared<Emitter>(sourceMap, std::cout, useColor);
+    dcx = std::make_shared<DiagCtxt>(emitter);
+    symbolTable = std::make_shared<SymbolTable>();
+}
+
+File session.h:
+
+#pragma once
+
+#include <memory>
+#include <string>
+#include <filesystem>
+
+#include "symbol_table.h"
+#include "source_map.h"
+#include "input.h"
+#include "diag_ctxt.h"
+
+class ParseSession {
+public:
+    ParseSession();
+
+public:
+    std::shared_ptr<DiagCtxt> dcx;
+    std::shared_ptr<SourceMap> sourceMap;
+    std::shared_ptr<SymbolTable> symbolTable;
+};
+File source_map.cpp:
+
+#include "source_map.h"
+#include "log.h"
+#include "span.h"
+
+#include <fstream>
+#include <filesystem>
+
+SourceFile::SourceFile(const std::filesystem::path &path, const std::string &src, std::size_t startPos)
+    : path(path), src(src), startPos(startPos), endPos(startPos + src.size())
+{
+    // Initialize lineStarts
+    lineStarts.push_back(0);
+    for (std::size_t i = 0; i < src.size(); ++i) {
+        if (src[i] == '\n') {
+            lineStarts.push_back(i + 1);
+        }
+    }
+}
+
+const std::filesystem::path &SourceFile::getPath() const { return path; }
+
+const std::string &SourceFile::getSource() const { return src; }
+
+std::size_t SourceFile::getStartPos() const { return startPos; }
+
+std::size_t SourceFile::getEndPos() const { return endPos; }
+
+std::size_t SourceFile::getLineNumber(std::size_t pos) const
+{
+    if (pos < startPos || pos >= endPos) {
+        LOG_DETAILED_ERROR("Position out of range in getLineNumber");
+        return 0;
+    }
+    std::size_t localPos = pos - startPos;
+    auto it = std::upper_bound(lineStarts.begin(), lineStarts.end(), localPos);
+    return (it - lineStarts.begin()) - 1;
+}
+
+// lineNumber is zero based
+std::string SourceFile::getLine(std::size_t lineNumber) const
+{
+    if (lineNumber >= lineStarts.size()) {
+        LOG_DETAILED_ERROR("Line number out of range in getLine");
+        return "";
+    }
+    std::size_t start = lineStarts[lineNumber];
+    std::size_t end;
+    if (lineNumber + 1 < lineStarts.size()) {
+        end = lineStarts[lineNumber + 1];
+    } else {
+        end = src.size();
+    }
+
+    // Exclude the newline character at the end if present
+    if (end > start && src[end - 1] == '\n') {
+        end--;
+    }
+    return src.substr(start, end - start);
+}
+
+// lineNumber is zero based
+std::size_t SourceFile::getLineStart(std::size_t lineNumber) const
+{
+    if (lineNumber >= lineStarts.size()) {
+        LOG_DETAILED_ERROR("Line number out of range in getLineStart");
+        return 0;
+    }
+    return lineStarts[lineNumber];
+}
+
+std::size_t SourceFile::countCodePoints(const std::string &str, std::size_t startByte, std::size_t endByte)
+{
+    std::size_t codePointCount = 0;
+    std::size_t i = startByte;
+    while (i < endByte) {
+        unsigned char c = static_cast<unsigned char>(str[i]);
+        std::size_t charSize = 1;
+        if ((c & 0x80) == 0x00) {
+            charSize = 1; // ASCII character
+        } else if ((c & 0xE0) == 0xC0) {
+            charSize = 2; // 2-byte sequence
+        } else if ((c & 0xF0) == 0xE0) {
+            charSize = 3; // 3-byte sequence
+        } else if ((c & 0xF8) == 0xF0) {
+            charSize = 4; // 4-byte sequence
+        } else {
+            // Invalid UTF-8 start byte
+            LOG_DETAILED_ERROR("Invalid UTF-8 encoding in countCodePoints");
+            charSize = 1;
+        }
+
+        // Move to the next character
+        i += charSize;
+        codePointCount++;
+    }
+    return codePointCount;
+}
+
+std::size_t SourceFile::getColumnNumber(std::size_t pos) const
+{
+    std::size_t lineNumber = getLineNumber(pos);
+    std::size_t lineStartPos = lineStarts[lineNumber];
+    std::size_t localPos = pos - startPos;
+
+    // Count code points between lineStartPos and localPos
+    return countCodePoints(src, lineStartPos, localPos);
+}
+
+std::shared_ptr<SourceFile> SourceMap::newSourceFile(const std::filesystem::path &path, const std::string &src)
+{
+    std::size_t startPos = 0;
+    if (!files.empty()) {
+        startPos = files.back()->getEndPos();
+    }
+    auto file = std::make_shared<SourceFile>(path, src, startPos);
+    files.push_back(file);
+    return file;
+}
+
+std::shared_ptr<SourceFile> SourceMap::loadFile(const std::filesystem::path &path)
+{
+    // Check if the file is already loaded
+    auto existingFile = getSourceFile(path);
+    if (existingFile) {
+        return existingFile;
+    }
+
+    // Open the file
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        return nullptr;
+    }
+
+    // Read the entire file content into a string
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    std::string content = buffer.str();
+
+    // Create a new SourceFile and add it to the SourceMap
+    return newSourceFile(path, content);
+}
+
+std::shared_ptr<SourceFile> SourceMap::lookupSourceFile(std::size_t pos) const
+{
+    for (const auto &file : files) {
+        if (file->getStartPos() <= pos && pos < file->getEndPos()) {
+            return file;
+        }
+    }
+    return nullptr;
+}
+
+std::shared_ptr<SourceFile> SourceMap::getSourceFile(const std::filesystem::path &path) const
+{
+    for (const auto &file : files) {
+        if (file->getPath() == path) {
+            return file;
+        }
+    }
+    return nullptr;
+}
+
+std::pair<std::size_t, std::size_t> SourceMap::lookupLineColumn(std::size_t pos) const
+{
+    auto file = lookupSourceFile(pos);
+    if (file) {
+        std::size_t lineNumber = file->getLineNumber(pos);
+        std::size_t columnNumber = file->getColumnNumber(pos);
+        return {lineNumber + 1, columnNumber + 1}; // Lines and columns are 1-based
+    } else {
+        return {0, 0};
+    }
+}
+
+void SourceMap::spanToLocation(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
+                               std::size_t &outColumn) const
+{
+    auto file = lookupSourceFile(span.lo);
+    if (file) {
+        outPath = file->getPath();
+        outLine = file->getLineNumber(span.lo);     // Zero-based
+        outColumn = file->getColumnNumber(span.lo); // Zero-based
+    } else {
+        outPath.clear();
+        outLine = 0;
+        outColumn = 0;
+    }
+}
+
+std::string SourceMap::spanToSnippet(const Span &span) const
+{
+    auto sourceFile = lookupSourceFile(span.lo);
+    if (!sourceFile) {
+        LOG_DETAILED_ERROR("Span does not belong to any source file");
+        return "";
+    }
+
+    std::size_t start_pos = span.lo - sourceFile->getStartPos();
+    std::size_t end_pos = span.hi - sourceFile->getStartPos();
+
+    if (end_pos > sourceFile->getSource().size()) {
+        LOG_DETAILED_ERROR("Span end position out of range");
+    }
+
+    return sourceFile->getSource().substr(start_pos, end_pos - start_pos);
+}
+File source_map.h:
+
+#pragma once
+
+#include <unordered_map>
+#include <filesystem>
+#include "span.h"
+
+class SourceFile {
+public:
+    SourceFile(const std::filesystem::path &path, const std::string &src, std::size_t startPos);
+
+    const std::filesystem::path &getPath() const;
+    const std::string &getSource() const;
+
+    std::size_t getStartPos() const;
+    std::size_t getEndPos() const;
+
+    // Maps a byte position to a line number
+    std::size_t getLineNumber(std::size_t pos) const;
+
+    // Retrieves the content of a specific line
+    std::string getLine(std::size_t lineNumber) const;
+
+    // Maps a byte position to a column number within its line
+    std::size_t getColumnNumber(std::size_t pos) const;
+
+    std::size_t getLineStart(std::size_t lineNumber) const;
+
+    static std::size_t countCodePoints(const std::string &str, std::size_t startByte, std::size_t endByte);
+
+private:
+    std::filesystem::path path;          // File path
+    std::string src;                     // Source code content
+    std::size_t startPos;                // Starting position in the global source map
+    std::size_t endPos;                  // Ending position in the global source map
+    std::vector<std::size_t> lineStarts; // Byte positions where each line starts
+
+};
+
+class SourceMap {
+public:
+    SourceMap() {};
+
+    // Adds a new source file to the map
+    std::shared_ptr<SourceFile> newSourceFile(const std::filesystem::path &path, const std::string &src);
+
+    // Loads a file from disk and adds it to the source map
+    std::shared_ptr<SourceFile> loadFile(const std::filesystem::path &path);
+
+    // Finds the source file containing a given position
+    std::shared_ptr<SourceFile> lookupSourceFile(std::size_t pos) const;
+
+    // Retrieves a source file by its path
+    std::shared_ptr<SourceFile> getSourceFile(const std::filesystem::path &path) const;
+
+    // Maps a global byte position to line and column
+    std::pair<std::size_t, std::size_t> lookupLineColumn(std::size_t pos) const;
+
+    // Maps a span to file path, line, and column
+    void spanToLocation(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
+                        std::size_t &outColumn) const;
+
+    // Retrieves the source code snippet corresponding to a span
+    std::string spanToSnippet(const Span &span) const;
+
+private:
+    std::vector<std::shared_ptr<SourceFile>> files;
+};
+File span.cpp:
+
+#include "span.h"
+#include "log.h"
+
+void SyntaxContextData::pushMacro(const std::string &macroName) { macroStack.push_back(macroName); }
+
+void SyntaxContextData::popMacro()
+{
+    if (!macroStack.empty()) {
+        macroStack.pop_back();
+    }
+}
+
+const std::string &SyntaxContextData::currentMacro() const { return macroStack.empty() ? "" : macroStack.back(); }
+
+bool Span::contains(std::size_t pos) const { return lo <= pos && pos < hi; }
+
+bool Span::overlaps(const Span &other) const { return lo < other.hi && other.lo < hi; }
+
+Span Span::merge(const Span &first, const Span &second)
+{
+    std::size_t new_lo = std::min(first.lo, second.lo);
+    std::size_t new_hi = std::max(first.hi, second.hi);
+
+    std::shared_ptr<SyntaxContextData> new_context = first.context;
+
+    if (first.context != second.context) {
+        LOG_DETAILED_ERROR("Can't merge spans with different contexts!");
+        return Span(0, 0, nullptr);
+    }
+
+    return Span(new_lo, new_hi, new_context);
+}
+File span.h:
+
+#pragma once
+
+#include <cstddef>
+#include <string>
+#include <vector>
+#include <memory>
+
+struct SyntaxContextData {
+    std::vector<std::string> macroStack;
+
+    void pushMacro(const std::string &macroName);
+
+    void popMacro();
+
+    const std::string &currentMacro() const;
+};
+
+struct Span {
+    Span() : lo(0), hi(0), context(nullptr) {};
+    Span(std::size_t start, std::size_t end, std::shared_ptr<SyntaxContextData> ctxt)
+        : lo(start), hi(end), context(ctxt) {};
+
+    bool contains(std::size_t pos) const;
+    bool overlaps(const Span &other) const;
+
+    static Span merge(const Span &first, const Span &second);
+
+    // absolute offsets in bytes from SourceMap
+    std::size_t lo;
+    std::size_t hi;
+
+    std::shared_ptr<SyntaxContextData> context;
+};
 File symbol_table.cpp:
 
 #include "symbol_table.h"
 
-std::unordered_map<std::string, Symbol> SymbolTable::symbols;
-
-void SymbolTable::init() {}
-
 void SymbolTable::addSymbol(const Symbol &symbol)
 {
-    if (symbols.find(symbol.name) == symbols.end()) {
-        symbols[symbol.name] = symbol;
-    } else {
-        const Symbol &existingSymbol = symbols[symbol.name];
-        ErrorReporter::reportError("Symbol redefinition: " + symbol.name + " (Previously defined in " +
-                                      existingSymbol.fileName + " at line " +
-                                      std::to_string(existingSymbol.lineNumber) + ")",
-                                  symbol.lineNumber, 0, "no context", symbol.fileName);
-    }
+    symbols[symbol.name] = symbol;
 }
 
 Symbol *SymbolTable::findSymbol(const std::string &name)
@@ -591,7 +1005,6 @@ File symbol_table.h:
 
 #pragma once
 
-#include "error_reporter.h"
 #include <string>
 #include <unordered_map>
 
@@ -605,12 +1018,11 @@ struct Symbol {
 
 class SymbolTable {
 public:
-    static void init();
-    static void addSymbol(const Symbol &symbol);
-    static Symbol *findSymbol(const std::string &name);
+    void addSymbol(const Symbol &symbol);
+    Symbol *findSymbol(const std::string &name);
 
 private:
-    static std::unordered_map<std::string, Symbol> symbols;
+    std::unordered_map<std::string, Symbol> symbols;
 };
 
 File timer.h:
@@ -661,36 +1073,24 @@ File tokenize.cpp:
 #include <algorithm>
 #include <cctype>
 
-size_t Tokenizer::currentIndex;
-std::string Tokenizer::currentLine;
-
-std::unordered_set<std::string> Tokenizer::directives;
-std::unordered_set<std::string> Tokenizer::instructions;
-std::unordered_set<std::string> Tokenizer::registers;
-
-void Tokenizer::init() { currentIndex = 0; }
-
-
-std::vector<Token> Tokenizer::tokenize(const std::string &input)
+std::vector<Token> Tokenizer::tokenize()
 {
-    std::vector<Token> tokens{
-        Token(TokenType::Identifier, "label", 1, 1, "test.asm"),       // "label"
-        Token(TokenType::Separator, ":", 1, 6, "test.asm"),             // ":"
-        Token(TokenType::Instruction, "mov", 1, 8, "test.asm"),        // "mov
-        Token(TokenType::Register, "eax", 1, 12, "test.asm"),          // "eax"
-        Token(TokenType::Separator, ",", 1, 15, "test.asm"),            // ,
-        Token(TokenType::Number, "1", 1, 17, "test.asm"),              // "1"
-        Token(TokenType::EndOfFile, "", 1, 18, "test.asm")             // End of file token
-    };
+    std::vector<Token> tokens;
+
+    while (pos < src.size()) {
+
+        pos++;
+    }
+
     return tokens;
 }
-
 
 File tokenize.h:
 
 #pragma once
 
-#include "context.h"
+#include "span.h"
+#include "session.h"
 #include <string>
 #include <deque>
 #include <unordered_set>
@@ -705,38 +1105,34 @@ enum class TokenType {
     Operator,
     Separator,
     EndOfFile,
+    EndOfLine,
     Comment,
 };
 
 struct Token {
     enum TokenType type;
     std::string lexeme;
-    int lineNumber;
-    int columnNumber;
-    std::string fileName;
+    Span span;
+
+    // data about macro expansion
 };
 
 class Tokenizer {
 public:
-    static void init();
-    static std::vector<Token> tokenize(const std::string &input);
+    Tokenizer(std::shared_ptr<ParseSession> psess, const std::string &src, std::size_t startPos)
+        : psess(psess), startPos(startPos), src(src), pos(startPos)
+    {
+    }
+    std::vector<Token> tokenize();
 
 private:
-    static size_t currentIndex;
-    static std::string currentLine;
-
-    static std::unordered_set<std::string> directives;
-    static std::unordered_set<std::string> instructions;
-    static std::unordered_set<std::string> registers;
-
-    static void loadReservedWords();
-    static char peekChar();
-    static char getChar();
-    static void skipWhitespace();
-    static Token lexToken();
-
-    static bool isReservedWord(const std::string &word, enum TokenType &type);
+    std::size_t startPos;
+    std::size_t pos;
+    const std::string &src;
+    std::shared_ptr<ParseSession> psess;
 };
+File utils.h:
+
 
 File test_add.cpp:
 

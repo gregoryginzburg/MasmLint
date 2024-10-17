@@ -1,8 +1,9 @@
 #pragma once
 
 #include "input.h"
-#include "error_reporter.h"
+#include "diag_ctxt.h"
 #include "tokenize.h"
+#include "session.h"
 #include <string>
 #include <vector>
 #include <stack>
@@ -11,10 +12,8 @@
 
 class Preprocessor {
 public:
-    static void init();
-    
-
+    Preprocessor(std::shared_ptr<ParseSession> parseSess) : parseSess(parseSess) {}
+    std::vector<Token> preprocess(const std::vector<Token>& tokens);
 private:
-    static std::string processLine(std::string& line);
+    std::shared_ptr<ParseSession> parseSess;
 };
-

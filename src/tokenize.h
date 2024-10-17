@@ -1,6 +1,7 @@
 #pragma once
 
-#include "context.h"
+#include "span.h"
+#include "session.h"
 #include <string>
 #include <deque>
 #include <unordered_set>
@@ -15,35 +16,29 @@ enum class TokenType {
     Operator,
     Separator,
     EndOfFile,
+    EndOfLine,
     Comment,
 };
 
 struct Token {
     enum TokenType type;
     std::string lexeme;
-    int lineNumber;
-    int columnNumber;
-    std::string fileName;
+    Span span;
+
+    // data about macro expansion
 };
 
 class Tokenizer {
 public:
-    static void init();
-    static std::vector<Token> tokenize(const std::string &input);
+    Tokenizer(std::shared_ptr<ParseSession> psess, const std::string &src, std::size_t startPos)
+        : psess(psess), startPos(startPos), src(src), pos(startPos)
+    {
+    }
+    std::vector<Token> tokenize();
 
 private:
-    static size_t currentIndex;
-    static std::string currentLine;
-
-    static std::unordered_set<std::string> directives;
-    static std::unordered_set<std::string> instructions;
-    static std::unordered_set<std::string> registers;
-
-    static void loadReservedWords();
-    static char peekChar();
-    static char getChar();
-    static void skipWhitespace();
-    static Token lexToken();
-
-    static bool isReservedWord(const std::string &word, enum TokenType &type);
+    std::size_t startPos;
+    std::size_t pos;
+    const std::string &src;
+    std::shared_ptr<ParseSession> psess;
 };

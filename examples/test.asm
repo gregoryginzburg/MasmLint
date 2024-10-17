@@ -1,1 +1,2 @@
-mov etx, 1
+add eax, ebx
+𡨸Ь mov etx, 1

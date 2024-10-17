@@ -2,26 +2,22 @@
 
 #include "tokenize.h"
 #include "symbol_table.h"
-#include "error_reporter.h"
-#include "context.h"
+#include "diag_ctxt.h"
 #include "preprocessor.h"
+#include "session.h"
 
 class Parser {
 public:
-    static void init();
-    static void parse();
+    Parser(std::shared_ptr<ParseSession> parseSession, const std::vector<Token> &tokens);
+    void parse();
 
 private:
-    static std::vector<Token> tokens;
-    static size_t currentIndex;
-    static Token currentToken;
+    std::shared_ptr<ParseSession> parseSess;
 
-    static bool getNextLine(std::string& line);
+    Token currentToken;
+    const std::vector<Token> &tokens;
+    int currentIndex;
 
-    static void advance();
-    static void parseLine();
-    static void parseDirective();
-    static void parseInstruction();
-    static void parseOperandList();
-    static void reportError(const std::string &message);
+    void advance();
+    void parseLine();
 };

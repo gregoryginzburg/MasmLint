@@ -22,30 +22,37 @@ block()
     set_target_properties(fmt PROPERTIES FOLDER "ext")
 endblock()
 
-
-
+# utf8proc library
 block()
-    # set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
-    # add_subdirectory(spdlog-1.x)
-    # set_target_properties(spdlog PROPERTIES SYSTEM ON)
-    # set_target_properties(spdlog PROPERTIES FOLDER "ext")
-    # # disable clang-tidy
-    # set_target_properties(spdlog PROPERTIES CXX_CLANG_TIDY "")
-    # # disable cppcheck
-    # set_target_properties(spdlog PROPERTIES CXX_CPPCHECK "")
+    add_subdirectory(utf8proc)
+    set_target_properties(utf8proc PROPERTIES SYSTEM ON)
+    set_target_properties(utf8proc PROPERTIES FOLDER "ext")
+endblock()
+
+# spdlog library
+block()
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
+    set(SPDLOG_FMT_EXTERNAL "ON")
+    add_subdirectory(spdlog-1.x)
+    set_target_properties(spdlog PROPERTIES SYSTEM ON)
+    set_target_properties(spdlog PROPERTIES FOLDER "ext")
+    # disable clang-tidy
+    set_target_properties(spdlog PROPERTIES CXX_CLANG_TIDY "")
+    # disable cppcheck
+    set_target_properties(spdlog PROPERTIES CXX_CPPCHECK "")
 
     #target_compile_definitions(spdlog PRIVATE _ITERATOR_DEBUG_LEVEL=1)
 
-    add_library(spdlog_header_only INTERFACE)
+    # add_library(spdlog_header_only INTERFACE)
 
-    target_include_directories(spdlog_header_only INTERFACE "${CMAKE_CURRENT_LIST_DIR}/spdlog-1.x/include")
+    # target_include_directories(spdlog_header_only INTERFACE "${CMAKE_CURRENT_LIST_DIR}/spdlog-1.x/include")
 
-    set_target_properties(spdlog_header_only PROPERTIES SYSTEM ON)
-    set_target_properties(spdlog_header_only PROPERTIES FOLDER "ext")
-    # disable clang-tidy
-    set_target_properties(spdlog_header_only PROPERTIES CXX_CLANG_TIDY "")
-    # disable cppcheck
-    set_target_properties(spdlog_header_only PROPERTIES CXX_CPPCHECK "")
+    # set_target_properties(spdlog_header_only PROPERTIES SYSTEM ON)
+    # set_target_properties(spdlog_header_only PROPERTIES FOLDER "ext")
+    # # disable clang-tidy
+    # set_target_properties(spdlog_header_only PROPERTIES CXX_CLANG_TIDY "")
+    # # disable cppcheck
+    # set_target_properties(spdlog_header_only PROPERTIES CXX_CPPCHECK "")
 endblock()
 
 

@@ -42,6 +42,8 @@ Checks: "*,
         
         -misc-include-cleaner,
         -misc-confusable-identifiers,
+
+        -modernize-use-nodiscard
 "
 
 

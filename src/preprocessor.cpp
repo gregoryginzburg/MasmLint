@@ -1,14 +1,11 @@
 #include "preprocessor.h"
+#include "tokenize.h"
 #include <sstream>
 #include <algorithm>
 #include <stdexcept>
 
-void Preprocessor::init()
-{
-
-}
-std::string Preprocessor::processLine(std::string &line)
+std::vector<Token> Preprocessor::preprocess(const std::vector<Token> &tokens)
 {
     // TODO
-    return line;
+    return tokens;
 }
