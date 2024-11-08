@@ -1,6 +1,5 @@
 #pragma once
 
-#include "input.h"
 #include "diag_ctxt.h"
 #include "tokenize.h"
 #include "session.h"
@@ -13,7 +12,8 @@
 class Preprocessor {
 public:
     Preprocessor(std::shared_ptr<ParseSession> parseSess) : parseSess(parseSess) {}
-    std::vector<Token> preprocess(const std::vector<Token>& tokens);
+    std::vector<Token> preprocess(const std::vector<Token> &tokens);
+
 private:
     std::shared_ptr<ParseSession> parseSess;
 };

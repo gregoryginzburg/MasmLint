@@ -12,6 +12,7 @@ public:
     void addDiagnostic(const Diagnostic &diag);
     bool hasErrors() const;
     void emitDiagnostics();
+    void emitJsonDiagnostics();
 
 private:
     std::vector<Diagnostic> diagnostics;

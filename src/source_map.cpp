@@ -119,24 +119,20 @@ std::shared_ptr<SourceFile> SourceMap::newSourceFile(const std::filesystem::path
 
 std::shared_ptr<SourceFile> SourceMap::loadFile(const std::filesystem::path &path)
 {
-    // Check if the file is already loaded
     auto existingFile = getSourceFile(path);
     if (existingFile) {
         return existingFile;
     }
 
-    // Open the file
     std::ifstream file(path);
     if (!file.is_open()) {
         return nullptr;
     }
 
-    // Read the entire file content into a string
     std::stringstream buffer;
     buffer << file.rdbuf();
     std::string content = buffer.str();
 
-    // Create a new SourceFile and add it to the SourceMap
     return newSourceFile(path, content);
 }
 
@@ -200,6 +196,7 @@ std::string SourceMap::spanToSnippet(const Span &span) const
 
     if (end_pos > sourceFile->getSource().size()) {
         LOG_DETAILED_ERROR("Span end position out of range");
+        return "";
     }
 
     return sourceFile->getSource().substr(start_pos, end_pos - start_pos);

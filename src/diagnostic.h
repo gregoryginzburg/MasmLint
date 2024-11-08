@@ -3,28 +3,32 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <fmt/core.h>
 
 #include "span.h"
+#include "error_codes.h"
+
+const std::string getErrorMessage(ErrorCode code);
 
 class Diagnostic {
 public:
     enum class Level { Error, Warning, Note };
 
-    Diagnostic(Level level, const std::string &message);
+    template <typename... Args>
+    Diagnostic(Level level, ErrorCode code, Args&&... args)
+        : level(level), code(code), message(fmt::format(fmt::runtime(getErrorMessage(code)), std::forward<Args>(args)...)) {}
 
     void addLabel(const Span &span, const std::string &labelMessage);
-    void addNote(const std::string &note);
 
-    // Accessors
     Level getLevel() const;
+    ErrorCode getCode() const;
     const std::string &getMessage() const;
     const std::vector<std::pair<Span, std::string>> &getLabels() const;
-    const std::vector<std::string> &getNotes() const;
 
 private:
     Level level;
+    ErrorCode code;
     std::string message;
     std::vector<std::pair<Span, std::string>> labels;
-    std::vector<std::string> notes;
 };
 

@@ -1,9 +1,6 @@
 #include "symbol_table.h"
 
-void SymbolTable::addSymbol(const Symbol &symbol)
-{
-    symbols[symbol.name] = symbol;
-}
+void SymbolTable::addSymbol(const Symbol &symbol) { symbols[symbol.name] = symbol; }
 
 Symbol *SymbolTable::findSymbol(const std::string &name)
 {

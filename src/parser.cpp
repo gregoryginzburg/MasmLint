@@ -49,15 +49,8 @@ void Parser::parseLine()
     } else if (currentToken.type == TokenType::Instruction) {
         // parseInstruction();
     } else if (currentToken.type == TokenType::Comment) {
-        // Comment line; do nothing
+        // Comment line
     } else {
         // Syntax error
-        // Syntax error
-        // std::string errMsg = fmt::format("Unexpected token: {}", currentToken.lexeme);
-
-        // Diagnostic diag(Diagnostic::Level::Error, errMsg);
-        // diag.addLabel(currentToken.span, "Unexpected token here");
-
-        // parseSess->dcx->addDiagnostic(diag);
     }
 }

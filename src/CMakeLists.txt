@@ -1,7 +1,5 @@
 set(SOURCES_LIST
     add.cpp
-    log.cpp
-    input.cpp
     parser.cpp
     preprocessor.cpp
     symbol_table.cpp
@@ -19,7 +17,6 @@ set(HEADERS_LIST
     add.h
     log.h
     timer.h
-    input.h
     parser.h
     preprocessor.h
     symbol_table.h
@@ -29,6 +26,9 @@ set(HEADERS_LIST
     diagnostic.h
     emitter.h
     diag_ctxt.h
+    diagnostic_messages.def
+    error_codes.h
+    tokenize.h
 )
 
 add_library(masmlint_lib ${SOURCES_LIST} ${HEADERS_LIST})
@@ -39,7 +39,7 @@ target_link_libraries(
     PRIVATE ml_options
             ml_warnings
 
-            spdlog
+            nlohmann_json
             fmt
             utf8proc
 )
@@ -62,7 +62,7 @@ target_link_libraries(
             ml_options
             ml_warnings
 
-            spdlog
+            nlohmann_json
             fmt
             utf8proc
 )

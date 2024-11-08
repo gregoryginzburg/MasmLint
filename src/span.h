@@ -26,6 +26,7 @@ struct Span {
     static Span merge(const Span &first, const Span &second);
 
     // absolute offsets in bytes from SourceMap
+    // the range is [lo, hi) bytes
     std::size_t lo;
     std::size_t hi;
 

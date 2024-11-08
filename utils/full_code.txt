@@ -13,40 +13,18 @@ File diagnostic.cpp:
 
 #include "diagnostic.h"
 
-Diagnostic::Diagnostic(Level level, const std::string &message)
-    : level(level), message(message)
-{
-}
+Diagnostic::Diagnostic(Level level, const std::string &message) : level(level), message(message) {}
 
 void Diagnostic::addLabel(const Span &span, const std::string &labelMessage)
 {
     labels.emplace_back(span, labelMessage);
 }
 
-void Diagnostic::addNote(const std::string &note)
-{
-    notes.push_back(note);
-}
+Diagnostic::Level Diagnostic::getLevel() const { return level; }
 
-Diagnostic::Level Diagnostic::getLevel() const
-{
-    return level;
-}
+const std::string &Diagnostic::getMessage() const { return message; }
 
-const std::string &Diagnostic::getMessage() const
-{
-    return message;
-}
-
-const std::vector<std::pair<Span, std::string>> &Diagnostic::getLabels() const
-{
-    return labels;
-}
-
-const std::vector<std::string> &Diagnostic::getNotes() const
-{
-    return notes;
-}
+const std::vector<std::pair<Span, std::string>> &Diagnostic::getLabels() const { return labels; }
 
 File diagnostic.h:
 
@@ -65,46 +43,27 @@ public:
     Diagnostic(Level level, const std::string &message);
 
     void addLabel(const Span &span, const std::string &labelMessage);
-    void addNote(const std::string &note);
 
-    // Accessors
     Level getLevel() const;
     const std::string &getMessage() const;
     const std::vector<std::pair<Span, std::string>> &getLabels() const;
-    const std::vector<std::string> &getNotes() const;
 
 private:
     Level level;
     std::string message;
     std::vector<std::pair<Span, std::string>> labels;
-    std::vector<std::string> notes;
 };
-
 
 File diag_ctxt.cpp:
 
 #include "diag_ctxt.h"
 #include "emitter.h"
 
-DiagCtxt::DiagCtxt(std::shared_ptr<Emitter> emitter)
-    : emitter(std::move(emitter))
-{
-}
+DiagCtxt::DiagCtxt(std::shared_ptr<Emitter> emitter) : emitter(std::move(emitter)) {}
 
-void DiagCtxt::addDiagnostic(const Diagnostic &diag)
-{
-    diagnostics.push_back(diag);
-}
+void DiagCtxt::addDiagnostic(const Diagnostic &diag) { diagnostics.push_back(diag); }
 
-bool DiagCtxt::hasErrors() const
-{
-    for (const auto &diag : diagnostics) {
-        if (diag.getLevel() == Diagnostic::Level::Error) {
-            return true;
-        }
-    }
-    return false;
-}
+bool DiagCtxt::hasErrors() const { return !diagnostics.empty(); }
 
 void DiagCtxt::emitDiagnostics()
 {
@@ -141,7 +100,10 @@ File emitter.cpp:
 #include <fmt/core.h>
 #include <fmt/color.h>
 #include <fmt/ostream.h>
-#include <fmt/format.h>
+
+// #include <spdlog/fmt/bundled/core.h>
+// #include <spdlog/fmt/bundled/color.h>
+// #include <spdlog/fmt/bundled/ostream.h>
 
 #include <utf8proc.h>
 
@@ -154,7 +116,6 @@ void Emitter::emit(const Diagnostic &diag)
 {
     printHeader(diag);
     printLabels(diag);
-    printNotes(diag);
 }
 
 void Emitter::printHeader(const Diagnostic &diag)
@@ -169,34 +130,44 @@ void Emitter::printHeader(const Diagnostic &diag)
 
 void Emitter::printLabels(const Diagnostic &diag)
 {
-    for (const auto &labelPair : diag.getLabels()) {
-        const Span &span = labelPair.first;
-        const std::string &labelMsg = labelPair.second;
-
+    for (const auto &[span, labelMsg] : diag.getLabels()) {
         std::filesystem::path filePath;
         std::size_t lineNumberZeroBased, columnNumberZeroBased;
         sourceMap->spanToLocation(span, filePath, lineNumberZeroBased, columnNumberZeroBased);
 
         auto sourceFile = sourceMap->lookupSourceFile(span.lo);
         if (sourceFile) {
-            // Get line content using zero-based line number
             std::string lineContent = sourceFile->getLine(lineNumberZeroBased);
-
-            // Get line start byte position
             std::size_t lineStartByte = sourceFile->getLineStart(lineNumberZeroBased);
-
-            // Compute byte length of the span
+            std::size_t byteOffsetInLine = span.lo - lineStartByte;
             std::size_t byteLength = span.hi - span.lo;
 
-            // Print location (convert to one-based for user display)
             fmt::memory_buffer buffer;
-            fmt::format_to(std::back_inserter(buffer), "  --> {}:{}:{}\n", filePath.string(), lineNumberZeroBased + 1,
-                           columnNumberZeroBased + 1);
-            fmt::format_to(std::back_inserter(buffer), "   {} | {}\n", lineNumberZeroBased + 1, lineContent);
+            if (useColor) {
+                fmt::format_to(std::back_inserter(buffer), "{} {}:{}:{}\n", fmt::format(fg(fmt::color::cyan), "  -->"),
+                               filePath.string(), lineNumberZeroBased + 1, columnNumberZeroBased + 1);
+            } else {
+                fmt::format_to(std::back_inserter(buffer), "  --> {}:{}:{}\n", filePath.string(),
+                               lineNumberZeroBased + 1, columnNumberZeroBased + 1);
+            }
+
+            if (useColor) {
+                fmt::format_to(std::back_inserter(buffer), "   {} {} {}\n",
+                               fmt::format(fg(fmt::color::cyan), "{}", lineNumberZeroBased + 1),
+                               fmt::format(fg(fmt::color::cyan), "|"), lineContent);
+
+            } else {
+                fmt::format_to(std::back_inserter(buffer), "   {} | {}\n", lineNumberZeroBased + 1, lineContent);
+            }
 
             // Print underline
-            std::string underline = createUnderline(lineContent, lineStartByte, byteLength);
-            fmt::format_to(std::back_inserter(buffer), "     | {}\n", underline);
+            std::string underline = createUnderline(lineContent, byteOffsetInLine, byteLength);
+            if (useColor) {
+                fmt::format_to(std::back_inserter(buffer), "     {} {}\n", fmt::format(fg(fmt::color::cyan), "|"),
+                               underline);
+            } else {
+                fmt::format_to(std::back_inserter(buffer), "     | {}\n", underline);
+            }
 
             // Print label message
             if (!labelMsg.empty()) {
@@ -205,20 +176,6 @@ void Emitter::printLabels(const Diagnostic &diag)
 
             out.write(buffer.data(), buffer.size());
         }
-    }
-}
-
-void Emitter::printNotes(const Diagnostic &diag)
-{
-    for (const auto &note : diag.getNotes()) {
-        fmt::memory_buffer buffer;
-        if (useColor) {
-            fmt::format_to(std::back_inserter(buffer), "{}: {}\n",
-                           fmt::format(fmt::emphasis::bold | fg(fmt::color::cyan), "note"), note);
-        } else {
-            fmt::format_to(std::back_inserter(buffer), "note: {}\n", note);
-        }
-        out.write(buffer.data(), buffer.size());
     }
 }
 
@@ -278,7 +235,10 @@ std::string Emitter::createUnderline(const std::string &lineContent, std::size_t
 
     // Create the underline string
     std::string underline(offsetWidth, ' ');
-    std::string carets(underlineWidth > 0 ? underlineWidth : 1, '^'); // Ensure at least one caret
+    if (underlineWidth == 0) {
+        LOG_DETAILED_ERROR("underlineWidth is 0");
+    }
+    std::string carets(underlineWidth > 0 ? underlineWidth : 1, '^');
 
     if (useColor) {
         underline += fmt::format(fmt::emphasis::bold | fg(fmt::color::red), "{}", carets);
@@ -298,7 +258,6 @@ File emitter.h:
 #include <ostream>
 #include <iostream>
 
-
 class Emitter {
 public:
     Emitter(std::shared_ptr<SourceMap> sourceMap, std::ostream &outStream = std::cout, bool useColor = true);
@@ -312,7 +271,6 @@ private:
 
     void printHeader(const Diagnostic &diag);
     void printLabels(const Diagnostic &diag);
-    void printNotes(const Diagnostic &diag);
 
     std::string formatLevel(Diagnostic::Level level);
     std::string formatMessage(const std::string &message);
@@ -321,99 +279,15 @@ private:
     int calculateDisplayWidth(const std::string &text);
 };
 
-
-File input.cpp:
-
-
-File input.h:
-
-#pragma once
-
-#include <string>
-#include <vector>
-#include <fstream>
-#include <memory>
-
-
-
 File log.cpp:
 
-#include <spdlog/spdlog.h>
-#include <spdlog/sinks/stdout_color_sinks.h>
-#include <memory>
-#include "log.h"
-
-std::shared_ptr<spdlog::logger> Log::s_core_logger;
-const char *Log::format_string = "%^%v%$";
-spdlog::level::level_enum Log::log_level = spdlog::level::trace;
-
-void Log::init()
-{
-    // https://github.com/gabime/spdlog/wiki/3.-Custom-formatting
-    spdlog::set_pattern(format_string);
-    s_core_logger = spdlog::stdout_color_mt("MasmLint");
-    s_core_logger->set_level(log_level);
-}
-
-void Log::add_sink(const spdlog::sink_ptr &new_sink)
-{
-    new_sink->set_pattern(format_string);
-    new_sink->set_level(log_level);
-    s_core_logger->sinks().push_back(new_sink);
-}
 File log.h:
 
 #pragma once
-
-#include <spdlog/spdlog.h>
-#include <memory>
-
-class Log {
-public:
-    static void init();
-    static void add_sink(const spdlog::sink_ptr &new_sink);
-
-    static std::shared_ptr<spdlog::logger> &get_core_logger() { return s_core_logger; }
-
-private:
-    static const char *format_string;
-    static spdlog::level::level_enum log_level;
-    static std::shared_ptr<spdlog::logger> s_core_logger;
-    // std::shared_ptr<spdlog::logger> s_client_logger;
-};
-
-// Regular logging macros
-#define LOG_TRACE(...) Log::get_core_logger()->trace(__VA_ARGS__)
-#define LOG_INFO(...) Log::get_core_logger()->info(__VA_ARGS__)
-#define LOG_WARN(...) Log::get_core_logger()->warn(__VA_ARGS__)
-#define LOG_ERROR(...) Log::get_core_logger()->error(__VA_ARGS__)
-
-// Detailed logging macros
-#if defined(__clang__)
-#    define PRETTY_FUNCTION __PRETTY_FUNCTION__
-#elif defined(__GNUC__) || defined(__GNUG__)
-#    define PRETTY_FUNCTION __PRETTY_FUNCTION__
-#elif defined(_MSC_VER)
-#    define PRETTY_FUNCTION __FUNCSIG__
-#else
-#    define PRETTY_FUNCTION __func__
-#endif
-
-#define LOG_FORMAT_DETAILED(message, file, line, function) "[{}:{} ({})] {}", file, line, function, message
-
-#define LOG_DETAILED_TRACE(...)                                                                                        \
-    Log::get_core_logger()->trace(LOG_FORMAT_DETAILED(fmt::format(__VA_ARGS__), __FILE__, __LINE__, PRETTY_FUNCTION))
-#define LOG_DETAILED_INFO(...)                                                                                         \
-    Log::get_core_logger()->info(LOG_FORMAT_DETAILED(fmt::format(__VA_ARGS__), __FILE__, __LINE__, PRETTY_FUNCTION))
-#define LOG_DETAILED_WARN(...)                                                                                         \
-    Log::get_core_logger()->warn(LOG_FORMAT_DETAILED(fmt::format(__VA_ARGS__), __FILE__, __LINE__, PRETTY_FUNCTION))
-#define LOG_DETAILED_ERROR(...)                                                                                        \
-    Log::get_core_logger()->error(LOG_FORMAT_DETAILED(fmt::format(__VA_ARGS__), __FILE__, __LINE__, PRETTY_FUNCTION))
-
+#define LOG_DETAILED_ERROR(...)
 File main.cpp:
 
 #include "log.h"
-#include "input.h"
 #include "preprocessor.h"
 #include "symbol_table.h"
 #include "parser.h"
@@ -425,42 +299,54 @@ File main.cpp:
 #include <filesystem>
 
 #ifdef _WIN32
-    #include <windows.h>
-    #include <io.h>
-    #include <fcntl.h>
+#    include <windows.h>
 #endif
 
-void setupConsoleForUtf8() {
+void setupConsoleForUtf8()
+{
 #ifdef _WIN32
     // Set console output code page to UTF-8 on Windows
     SetConsoleOutputCP(CP_UTF8);
-    // Set output mode to handle UTF-8 text properly
-    // _setmode(_fileno(stdout), _O_U8TEXT);
 #endif
 }
 
 int main(/* int argc, char *argv[]*/)
 {
     setupConsoleForUtf8();
-    Log::init();
+    // Log::init();
 
     std::filesystem::path filename = "examples/test.asm";
 
     auto parseSess = std::make_shared<ParseSession>();
     auto sourceFile = parseSess->sourceMap->loadFile(filename);
 
-    auto tokenizer = Tokenizer(parseSess, sourceFile->getSource(), 0);
-    auto preprocessor = Preprocessor(parseSess);
+    if (sourceFile) {
+        auto tokenizer = Tokenizer(parseSess, sourceFile->getSource(), 0);
+        auto preprocessor = Preprocessor(parseSess);
 
-    std::vector<Token> tokens = tokenizer.tokenize();
-    tokens = preprocessor.preprocess(tokens);
-    Parser parser(parseSess, tokens);
-    parser.parse();
+        std::vector<Token> tokens = tokenizer.tokenize();
+        tokens = preprocessor.preprocess(tokens);
+        Parser parser(parseSess, tokens);
+        parser.parse();
+    } else {
+        Diagnostic diag(Diagnostic::Level::Error, "failed to open file");
+        parseSess->dcx->addDiagnostic(diag);
+    }
 
+    // TESTING
     std::string errMsg = "hey";
 
     Diagnostic diag(Diagnostic::Level::Error, errMsg);
-    diag.addLabel(Span(6, 7, nullptr), "Unexpected token here");
+    std::string test_string = sourceFile->getSource();
+    int idx = 0;
+    while (idx < test_string.size()) {
+        if (test_string[idx] == 'o') {
+            break;
+        }
+        idx++;
+    }
+    diag.addLabel(Span(idx, idx + 1, nullptr), "Unexpected token here");
+    // diag.addLabel(Span(idx+1, idx + 2, nullptr), "Unexpected token here");
 
     parseSess->dcx->addDiagnostic(diag);
 
@@ -525,16 +411,9 @@ void Parser::parseLine()
     } else if (currentToken.type == TokenType::Instruction) {
         // parseInstruction();
     } else if (currentToken.type == TokenType::Comment) {
-        // Comment line; do nothing
+        // Comment line
     } else {
         // Syntax error
-        // Syntax error
-        // std::string errMsg = fmt::format("Unexpected token: {}", currentToken.lexeme);
-
-        // Diagnostic diag(Diagnostic::Level::Error, errMsg);
-        // diag.addLabel(currentToken.span, "Unexpected token here");
-
-        // parseSess->dcx->addDiagnostic(diag);
     }
 }
 
@@ -581,7 +460,6 @@ File preprocessor.h:
 
 #pragma once
 
-#include "input.h"
 #include "diag_ctxt.h"
 #include "tokenize.h"
 #include "session.h"
@@ -594,7 +472,8 @@ File preprocessor.h:
 class Preprocessor {
 public:
     Preprocessor(std::shared_ptr<ParseSession> parseSess) : parseSess(parseSess) {}
-    std::vector<Token> preprocess(const std::vector<Token>& tokens);
+    std::vector<Token> preprocess(const std::vector<Token> &tokens);
+
 private:
     std::shared_ptr<ParseSession> parseSess;
 };
@@ -625,7 +504,6 @@ File session.h:
 
 #include "symbol_table.h"
 #include "source_map.h"
-#include "input.h"
 #include "diag_ctxt.h"
 
 class ParseSession {
@@ -760,24 +638,20 @@ std::shared_ptr<SourceFile> SourceMap::newSourceFile(const std::filesystem::path
 
 std::shared_ptr<SourceFile> SourceMap::loadFile(const std::filesystem::path &path)
 {
-    // Check if the file is already loaded
     auto existingFile = getSourceFile(path);
     if (existingFile) {
         return existingFile;
     }
 
-    // Open the file
     std::ifstream file(path);
     if (!file.is_open()) {
         return nullptr;
     }
 
-    // Read the entire file content into a string
     std::stringstream buffer;
     buffer << file.rdbuf();
     std::string content = buffer.str();
 
-    // Create a new SourceFile and add it to the SourceMap
     return newSourceFile(path, content);
 }
 
@@ -841,6 +715,7 @@ std::string SourceMap::spanToSnippet(const Span &span) const
 
     if (end_pos > sourceFile->getSource().size()) {
         LOG_DETAILED_ERROR("Span end position out of range");
+        return "";
     }
 
     return sourceFile->getSource().substr(start_pos, end_pos - start_pos);
@@ -863,13 +738,12 @@ public:
     std::size_t getStartPos() const;
     std::size_t getEndPos() const;
 
-    // Maps a byte position to a line number
+    // Maps a byte position to a line number (zer based)
     std::size_t getLineNumber(std::size_t pos) const;
 
-    // Retrieves the content of a specific line
     std::string getLine(std::size_t lineNumber) const;
 
-    // Maps a byte position to a column number within its line
+    // Maps a byte position to a column number within its line (zero based)
     std::size_t getColumnNumber(std::size_t pos) const;
 
     std::size_t getLineStart(std::size_t lineNumber) const;
@@ -877,34 +751,29 @@ public:
     static std::size_t countCodePoints(const std::string &str, std::size_t startByte, std::size_t endByte);
 
 private:
-    std::filesystem::path path;          // File path
+    std::filesystem::path path;          
     std::string src;                     // Source code content
-    std::size_t startPos;                // Starting position in the global source map
-    std::size_t endPos;                  // Ending position in the global source map
+    std::size_t startPos;                // Starting position in the global source map (including startPos)
+    std::size_t endPos;                  // Ending position in the global source map (excluding endPos)
     std::vector<std::size_t> lineStarts; // Byte positions where each line starts
-
 };
 
 class SourceMap {
 public:
     SourceMap() {};
 
-    // Adds a new source file to the map
     std::shared_ptr<SourceFile> newSourceFile(const std::filesystem::path &path, const std::string &src);
 
-    // Loads a file from disk and adds it to the source map
     std::shared_ptr<SourceFile> loadFile(const std::filesystem::path &path);
 
-    // Finds the source file containing a given position
     std::shared_ptr<SourceFile> lookupSourceFile(std::size_t pos) const;
 
-    // Retrieves a source file by its path
     std::shared_ptr<SourceFile> getSourceFile(const std::filesystem::path &path) const;
 
-    // Maps a global byte position to line and column
+    // Maps a global byte position to line and column (zero based)
     std::pair<std::size_t, std::size_t> lookupLineColumn(std::size_t pos) const;
 
-    // Maps a span to file path, line, and column
+    // Maps a span to file path, line, and column (zero based)
     void spanToLocation(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
                         std::size_t &outColumn) const;
 
@@ -978,6 +847,7 @@ struct Span {
     static Span merge(const Span &first, const Span &second);
 
     // absolute offsets in bytes from SourceMap
+    // the range is [lo, hi) bytes
     std::size_t lo;
     std::size_t hi;
 
@@ -987,10 +857,7 @@ File symbol_table.cpp:
 
 #include "symbol_table.h"
 
-void SymbolTable::addSymbol(const Symbol &symbol)
-{
-    symbols[symbol.name] = symbol;
-}
+void SymbolTable::addSymbol(const Symbol &symbol) { symbols[symbol.name] = symbol; }
 
 Symbol *SymbolTable::findSymbol(const std::string &name)
 {
@@ -1131,9 +998,6 @@ private:
     const std::string &src;
     std::shared_ptr<ParseSession> psess;
 };
-File utils.h:
-
-
 File test_add.cpp:
 
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN

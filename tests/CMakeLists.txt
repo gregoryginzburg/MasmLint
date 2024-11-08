@@ -9,7 +9,7 @@ set(HEADERS_LIST
 
 add_executable(tests ${SOURCES_LIST} ${HEADERS_LIST})
 target_link_libraries(tests PRIVATE masmlint_lib)
-target_link_libraries(tests PRIVATE doctest::doctest ml_options ml_warnings)
+target_link_libraries(tests PRIVATE doctest::doctest ml_options ml_warnings nlohmann_json fmt utf8proc)
 
 
 include(doctest)

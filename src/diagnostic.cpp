@@ -1,36 +1,32 @@
 #include "diagnostic.h"
+#include "fmt/core.h"
 
-Diagnostic::Diagnostic(Level level, const std::string &message)
-    : level(level), message(message)
-{
-}
+// template <typename... Args>
+// Diagnostic::Diagnostic(Level level, ErrorCode code, Args&&... args)
+//     : level(level), code(code), message(fmt::format(getErrorMessage(code), std::forward<Args>(args)...)) {}
 
 void Diagnostic::addLabel(const Span &span, const std::string &labelMessage)
 {
     labels.emplace_back(span, labelMessage);
 }
 
-void Diagnostic::addNote(const std::string &note)
-{
-    notes.push_back(note);
-}
+Diagnostic::Level Diagnostic::getLevel() const { return level; }
 
-Diagnostic::Level Diagnostic::getLevel() const
-{
-    return level;
-}
+ErrorCode Diagnostic::getCode() const { return code; }
 
-const std::string &Diagnostic::getMessage() const
-{
-    return message;
-}
+const std::string &Diagnostic::getMessage() const { return message; }
 
-const std::vector<std::pair<Span, std::string>> &Diagnostic::getLabels() const
-{
-    return labels;
-}
+const std::vector<std::pair<Span, std::string>> &Diagnostic::getLabels() const { return labels; }
 
-const std::vector<std::string> &Diagnostic::getNotes() const
+const std::string getErrorMessage(ErrorCode code)
 {
-    return notes;
+    switch (code) {
+#define DEFINE_ERROR(code, message)                                                                                    \
+    case ErrorCode::code:                                                                                              \
+        return message;
+#include "diagnostic_messages.def"
+#undef DEFINE_ERROR
+    default:
+        return "Unknown error.";
+    }
 }

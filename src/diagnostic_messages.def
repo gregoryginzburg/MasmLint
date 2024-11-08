@@ -1,0 +1,11 @@
+#ifndef DEFINE_ERROR
+    #define DEFINE_ERROR(code, msg)
+#endif
+
+DEFINE_ERROR(UNEXPECTED_TOKEN, "Unexpected token '{}'.")
+DEFINE_ERROR(FAILED_TO_OPEN_FILE, "Failed to open file '{}'.")
+DEFINE_ERROR(SYNTAX_ERROR, "Syntax error: {}")
+DEFINE_ERROR(UNRECOGNIZED_SYMBOL, "Unrecognized symbol")
+DEFINE_ERROR(LINE_CONTINUATION_NOT_SUPPORTED, "Line continuations are not supported")
+DEFINE_ERROR(INVALID_NUMBER_FORMAT, "Invalid number format")
+DEFINE_ERROR(UNTERMINATED_STRING_LITERAL, "Unterminated string literal")

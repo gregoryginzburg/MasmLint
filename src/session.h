@@ -6,7 +6,6 @@
 
 #include "symbol_table.h"
 #include "source_map.h"
-#include "input.h"
 #include "diag_ctxt.h"
 
 class ParseSession {
