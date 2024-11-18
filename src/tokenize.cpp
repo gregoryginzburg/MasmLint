@@ -185,7 +185,7 @@ bool Tokenizer::isValidNumber(const std::string &lexeme)
     }
 
     size_t len = lexeme.size();
-    char suffix = tolower(lexeme[len - 1]);
+    char suffix = static_cast<char>(tolower(lexeme[len - 1]));
     std::string digits = lexeme.substr(0, len - 1);
     unsigned int base = 10;
 
@@ -214,6 +214,9 @@ bool Tokenizer::isValidNumber(const std::string &lexeme)
     }
 
     // check that digits are valid for the base
+    if (digits.empty()) {
+        return false;
+    }
     for (char c : digits) {
         c = static_cast<char>(tolower(c));
         if (base == 16) {

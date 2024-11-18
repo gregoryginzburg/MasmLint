@@ -11,7 +11,7 @@ using json = nlohmann::json;
 #include <utf8proc.h>
 
 Emitter::Emitter(std::shared_ptr<SourceMap> sourceMap, std::ostream &outStream, bool useColor)
-    : sourceMap(std::move(sourceMap)), out(outStream), useColor(useColor)
+    : sourceMap(sourceMap), out(outStream), useColor(useColor)
 {
 }
 
