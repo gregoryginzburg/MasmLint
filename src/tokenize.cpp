@@ -10,8 +10,8 @@
 #include <string>
 
 static const std::unordered_set<std::string> directives = {
-    "INCLUDE", "EQU", "DB",   "DW",     "DD",  "DQ",   "END",  ".STACK", ".DATA", ".CODE", "PROC",  "ENDP",
-    "STRUC",   "ENDS", "RECORD", "PTR", "TYPE", "SIZE", "LENGTH", "WIDTH", "MASK",  "OFFSET"};
+    "INCLUDE", "EQU",   "DB",   "DW",     "DD",  "DQ",   "END",  ".STACK", ".DATA", ".CODE", "PROC",
+    "ENDP",    "STRUC", "ENDS", "RECORD", "PTR", "TYPE", "SIZE", "LENGTH", "WIDTH", "MASK",  "OFFSET"};
 
 static const std::unordered_set<std::string> instructions = {
     "MOV",   "XCHG",  "MOVZX", "MOVSX", "DIV",   "IDIV",  "MUL",   "IMUL",  "ADD",   "ADC",   "INC",   "SUB",
@@ -51,11 +51,19 @@ std::vector<Token> Tokenizer::tokenize()
 
     tokens.emplace_back(Token{TokenType::EndOfFile, "", Span(pos, pos, context)});
 
+    // TODO: remove testing code
+    // Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_NUMBER_FORMAT);
+    // diag.addPrimaryLabel(Span(0, 3, nullptr), "hey");
+    // diag.addSecondaryLabel(Span(4, 5, nullptr), "hi");
+    // diag.addSecondaryLabel(Span(22, 23, nullptr), "nice");
+    // psess->dcx->addDiagnostic(diag);
+
     return tokens;
 }
 
 void Tokenizer::skipWhitespace()
 {
+    // TODO fix isspace to handle utf8
     while (pos < src.size() && isspace(src[pos])) {
         ++pos;
     }
@@ -319,8 +327,10 @@ Token Tokenizer::getSpecialSymbolToken()
     return Token{type, lexeme, Span(start, pos, nullptr)};
 }
 
+// TODO fix isalpha to handle utf8
 bool Tokenizer::isValidIdentifierStart(char c) { return isalpha(c) || c == '_' || c == '@' || c == '$' || c == '?'; }
 
+// TODO fix isalnum to handle utf8
 bool Tokenizer::isValidIdentifierChar(char c) { return isalnum(c) || c == '_' || c == '@' || c == '$' || c == '?'; }
 
 bool Tokenizer::isValidIdentifier(const std::string &lexeme)

@@ -30,27 +30,12 @@ void Parser::advance()
     }
 }
 
-void Parser::parseLine()
+void Parser::parseLine() 
 {
-    if (currentToken.type == TokenType::Identifier) {
-        // Possible label or instruction
-        if (currentIndex < tokens.size() && tokens[currentIndex].lexeme == ":") {
-            // It's a label
-            parseSess->symbolTable->addSymbol({currentToken.lexeme, Symbol::Type::Label});
-            advance();
-            advance();
-            // parseLine();
-        } else {
-            // Treat as instruction or directive
-            // parseInstruction();
-        }
-    } else if (currentToken.type == TokenType::Directive) {
-        // parseDirective();
-    } else if (currentToken.type == TokenType::Instruction) {
-        // parseInstruction();
-    } else if (currentToken.type == TokenType::Comment) {
-        // Comment line
-    } else {
-        // Syntax error
-    }
+    parseExpression();
+}
+
+void Parser::parseExpression()
+{
+    
 }

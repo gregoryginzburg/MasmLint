@@ -22,6 +22,8 @@ public:
     // Maps a byte position to a column number within its line (zero based)
     std::size_t getColumnNumber(std::size_t pos) const;
 
+    std::size_t getColumnPosition(std::size_t pos) const;
+
     std::size_t getLineStart(std::size_t lineNumber) const;
 
     static std::size_t countCodePoints(const std::string &str, std::size_t startByte, std::size_t endByte);
@@ -51,6 +53,13 @@ public:
 
     // Maps a span to file path, line, and column (zero based)
     void spanToLocation(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
+                        std::size_t &outColumn) const;
+
+    // Column doesn't is only position, TODO: refactor
+    void spanToStartLocation(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
+                        std::size_t &outColumn) const;
+
+    void spanToEndLocation(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
                         std::size_t &outColumn) const;
 
     // Retrieves the source code snippet corresponding to a span

@@ -62,7 +62,7 @@ private:
     template <typename... Args> void addDiagnostic(size_t start, size_t end, ErrorCode errorCode, Args &&...args)
     {
         Diagnostic diag(Diagnostic::Level::Error, errorCode, std::forward<Args>(args)...);
-        diag.addLabel(Span(start, end, nullptr), "");
+        diag.addPrimaryLabel(Span(start, end, nullptr), "");
         psess->dcx->addDiagnostic(diag);
     }
 

@@ -10,7 +10,7 @@ void SyntaxContextData::popMacro()
     }
 }
 
-const std::string &SyntaxContextData::currentMacro() const { return macroStack.empty() ? "" : macroStack.back(); }
+const std::string SyntaxContextData::currentMacro() const { return macroStack.empty() ? "" : macroStack.back(); }
 
 bool Span::contains(std::size_t pos) const { return lo <= pos && pos < hi; }
 
@@ -30,3 +30,22 @@ Span Span::merge(const Span &first, const Span &second)
 
     return Span(new_lo, new_hi, new_context);
 }
+
+bool Span::operator==(const Span &other) const { return lo == other.lo && hi == other.hi && context == other.context; }
+
+bool Span::operator!=(const Span &other) const { return !(*this == other); }
+
+bool Span::operator<(const Span &other) const
+{
+    if (lo != other.lo)
+        return lo < other.lo;
+    if (hi != other.hi)
+        return hi < other.hi;
+    return true;
+}
+
+bool Span::operator>(const Span &other) const { return other < *this; }
+
+bool Span::operator<=(const Span &other) const { return !(other < *this); }
+
+bool Span::operator>=(const Span &other) const { return !(*this < other); }

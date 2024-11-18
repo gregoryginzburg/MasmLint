@@ -12,7 +12,7 @@ struct SyntaxContextData {
 
     void popMacro();
 
-    const std::string &currentMacro() const;
+    const std::string currentMacro() const;
 };
 
 struct Span {
@@ -24,6 +24,13 @@ struct Span {
     bool overlaps(const Span &other) const;
 
     static Span merge(const Span &first, const Span &second);
+
+    bool operator==(const Span &other) const;
+    bool operator!=(const Span &other) const;
+    bool operator<(const Span &other) const;
+    bool operator>(const Span &other) const;
+    bool operator<=(const Span &other) const;
+    bool operator>=(const Span &other) const;
 
     // absolute offsets in bytes from SourceMap
     // the range is [lo, hi) bytes

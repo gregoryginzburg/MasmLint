@@ -106,6 +106,15 @@ std::size_t SourceFile::getColumnNumber(std::size_t pos) const
     return countCodePoints(src, lineStartPos, localPos);
 }
 
+std::size_t SourceFile::getColumnPosition(std::size_t pos) const
+{
+    std::size_t lineNumber = getLineNumber(pos);
+    std::size_t lineStartPos = lineStarts[lineNumber];
+    std::size_t localPos = pos - startPos;
+
+    return localPos - lineStartPos;
+}
+
 std::shared_ptr<SourceFile> SourceMap::newSourceFile(const std::filesystem::path &path, const std::string &src)
 {
     std::size_t startPos = 0;
@@ -176,6 +185,37 @@ void SourceMap::spanToLocation(const Span &span, std::filesystem::path &outPath,
         outPath = file->getPath();
         outLine = file->getLineNumber(span.lo);     // Zero-based
         outColumn = file->getColumnNumber(span.lo); // Zero-based
+    } else {
+        outPath.clear();
+        outLine = 0;
+        outColumn = 0;
+    }
+}
+
+void SourceMap::spanToStartLocation(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
+                                    std::size_t &outColumn) const
+{
+    auto file = lookupSourceFile(span.lo);
+    if (file) {
+        outPath = file->getPath();
+        outLine = file->getLineNumber(span.lo); // Zero-based
+        outColumn = file->getColumnPosition(span.lo);
+    } else {
+        outPath.clear();
+        outLine = 0;
+        outColumn = 0;
+    }
+}
+
+void SourceMap::spanToEndLocation(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
+                                  std::size_t &outColumn) const
+{
+    auto file = lookupSourceFile(span.hi - 1);
+    if (file) {
+        outPath = file->getPath();
+        outLine = file->getLineNumber(span.hi - 1);       // Zero-based
+        // (need to add one because in the span (4, 5) startLocation is column 4 but endLocation column should be 5)
+        outColumn = file->getColumnPosition(span.hi - 1) + 1; // Zero-based
     } else {
         outPath.clear();
         outLine = 0;

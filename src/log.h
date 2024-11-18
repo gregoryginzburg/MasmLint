@@ -28,6 +28,7 @@
 // #define LOG_DETAILED_ERROR(...)                                                                                        \
 //     Log::get_core_logger()->error(LOG_FORMAT_DETAILED(fmt::format(__VA_ARGS__), __FILE__, __LINE__, PRETTY_FUNCTION))
 #include <fmt/core.h>
+#include <fmt/color.h>
 
 #if defined(__GNUC__) || defined(__clang__)
     #define PRETTY_FUNCTION __PRETTY_FUNCTION__
@@ -38,4 +39,4 @@
 #endif
 
 #define LOG_DETAILED_ERROR(...) \
-    fmt::print(stderr, "[ERROR] {} ({}:{}): {}\n", __FILE__, __LINE__, PRETTY_FUNCTION, fmt::format(__VA_ARGS__));
+    fmt::print(stderr, "{} {} ({}:{}): {}\n", fmt::format(fg(fmt::color::red), "[ERROR]"), __FILE__, __LINE__, PRETTY_FUNCTION, fmt::format(__VA_ARGS__));

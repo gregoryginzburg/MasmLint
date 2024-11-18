@@ -20,4 +20,5 @@ private:
 
     void advance();
     void parseLine();
+    void parseExpression();
 };
