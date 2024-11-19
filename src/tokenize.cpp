@@ -71,14 +71,16 @@ std::vector<Token> Tokenizer::tokenize()
         }
     }
 
-    tokens.emplace_back(Token{TokenType::EndOfFile, "", Span(pos, pos, context)});
+    // because files always ends with a '\n', we can make EndOfFile span equal to the last '\n' 
+    // to be able to underline EndOfFile correctly
+    tokens.emplace_back(Token{TokenType::EndOfFile, "", Span(pos - 2, pos - 1, context)});
 
     // TODO: remove testing code
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_NUMBER_FORMAT);
     // diag.addSecondaryLabel(Span(0, 1, nullptr), "pr");
     // diag.addPrimaryLabel(Span(2, 3, nullptr), "hey");
     // diag.addSecondaryLabel(Span(4, 5, nullptr), "hi");
-    diag.addPrimaryLabel(Span(pos-1, pos, nullptr), "nice");
+    diag.addPrimaryLabel(Span(pos - 2, pos - 1, nullptr), "nice");
     psess->dcx->addDiagnostic(diag);
 
     return tokens;
@@ -183,8 +185,7 @@ Token Tokenizer::getIdentifierOrKeywordToken()
         return Token{TokenType::Operator, lexeme, tokenSpan};
     } else if (types.count(lexemeUpper)) {
         return Token{TokenType::Type, lexeme, tokenSpan};
-    } 
-    else {
+    } else {
         return Token{TokenType::Identifier, lexeme, tokenSpan};
     }
 }

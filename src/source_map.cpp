@@ -141,6 +141,8 @@ std::shared_ptr<SourceFile> SourceMap::loadFile(const std::filesystem::path &pat
     std::stringstream buffer;
     buffer << file.rdbuf();
     std::string content = buffer.str();
+    // TODO: remove this hack to handle EndOfFile drawing
+    content += "\n";
 
     return newSourceFile(path, content);
 }
@@ -215,7 +217,7 @@ void SourceMap::spanToEndLocation(const Span &span, std::filesystem::path &outPa
     auto file = lookupSourceFile(span.hi - 1);
     if (file) {
         outPath = file->getPath();
-        outLine = file->getLineNumber(span.hi - 1);       // Zero-based
+        outLine = file->getLineNumber(span.hi - 1); // Zero-based
         // (need to add one because in the span (4, 5) startLocation is column 4 but endLocation column should be 5)
         outColumn = file->getColumnPosition(span.hi - 1) + 1; // Zero-based
     } else {
