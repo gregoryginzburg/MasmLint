@@ -54,7 +54,8 @@ int main(int argc, char *argv[])
         tokens = preprocessor.preprocess(tokens);
         Parser parser(parseSess, tokens);
         ASTPtr root = parser.parse();
-        
+        printAST(root, 0);
+
     } else {
         Diagnostic diag(Diagnostic::Level::Error, ErrorCode::FAILED_TO_OPEN_FILE, filename.string());
         parseSess->dcx->addDiagnostic(diag);

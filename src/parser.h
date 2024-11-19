@@ -27,4 +27,11 @@ private:
 
     ASTPtr parseLine();
     ASTPtr parseExpression();
+    ASTPtr parseMultiplicativeExpression();
+    ASTPtr parseUnaryExpression();
+    ASTPtr parsePostfixExpression();
+    ASTPtr parseMemberAccessExpression();
+    ASTPtr parseHighPrecedenceUnaryExpression();
+    ASTPtr parseIndexSequence();
+    ASTPtr parsePrimaryExpression();
 };
