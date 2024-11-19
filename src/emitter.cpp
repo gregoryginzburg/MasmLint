@@ -34,8 +34,9 @@ void Emitter::printHeader(const Diagnostic &diag)
     auto levelStr = formatLevel(diag.getLevel());
     auto codeStr = formatErrorCode(diag.getLevel(), diag.getCode());
     auto message = format(fmt::emphasis::bold | fg(whiteColor), "{}", diag.getMessage());
+    auto colon = format(fmt::emphasis::bold | fg(whiteColor), ":");
 
-    std::string result = format(fmt::emphasis::bold, "{}{}: {}\n", levelStr, codeStr, message);
+    std::string result = fmt::format("{}{}: {}\n", levelStr, codeStr, message);
     out.write(result.data(), result.size());
 }
 
@@ -104,6 +105,9 @@ void Emitter::printDiagnosticBody(const Diagnostic &diag)
                    format(fg(cyanColor), "-->"), primaryFilePath.string(), primaryLineNumberZeroBased + 1,
                    primaryColumnNumberZeroBased + 1);
 
+    // print empty line
+    fmt::format_to(std::back_inserter(buffer), "{} {}\n", std::string(spaceCount, ' '), format(fg(cyanColor), "|"));
+
     // print primary string
     auto primarySourceFile = sourceMap->getSourceFile(primaryFilePath);
     std::string primaryLineContent = primarySourceFile->getLine(primaryLineNumberZeroBased);
@@ -125,6 +129,9 @@ void Emitter::printDiagnosticBody(const Diagnostic &diag)
         // print "..."
         fmt::format_to(std::back_inserter(buffer), "{}{}\n", std::string(spaceCount, ' '),
                        format(fg(cyanColor), "..."));
+        // print empty line
+        fmt::format_to(std::back_inserter(buffer), "{} {}\n", std::string(spaceCount, ' '), format(fg(cyanColor), "|"));
+
         // print string
         std::string lineContent = primarySourceFile->getLine(lineNumberZeroBased);
         int lineNumberWidth = calculateDisplayWidth(std::to_string(lineNumberZeroBased + 1));
@@ -298,14 +305,15 @@ void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, std::string lineCon
                 primaryLabelIndex = startPos;
             }
         }
+
         std::string coloredLine;
         for (size_t i = 0; i < messageLine.size(); ++i) {
             char c = messageLine[i];
             if (c == '|') {
                 if (primaryLabelIndex && primaryLabelIndex == i) {
-                    coloredLine += format(fg(primaryColor), "{}", c);
+                    coloredLine += format(fg(primaryColor), "{}", "│");
                 } else {
-                    coloredLine += format(fg(cyanColor), "{}", c);
+                    coloredLine += format(fg(cyanColor), "{}", "│");
                 }
             } else {
                 coloredLine += c;
@@ -336,9 +344,9 @@ void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, std::string lineCon
             char c = messageLine[i];
             if (c == '|') {
                 if (primaryLabelIndex && primaryLabelIndex == i) {
-                    coloredLine += format(fg(primaryColor), "{}", c);
+                    coloredLine += format(fg(primaryColor), "{}", "│");
                 } else {
-                    coloredLine += format(fg(cyanColor), "{}", c);
+                    coloredLine += format(fg(cyanColor), "{}", "│");
                 }
             } else {
                 coloredLine += c;

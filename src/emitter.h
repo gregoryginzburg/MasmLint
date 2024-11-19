@@ -22,7 +22,7 @@ private:
     std::ostream &out;
     bool useColor;
     fmt::rgb whiteColor = fmt::rgb(200, 200, 200);
-    fmt::rgb redColor = fmt::rgb(235, 0, 0);
+    fmt::rgb redColor = fmt::rgb(254,89,89);
     fmt::rgb yellowColor = fmt::rgb(255, 191, 0);
     fmt::rgb cyanColor = fmt::rgb(0, 200, 200);
 
