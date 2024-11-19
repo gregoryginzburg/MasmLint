@@ -9,50 +9,116 @@ File add.h:
 
 int add(int a, int b);
 int mul(int a, int b);
+File ast.h:
+
+#include "tokenize.h"
+
+class AST
+{
+    
+};
+
+class BinaryOperator : public AST
+{
+    
+}
 File diagnostic.cpp:
 
 #include "diagnostic.h"
+#include "fmt/core.h"
 
-Diagnostic::Diagnostic(Level level, const std::string &message) : level(level), message(message) {}
+// template <typename... Args>
+// Diagnostic::Diagnostic(Level level, ErrorCode code, Args&&... args)
+//     : level(level), code(code), message(fmt::format(getErrorMessage(code), std::forward<Args>(args)...)) {}
 
-void Diagnostic::addLabel(const Span &span, const std::string &labelMessage)
+
+void Diagnostic::addPrimaryLabel(const Span &span, const std::string &labelMessage)
 {
-    labels.emplace_back(span, labelMessage);
+    primaryLabel = std::pair<Span, std::string>(span, labelMessage);
+}
+
+void Diagnostic::addSecondaryLabel(const Span &span, const std::string &labelMessage)
+{
+    secondaryLabels.emplace_back(span, labelMessage);
 }
 
 Diagnostic::Level Diagnostic::getLevel() const { return level; }
 
+ErrorCode Diagnostic::getCode() const { return code; }
+
 const std::string &Diagnostic::getMessage() const { return message; }
 
-const std::vector<std::pair<Span, std::string>> &Diagnostic::getLabels() const { return labels; }
+const std::pair<Span, std::string> &Diagnostic::getPrimaryLabel() const { return primaryLabel; }
 
+const std::vector<std::pair<Span, std::string>> &Diagnostic::getSecondaryLabels() const { return secondaryLabels; }
+
+const std::optional<std::string> &Diagnostic::getNoteMessage() const { return noteMessage; }
+
+const std::optional<std::string> &Diagnostic::getHelpMessage() const {return helpMessage; }
+
+const std::string getErrorMessage(ErrorCode code)
+{
+    switch (code) {
+#define DEFINE_ERROR(code, message)                                                                                    \
+    case ErrorCode::code:                                                                                              \
+        return message;
+#include "diagnostic_messages.def"
+#undef DEFINE_ERROR
+    default:
+        return "Unknown error.";
+    }
+}
 File diagnostic.h:
 
 #pragma once
 
 #include <string>
 #include <vector>
+#include <optional>
 #include <memory>
+#include <fmt/core.h>
 
 #include "span.h"
+#include "error_codes.h"
+
+const std::string getErrorMessage(ErrorCode code);
 
 class Diagnostic {
 public:
     enum class Level { Error, Warning, Note };
 
-    Diagnostic(Level level, const std::string &message);
+    template <typename... Args>
+    Diagnostic(Level level, ErrorCode code, Args&&... args)
+        : level(level), code(code), message(fmt::format(fmt::runtime(getErrorMessage(code)), std::forward<Args>(args)...)) {}
 
-    void addLabel(const Span &span, const std::string &labelMessage);
+    void addPrimaryLabel(const Span &span, const std::string &labelMessage);
+    void addSecondaryLabel(const Span &span, const std::string &labelMessage);
 
     Level getLevel() const;
+    ErrorCode getCode() const;
     const std::string &getMessage() const;
-    const std::vector<std::pair<Span, std::string>> &getLabels() const;
+    const std::pair<Span, std::string> &getPrimaryLabel() const;
+    const std::vector<std::pair<Span, std::string>> &getSecondaryLabels() const;
+    const std::optional<std::string> &getNoteMessage() const;
+    const std::optional<std::string> &getHelpMessage() const;
 
 private:
     Level level;
+    ErrorCode code;
     std::string message;
-    std::vector<std::pair<Span, std::string>> labels;
+    std::pair<Span, std::string> primaryLabel;
+    std::vector<std::pair<Span, std::string>> secondaryLabels;
+
+    std::optional<std::string> noteMessage;
+    std::vector<std::pair<Span, std::string>> noteLabels;
+
+    std::optional<std::string> helpMessage;
+    std::optional <std::string> stringToDelete;
+    std::optional <std::string> stringToInsert;
+    std::vector<Span> insertColor;
+    std::vector<Span> deleteColor;
 };
+
 
 File diag_ctxt.cpp:
 
@@ -71,6 +137,11 @@ void DiagCtxt::emitDiagnostics()
         emitter->emit(diag);
     }
 }
+
+void DiagCtxt::emitJsonDiagnostics()
+{
+    emitter->emitJSON(diagnostics);
+}
 File diag_ctxt.h:
 
 #pragma once
@@ -87,204 +158,41 @@ public:
     void addDiagnostic(const Diagnostic &diag);
     bool hasErrors() const;
     void emitDiagnostics();
+    void emitJsonDiagnostics();
 
 private:
     std::vector<Diagnostic> diagnostics;
     std::shared_ptr<Emitter> emitter;
 };
-File emitter.cpp:
 
-#include "emitter.h"
-#include "log.h"
-
-#include <fmt/core.h>
-#include <fmt/color.h>
-#include <fmt/ostream.h>
-
-// #include <spdlog/fmt/bundled/core.h>
-// #include <spdlog/fmt/bundled/color.h>
-// #include <spdlog/fmt/bundled/ostream.h>
-
-#include <utf8proc.h>
-
-Emitter::Emitter(std::shared_ptr<SourceMap> sourceMap, std::ostream &outStream, bool useColor)
-    : sourceMap(std::move(sourceMap)), out(outStream), useColor(useColor)
-{
-}
-
-void Emitter::emit(const Diagnostic &diag)
-{
-    printHeader(diag);
-    printLabels(diag);
-}
-
-void Emitter::printHeader(const Diagnostic &diag)
-{
-    auto levelStr = formatLevel(diag.getLevel());
-    auto message = diag.getMessage();
-
-    fmt::memory_buffer buffer;
-    fmt::format_to(std::back_inserter(buffer), "{}: {}\n", levelStr, message);
-    out.write(buffer.data(), buffer.size());
-}
-
-void Emitter::printLabels(const Diagnostic &diag)
-{
-    for (const auto &[span, labelMsg] : diag.getLabels()) {
-        std::filesystem::path filePath;
-        std::size_t lineNumberZeroBased, columnNumberZeroBased;
-        sourceMap->spanToLocation(span, filePath, lineNumberZeroBased, columnNumberZeroBased);
-
-        auto sourceFile = sourceMap->lookupSourceFile(span.lo);
-        if (sourceFile) {
-            std::string lineContent = sourceFile->getLine(lineNumberZeroBased);
-            std::size_t lineStartByte = sourceFile->getLineStart(lineNumberZeroBased);
-            std::size_t byteOffsetInLine = span.lo - lineStartByte;
-            std::size_t byteLength = span.hi - span.lo;
-
-            fmt::memory_buffer buffer;
-            if (useColor) {
-                fmt::format_to(std::back_inserter(buffer), "{} {}:{}:{}\n", fmt::format(fg(fmt::color::cyan), "  -->"),
-                               filePath.string(), lineNumberZeroBased + 1, columnNumberZeroBased + 1);
-            } else {
-                fmt::format_to(std::back_inserter(buffer), "  --> {}:{}:{}\n", filePath.string(),
-                               lineNumberZeroBased + 1, columnNumberZeroBased + 1);
-            }
-
-            if (useColor) {
-                fmt::format_to(std::back_inserter(buffer), "   {} {} {}\n",
-                               fmt::format(fg(fmt::color::cyan), "{}", lineNumberZeroBased + 1),
-                               fmt::format(fg(fmt::color::cyan), "|"), lineContent);
-
-            } else {
-                fmt::format_to(std::back_inserter(buffer), "   {} | {}\n", lineNumberZeroBased + 1, lineContent);
-            }
-
-            // Print underline
-            std::string underline = createUnderline(lineContent, byteOffsetInLine, byteLength);
-            if (useColor) {
-                fmt::format_to(std::back_inserter(buffer), "     {} {}\n", fmt::format(fg(fmt::color::cyan), "|"),
-                               underline);
-            } else {
-                fmt::format_to(std::back_inserter(buffer), "     | {}\n", underline);
-            }
-
-            // Print label message
-            if (!labelMsg.empty()) {
-                fmt::format_to(std::back_inserter(buffer), "     = {}\n", labelMsg);
-            }
-
-            out.write(buffer.data(), buffer.size());
-        }
-    }
-}
-
-std::string Emitter::formatLevel(Diagnostic::Level level)
-{
-    if (useColor) {
-        switch (level) {
-        case Diagnostic::Level::Error:
-            return fmt::format(fmt::emphasis::bold | fg(fmt::color::red), "error");
-        case Diagnostic::Level::Warning:
-            return fmt::format(fmt::emphasis::bold | fg(fmt::color::yellow), "warning");
-        case Diagnostic::Level::Note:
-            return fmt::format(fmt::emphasis::bold | fg(fmt::color::cyan), "note");
-        }
-    } else {
-        switch (level) {
-        case Diagnostic::Level::Error:
-            return "error";
-        case Diagnostic::Level::Warning:
-            return "warning";
-        case Diagnostic::Level::Note:
-            return "note";
-        }
-    }
-    return "unknown";
-}
-
-int Emitter::calculateDisplayWidth(const std::string &text)
-{
-    int width = 0;
-    const char *str = text.c_str();
-    utf8proc_ssize_t len = text.size();
-    utf8proc_ssize_t idx = 0;
-    utf8proc_int32_t codepoint;
-    while (idx < len) {
-        utf8proc_ssize_t charLen = utf8proc_iterate((const utf8proc_uint8_t *)(str + idx), len - idx, &codepoint);
-        if (charLen <= 0) {
-            LOG_DETAILED_ERROR("Invalid utf-8 formatting in calculateDisplayWidth");
-            break;
-        }
-
-        width += utf8proc_charwidth(codepoint);
-        idx += charLen;
-    }
-    return width;
-}
-
-std::string Emitter::createUnderline(const std::string &lineContent, std::size_t byteOffsetInLine,
-                                     std::size_t byteLength)
-{
-    // Extract substrings
-    std::string beforeUnderline = lineContent.substr(0, byteOffsetInLine);
-    std::string underlineText = lineContent.substr(byteOffsetInLine, byteLength);
-
-    int offsetWidth = calculateDisplayWidth(beforeUnderline);
-    int underlineWidth = calculateDisplayWidth(underlineText);
-
-    // Create the underline string
-    std::string underline(offsetWidth, ' ');
-    if (underlineWidth == 0) {
-        LOG_DETAILED_ERROR("underlineWidth is 0");
-    }
-    std::string carets(underlineWidth > 0 ? underlineWidth : 1, '^');
-
-    if (useColor) {
-        underline += fmt::format(fmt::emphasis::bold | fg(fmt::color::red), "{}", carets);
-    } else {
-        underline += carets;
-    }
-    return underline;
-}
-File emitter.h:
+File error_codes.h:
 
 #pragma once
 
-#include "source_map.h"
-#include "diagnostic.h"
-
-#include <memory>
-#include <ostream>
-#include <iostream>
-
-class Emitter {
-public:
-    Emitter(std::shared_ptr<SourceMap> sourceMap, std::ostream &outStream = std::cout, bool useColor = true);
-
-    void emit(const Diagnostic &diag);
-
-private:
-    std::shared_ptr<SourceMap> sourceMap;
-    std::ostream &out;
-    bool useColor;
-
-    void printHeader(const Diagnostic &diag);
-    void printLabels(const Diagnostic &diag);
-
-    std::string formatLevel(Diagnostic::Level level);
-    std::string formatMessage(const std::string &message);
-    std::string formatLocation(const std::filesystem::path &path, std::size_t line, std::size_t column);
-    std::string createUnderline(const std::string &lineContent, std::size_t byteOffsetInLine, std::size_t byteLength);
-    int calculateDisplayWidth(const std::string &text);
+enum class ErrorCode {
+#define DEFINE_ERROR(code, message) code,
+#include "diagnostic_messages.def"
+#undef DEFINE_ERROR
 };
-
-File log.cpp:
 
 File log.h:
 
 #pragma once
-#define LOG_DETAILED_ERROR(...)
+
+#include <fmt/core.h>
+#include <fmt/color.h>
+
+#if defined(__GNUC__) || defined(__clang__)
+    #define PRETTY_FUNCTION __PRETTY_FUNCTION__
+#elif defined(_MSC_VER)
+    #define PRETTY_FUNCTION __FUNCSIG__
+#else
+    #define PRETTY_FUNCTION __func__
+#endif
+
+#define LOG_DETAILED_ERROR(...) \
+    fmt::print(stderr, "{} {} ({}:{}): {}\n", fmt::format(fg(fmt::color::red), "[ERROR]"), __FILE__, __LINE__, PRETTY_FUNCTION, fmt::format(__VA_ARGS__));
+
 File main.cpp:
 
 #include "log.h"
@@ -292,6 +200,7 @@ File main.cpp:
 #include "symbol_table.h"
 #include "parser.h"
 #include "session.h"
+#include "error_codes.h"
 
 #include <iostream>
 #include <memory>
@@ -310,18 +219,31 @@ void setupConsoleForUtf8()
 #endif
 }
 
-int main(/* int argc, char *argv[]*/)
+int main(int argc, char *argv[])
 {
     setupConsoleForUtf8();
-    // Log::init();
 
-    std::filesystem::path filename = "examples/test.asm";
+    bool jsonOutput = false;
+    for (int i = 1; i < argc; ++i) {
+        if (std::string(argv[i]) == "--json") {
+            jsonOutput = true;
+            break;
+        }
+    }
+    // TODO: Remove in release
+    std::filesystem::path new_path = "C:\\Users\\grigo\\Documents\\MasmLint";
+    std::filesystem::current_path(new_path);
+
+    std::filesystem::path filename = "examples/test1.asm";
+    if (argc > 2) {
+        filename = argv[2];
+    }
 
     auto parseSess = std::make_shared<ParseSession>();
     auto sourceFile = parseSess->sourceMap->loadFile(filename);
 
     if (sourceFile) {
-        auto tokenizer = Tokenizer(parseSess, sourceFile->getSource(), 0);
+        auto tokenizer = Tokenizer(parseSess, sourceFile->getSource());
         auto preprocessor = Preprocessor(parseSess);
 
         std::vector<Token> tokens = tokenizer.tokenize();
@@ -329,31 +251,23 @@ int main(/* int argc, char *argv[]*/)
         Parser parser(parseSess, tokens);
         parser.parse();
     } else {
-        Diagnostic diag(Diagnostic::Level::Error, "failed to open file");
+        Diagnostic diag(Diagnostic::Level::Error, ErrorCode::FAILED_TO_OPEN_FILE, filename.string());
         parseSess->dcx->addDiagnostic(diag);
     }
 
-    // TESTING
-    std::string errMsg = "hey";
-
-    Diagnostic diag(Diagnostic::Level::Error, errMsg);
-    std::string test_string = sourceFile->getSource();
-    int idx = 0;
-    while (idx < test_string.size()) {
-        if (test_string[idx] == 'o') {
-            break;
-        }
-        idx++;
-    }
-    diag.addLabel(Span(idx, idx + 1, nullptr), "Unexpected token here");
-    // diag.addLabel(Span(idx+1, idx + 2, nullptr), "Unexpected token here");
-
-    parseSess->dcx->addDiagnostic(diag);
-
     if (parseSess->dcx->hasErrors()) {
-        parseSess->dcx->emitDiagnostics();
+        if (jsonOutput) {
+            parseSess->dcx->emitJsonDiagnostics();
+
+        } else {
+            parseSess->dcx->emitDiagnostics();
+        }
     } else {
-        fmt::print("Parsing completed successfully with no errors.\n");
+        if (jsonOutput) {
+            fmt::print("[]");
+        } else {
+            fmt::print("Parsing completed successfully with no errors.\n");
+        }
     }
     return 0;
 }
@@ -392,29 +306,14 @@ void Parser::advance()
     }
 }
 
-void Parser::parseLine()
+void Parser::parseLine() 
 {
-    if (currentToken.type == TokenType::Identifier) {
-        // Possible label or instruction
-        if (currentIndex < tokens.size() && tokens[currentIndex].lexeme == ":") {
-            // It's a label
-            parseSess->symbolTable->addSymbol({currentToken.lexeme, Symbol::Type::Label});
-            advance();
-            advance();
-            // parseLine();
-        } else {
-            // Treat as instruction or directive
-            // parseInstruction();
-        }
-    } else if (currentToken.type == TokenType::Directive) {
-        // parseDirective();
-    } else if (currentToken.type == TokenType::Instruction) {
-        // parseInstruction();
-    } else if (currentToken.type == TokenType::Comment) {
-        // Comment line
-    } else {
-        // Syntax error
-    }
+    parseExpression();
+}
+
+void Parser::parseExpression()
+{
+    
 }
 
 File parser.h:
@@ -441,6 +340,7 @@ private:
 
     void advance();
     void parseLine();
+    void parseExpression();
 };
 File preprocessor.cpp:
 
@@ -625,6 +525,15 @@ std::size_t SourceFile::getColumnNumber(std::size_t pos) const
     return countCodePoints(src, lineStartPos, localPos);
 }
 
+std::size_t SourceFile::getColumnPosition(std::size_t pos) const
+{
+    std::size_t lineNumber = getLineNumber(pos);
+    std::size_t lineStartPos = lineStarts[lineNumber];
+    std::size_t localPos = pos - startPos;
+
+    return localPos - lineStartPos;
+}
+
 std::shared_ptr<SourceFile> SourceMap::newSourceFile(const std::filesystem::path &path, const std::string &src)
 {
     std::size_t startPos = 0;
@@ -702,6 +611,37 @@ void SourceMap::spanToLocation(const Span &span, std::filesystem::path &outPath,
     }
 }
 
+void SourceMap::spanToStartLocation(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
+                                    std::size_t &outColumn) const
+{
+    auto file = lookupSourceFile(span.lo);
+    if (file) {
+        outPath = file->getPath();
+        outLine = file->getLineNumber(span.lo); // Zero-based
+        outColumn = file->getColumnPosition(span.lo);
+    } else {
+        outPath.clear();
+        outLine = 0;
+        outColumn = 0;
+    }
+}
+
+void SourceMap::spanToEndLocation(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
+                                  std::size_t &outColumn) const
+{
+    auto file = lookupSourceFile(span.hi - 1);
+    if (file) {
+        outPath = file->getPath();
+        outLine = file->getLineNumber(span.hi - 1);       // Zero-based
+        // (need to add one because in the span (4, 5) startLocation is column 4 but endLocation column should be 5)
+        outColumn = file->getColumnPosition(span.hi - 1) + 1; // Zero-based
+    } else {
+        outPath.clear();
+        outLine = 0;
+        outColumn = 0;
+    }
+}
+
 std::string SourceMap::spanToSnippet(const Span &span) const
 {
     auto sourceFile = lookupSourceFile(span.lo);
@@ -746,6 +686,8 @@ public:
     // Maps a byte position to a column number within its line (zero based)
     std::size_t getColumnNumber(std::size_t pos) const;
 
+    std::size_t getColumnPosition(std::size_t pos) const;
+
     std::size_t getLineStart(std::size_t lineNumber) const;
 
     static std::size_t countCodePoints(const std::string &str, std::size_t startByte, std::size_t endByte);
@@ -777,6 +719,13 @@ public:
     void spanToLocation(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
                         std::size_t &outColumn) const;
 
+    // Column doesn't is only position, TODO: refactor
+    void spanToStartLocation(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
+                        std::size_t &outColumn) const;
+
+    void spanToEndLocation(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
+                        std::size_t &outColumn) const;
+
     // Retrieves the source code snippet corresponding to a span
     std::string spanToSnippet(const Span &span) const;
 
@@ -797,7 +746,7 @@ void SyntaxContextData::popMacro()
     }
 }
 
-const std::string &SyntaxContextData::currentMacro() const { return macroStack.empty() ? "" : macroStack.back(); }
+const std::string SyntaxContextData::currentMacro() const { return macroStack.empty() ? "" : macroStack.back(); }
 
 bool Span::contains(std::size_t pos) const { return lo <= pos && pos < hi; }
 
@@ -817,6 +766,25 @@ Span Span::merge(const Span &first, const Span &second)
 
     return Span(new_lo, new_hi, new_context);
 }
+
+bool Span::operator==(const Span &other) const { return lo == other.lo && hi == other.hi && context == other.context; }
+
+bool Span::operator!=(const Span &other) const { return !(*this == other); }
+
+bool Span::operator<(const Span &other) const
+{
+    if (lo != other.lo)
+        return lo < other.lo;
+    if (hi != other.hi)
+        return hi < other.hi;
+    return true;
+}
+
+bool Span::operator>(const Span &other) const { return other < *this; }
+
+bool Span::operator<=(const Span &other) const { return !(other < *this); }
+
+bool Span::operator>=(const Span &other) const { return !(*this < other); }
 File span.h:
 
 #pragma once
@@ -833,7 +801,7 @@ struct SyntaxContextData {
 
     void popMacro();
 
-    const std::string &currentMacro() const;
+    const std::string currentMacro() const;
 };
 
 struct Span {
@@ -845,6 +813,13 @@ struct Span {
     bool overlaps(const Span &other) const;
 
     static Span merge(const Span &first, const Span &second);
+
+    bool operator==(const Span &other) const;
+    bool operator!=(const Span &other) const;
+    bool operator<(const Span &other) const;
+    bool operator>(const Span &other) const;
+    bool operator<=(const Span &other) const;
+    bool operator>=(const Span &other) const;
 
     // absolute offsets in bytes from SourceMap
     // the range is [lo, hi) bytes
@@ -920,44 +895,13 @@ private:
     std::chrono::time_point<std::chrono::high_resolution_clock> m_start;
 };
 
-// class ScopedTimer
-// {
-// public:
-//     explicit ScopedTimer(const std::string &name) : m_name(name) {}
-//     ~ScopedTimer() // NOLINT(cppcoreguidelines-special-member-functions): not using heap allocated memory here
-//     {
-//         const float time = m_timer.elapsed_millis();
-//          LOG
-//     }
-
-// private:
-//     std::string m_name;
-//     Timer m_timer;
-// };
-File tokenize.cpp:
-
-#include "tokenize.h"
-#include <algorithm>
-#include <cctype>
-
-std::vector<Token> Tokenizer::tokenize()
-{
-    std::vector<Token> tokens;
-
-    while (pos < src.size()) {
-
-        pos++;
-    }
-
-    return tokens;
-}
-
 File tokenize.h:
 
 #pragma once
 
 #include "span.h"
 #include "session.h"
+#include "diagnostic.h"
 #include <string>
 #include <deque>
 #include <unordered_set>
@@ -966,14 +910,25 @@ enum class TokenType {
     Identifier,
     Directive,
     Instruction,
+    Type,
     Register,
     Number,
     StringLiteral,
     Operator,
-    Separator,
+    OpenBracket,        // '('
+    CloseBracket,       // ')'
+    OpenSquareBracket,  // '['
+    CloseSquareBracket, // ']'
+    OpenAngleBracket,   // '<'
+    CloseAngleBracket,  // '>'
+    Comma,              // ','
+    Colon,              // ':'
+    Dollar,             // '$'
+    QuestionMark,       // '?'
     EndOfFile,
     EndOfLine,
     Comment,
+    Invalid
 };
 
 struct Token {
@@ -981,32 +936,39 @@ struct Token {
     std::string lexeme;
     Span span;
 
-    // data about macro expansion
+    // TODO: data about macro expansion
 };
 
 class Tokenizer {
 public:
-    Tokenizer(std::shared_ptr<ParseSession> psess, const std::string &src, std::size_t startPos)
-        : psess(psess), startPos(startPos), src(src), pos(startPos)
-    {
-    }
+    Tokenizer(std::shared_ptr<ParseSession> psess, const std::string &src) : psess(psess), src(src), pos(0) {}
     std::vector<Token> tokenize();
 
 private:
-    std::size_t startPos;
+    void skipWhitespace();
+    Token getNextToken();
+    Token getNumberToken();
+    Token getIdentifierOrKeywordToken();
+    Token getStringLiteralToken();
+    Token getSpecialSymbolToken();
+    bool isDotName();
+    bool isValidNumber(const std::string &lexeme);
+    bool isValidIdentifier(const std::string &lexeme);
+    bool isValidIdentifierStart(char c);
+    bool isValidIdentifierChar(char c);
+    bool isValidNumberStart(char c);
+
+    template <typename... Args> void addDiagnostic(size_t start, size_t end, ErrorCode errorCode, Args &&...args)
+    {
+        Diagnostic diag(Diagnostic::Level::Error, errorCode, std::forward<Args>(args)...);
+        diag.addPrimaryLabel(Span(start, end, nullptr), "");
+        psess->dcx->addDiagnostic(diag);
+    }
+
+    std::vector<Token> tokens;
     std::size_t pos;
     const std::string &src;
     std::shared_ptr<ParseSession> psess;
 };
-File test_add.cpp:
 
-#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
-#include <doctest/doctest.h>
-#include "add.h"
 
-// int add(int a, int b) { return a + b; }
-
-TEST_CASE("testing the add function") {
-    CHECK(add(1, 2) == 3);
-    CHECK(add(2, 5) == 7);
-}

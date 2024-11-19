@@ -4,6 +4,7 @@
 #include "parser.h"
 #include "session.h"
 #include "error_codes.h"
+#include "ast.h"
 
 #include <iostream>
 #include <memory>
@@ -46,13 +47,14 @@ int main(int argc, char *argv[])
     auto sourceFile = parseSess->sourceMap->loadFile(filename);
 
     if (sourceFile) {
-        auto tokenizer = Tokenizer(parseSess, sourceFile->getSource(), 0);
+        auto tokenizer = Tokenizer(parseSess, sourceFile->getSource());
         auto preprocessor = Preprocessor(parseSess);
 
         std::vector<Token> tokens = tokenizer.tokenize();
         tokens = preprocessor.preprocess(tokens);
         Parser parser(parseSess, tokens);
-        parser.parse();
+        ASTPtr root = parser.parse();
+        
     } else {
         Diagnostic diag(Diagnostic::Level::Error, ErrorCode::FAILED_TO_OPEN_FILE, filename.string());
         parseSess->dcx->addDiagnostic(diag);

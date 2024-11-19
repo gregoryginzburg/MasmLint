@@ -180,6 +180,8 @@ std::pair<std::size_t, std::size_t> SourceMap::lookupLineColumn(std::size_t pos)
 void SourceMap::spanToLocation(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
                                std::size_t &outColumn) const
 {
+    // check if span corresponds to EndOfFile
+    // if (files->())
     auto file = lookupSourceFile(span.lo);
     if (file) {
         outPath = file->getPath();

@@ -11,18 +11,21 @@ enum class TokenType {
     Identifier,
     Directive,
     Instruction,
+    Type,
     Register,
     Number,
     StringLiteral,
     Operator,
-    OpenBracket,         // '('
-    CloseBracket,        // ')'
-    OpenSquareBracket,   // '['
-    CloseSquareBracket,  // ']'
-    Comma,               // ','
-    Colon,               // ':'
-    Dot,                 // '.'
-    Percent,             // '%'
+    OpenBracket,        // '('
+    CloseBracket,       // ')'
+    OpenSquareBracket,  // '['
+    CloseSquareBracket, // ']'
+    OpenAngleBracket,   // '<'
+    CloseAngleBracket,  // '>'
+    Comma,              // ','
+    Colon,              // ':'
+    Dollar,             // '$'
+    QuestionMark,       // '?'
     EndOfFile,
     EndOfLine,
     Comment,
@@ -39,10 +42,7 @@ struct Token {
 
 class Tokenizer {
 public:
-    Tokenizer(std::shared_ptr<ParseSession> psess, const std::string &src, std::size_t startPos)
-        : psess(psess), startPos(startPos), src(src), pos(startPos)
-    {
-    }
+    Tokenizer(std::shared_ptr<ParseSession> psess, const std::string &src) : psess(psess), src(src), pos(0) {}
     std::vector<Token> tokenize();
 
 private:
@@ -54,7 +54,7 @@ private:
     Token getSpecialSymbolToken();
     bool isDotName();
     bool isValidNumber(const std::string &lexeme);
-    bool isValidIdentifier(const std::string& lexeme);
+    bool isValidIdentifier(const std::string &lexeme);
     bool isValidIdentifierStart(char c);
     bool isValidIdentifierChar(char c);
     bool isValidNumberStart(char c);
@@ -67,7 +67,6 @@ private:
     }
 
     std::vector<Token> tokens;
-    std::size_t startPos;
     std::size_t pos;
     const std::string &src;
     std::shared_ptr<ParseSession> psess;

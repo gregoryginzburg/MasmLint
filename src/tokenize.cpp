@@ -9,9 +9,31 @@
 #include <unordered_set>
 #include <string>
 
-static const std::unordered_set<std::string> directives = {
-    "INCLUDE", "EQU",   "DB",   "DW",     "DD",  "DQ",   "END",  ".STACK", ".DATA", ".CODE", "PROC",
-    "ENDP",    "STRUC", "ENDS", "RECORD", "PTR", "TYPE", "SIZE", "LENGTH", "WIDTH", "MASK",  "OFFSET"};
+static const std::unordered_set<std::string> directives = {"INCLUDE", "EQU",    "DB",     "DW",    "DD",   "DQ",
+                                                           "END",     ".STACK", ".DATA",  ".CODE", "PROC", "ENDP",
+                                                           "STRUC",   "ENDS",   "RECORD", "="};
+
+static const std::unordered_set<std::string> reservedWords = {"DUP"};
+
+static const std::unordered_set<std::string> operators = {"+",
+                                                          "-",
+                                                          "*",
+                                                          "/",
+                                                          "."
+                                                          "MOD",
+                                                          "SHL",
+                                                          "SHR",
+                                                          "PTR",
+                                                          "TYPE",
+                                                          "SIZE",
+                                                          "SIZEOF",
+                                                          "LENGTH",
+                                                          "LENGTHOF",
+                                                          "WIDTH",
+                                                          "MASK",
+                                                          "OFFSET"};
+
+static const std::unordered_set<std::string> types = {"BYTE", "WORD", "DWORD", "QWORD"};
 
 static const std::unordered_set<std::string> instructions = {
     "MOV",   "XCHG",  "MOVZX", "MOVSX", "DIV",   "IDIV",  "MUL",   "IMUL",  "ADD",   "ADC",   "INC",   "SUB",
@@ -52,12 +74,12 @@ std::vector<Token> Tokenizer::tokenize()
     tokens.emplace_back(Token{TokenType::EndOfFile, "", Span(pos, pos, context)});
 
     // TODO: remove testing code
-    // Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_NUMBER_FORMAT);
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_NUMBER_FORMAT);
     // diag.addSecondaryLabel(Span(0, 1, nullptr), "pr");
     // diag.addPrimaryLabel(Span(2, 3, nullptr), "hey");
     // diag.addSecondaryLabel(Span(4, 5, nullptr), "hi");
-    // diag.addSecondaryLabel(Span(22, 23, nullptr), "nice");
-    // psess->dcx->addDiagnostic(diag);
+    diag.addPrimaryLabel(Span(pos-1, pos, nullptr), "nice");
+    psess->dcx->addDiagnostic(diag);
 
     return tokens;
 }
@@ -157,7 +179,12 @@ Token Tokenizer::getIdentifierOrKeywordToken()
         return Token{TokenType::Instruction, lexeme, tokenSpan};
     } else if (registers.count(lexemeUpper)) {
         return Token{TokenType::Register, lexeme, tokenSpan};
-    } else {
+    } else if (operators.count(lexemeUpper)) {
+        return Token{TokenType::Operator, lexeme, tokenSpan};
+    } else if (types.count(lexemeUpper)) {
+        return Token{TokenType::Type, lexeme, tokenSpan};
+    } 
+    else {
         return Token{TokenType::Identifier, lexeme, tokenSpan};
     }
 }
@@ -301,24 +328,27 @@ Token Tokenizer::getSpecialSymbolToken()
     case ':':
         type = TokenType::Colon;
         break;
-    case '.':
-        type = TokenType::Dot;
-        break;
-    case '%':
-        type = TokenType::Percent;
-        break;
     case '+':
     case '-':
     case '*':
     case '/':
+    case '.':
+        type = TokenType::Operator;
+        break;
     case '=':
+        type = TokenType::Directive;
+        break;
     case '<':
+        type = TokenType::OpenAngleBracket;
+        break;
     case '>':
-    case '!':
-    case '&':
-    case '|':
-    case '^':
-    case '~':
+        type = TokenType::CloseAngleBracket;
+        break;
+    case '?':
+        type = TokenType::QuestionMark;
+        break;
+    case '$':
+        type = TokenType::Dollar;
         break;
     default:
         addDiagnostic(start, pos, ErrorCode::UNRECOGNIZED_SYMBOL);

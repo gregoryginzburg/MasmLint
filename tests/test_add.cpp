@@ -22,7 +22,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
     SUBCASE("Valid Identifier")
     {
         std::string source = "myVar";
-        Tokenizer tokenizer(parseSess, source, 0);
+        Tokenizer tokenizer(parseSess, source);
         auto tokens = tokenizer.tokenize();
 
         CHECK(tokens.size() == 2); // Identifier + EndOfFile
@@ -33,7 +33,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
     SUBCASE("Directive Keyword")
     {
         std::string source = "EQU";
-        Tokenizer tokenizer(parseSess, source, 0);
+        Tokenizer tokenizer(parseSess, source);
         auto tokens = tokenizer.tokenize();
 
         CHECK(tokens[0].type == TokenType::Directive);
@@ -43,7 +43,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
     SUBCASE("Instruction Keyword")
     {
         std::string source = "mov";
-        Tokenizer tokenizer(parseSess, source, 0);
+        Tokenizer tokenizer(parseSess, source);
         auto tokens = tokenizer.tokenize();
 
         CHECK(tokens[0].type == TokenType::Instruction);
@@ -53,7 +53,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
     SUBCASE("Register Keyword")
     {
         std::string source = "AX";
-        Tokenizer tokenizer(parseSess, source, 0);
+        Tokenizer tokenizer(parseSess, source);
         auto tokens = tokenizer.tokenize();
 
         CHECK(tokens[0].type == TokenType::Register);
@@ -63,7 +63,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
     SUBCASE("Identifier Starting with Dot")
     {
         std::string source = ".myLabel";
-        Tokenizer tokenizer(parseSess, source, 0);
+        Tokenizer tokenizer(parseSess, source);
         auto tokens = tokenizer.tokenize();
 
         CHECK(tokens[0].type == TokenType::Identifier);
@@ -76,7 +76,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 
 //     SUBCASE("Decimal Number") {
 //         std::string source = "12345";
-//         Tokenizer tokenizer(parseSess, source, 0);
+//         Tokenizer tokenizer(parseSess, source);
 //         auto tokens = tokenizer.tokenize();
 
 //         CHECK(tokens[0].type == TokenType::Number);
@@ -85,7 +85,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 
 //     SUBCASE("Hexadecimal Number with 'h' Suffix") {
 //         std::string source = "0FFh";
-//         Tokenizer tokenizer(parseSess, source, 0);
+//         Tokenizer tokenizer(parseSess, source);
 //         auto tokens = tokenizer.tokenize();
 
 //         CHECK(tokens[0].type == TokenType::Number);
@@ -94,7 +94,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 
 //     SUBCASE("Binary Number with 'b' Suffix") {
 //         std::string source = "1010b";
-//         Tokenizer tokenizer(parseSess, source, 0);
+//         Tokenizer tokenizer(parseSess, source);
 //         auto tokens = tokenizer.tokenize();
 
 //         CHECK(tokens[0].type == TokenType::Number);
@@ -103,7 +103,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 
 //     SUBCASE("Octal Number with 'o' Suffix") {
 //         std::string source = "77o";
-//         Tokenizer tokenizer(parseSess, source, 0);
+//         Tokenizer tokenizer(parseSess, source);
 //         auto tokens = tokenizer.tokenize();
 
 //         CHECK(tokens[0].type == TokenType::Number);
@@ -112,7 +112,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 
 //     SUBCASE("Floating Point Number") {
 //         std::string source = "3.14";
-//         Tokenizer tokenizer(parseSess, source, 0);
+//         Tokenizer tokenizer(parseSess, source);
 //         auto tokens = tokenizer.tokenize();
 
 //         CHECK(tokens[0].type == TokenType::Number);
@@ -121,7 +121,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 
 //     SUBCASE("Invalid Number Format") {
 //         std::string source = "123XYZ";
-//         Tokenizer tokenizer(parseSess, source, 0);
+//         Tokenizer tokenizer(parseSess, source);
 //         auto tokens = tokenizer.tokenize();
 
 //         CHECK(tokens[0].type == TokenType::Invalid);
@@ -134,7 +134,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 
 //     SUBCASE("Double-Quoted String") {
 //         std::string source = "\"Hello, World!\"";
-//         Tokenizer tokenizer(parseSess, source, 0);
+//         Tokenizer tokenizer(parseSess, source);
 //         auto tokens = tokenizer.tokenize();
 
 //         CHECK(tokens[0].type == TokenType::StringLiteral);
@@ -143,7 +143,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 
 //     SUBCASE("Single-Quoted String") {
 //         std::string source = "'Hello, MASM'";
-//         Tokenizer tokenizer(parseSess, source, 0);
+//         Tokenizer tokenizer(parseSess, source);
 //         auto tokens = tokenizer.tokenize();
 
 //         CHECK(tokens[0].type == TokenType::StringLiteral);
@@ -152,7 +152,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 
 //     SUBCASE("String with Escaped Quote") {
 //         std::string source = "\"She said, \\\"Hello\\\"\"";
-//         Tokenizer tokenizer(parseSess, source, 0);
+//         Tokenizer tokenizer(parseSess, source);
 //         auto tokens = tokenizer.tokenize();
 
 //         CHECK(tokens[0].type == TokenType::StringLiteral);
@@ -161,7 +161,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 
 //     SUBCASE("Unterminated String") {
 //         std::string source = "\"This string is not closed";
-//         Tokenizer tokenizer(parseSess, source, 0);
+//         Tokenizer tokenizer(parseSess, source);
 //         auto tokens = tokenizer.tokenize();
 
 //         CHECK(tokens[0].type == TokenType::Invalid);
@@ -174,7 +174,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 
 //     SUBCASE("Single-Line Comment") {
 //         std::string source = "; This is a comment";
-//         Tokenizer tokenizer(parseSess, source, 0);
+//         Tokenizer tokenizer(parseSess, source);
 //         auto tokens = tokenizer.tokenize();
 
 //         CHECK(tokens[0].type == TokenType::Comment);
@@ -183,7 +183,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 
 //     SUBCASE("Code with Comment") {
 //         std::string source = "MOV AX, BX ; Move BX into AX";
-//         Tokenizer tokenizer(parseSess, source, 0);
+//         Tokenizer tokenizer(parseSess, source);
 //         auto tokens = tokenizer.tokenize();
 
 //         CHECK(tokens.size() == 7); // MOV, AX, ,, BX, Comment, EndOfFile
@@ -199,7 +199,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 
 //     SUBCASE("Single-Character Operators") {
 //         std::string source = "+ - * / % = < > & | ^ ~";
-//         Tokenizer tokenizer(parseSess, source, 0);
+//         Tokenizer tokenizer(parseSess, source);
 //         auto tokens = tokenizer.tokenize();
 
 //         CHECK(tokens.size() == 14); // 12 operators + EndOfFile
@@ -212,7 +212,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 
 //     SUBCASE("Multi-Character Operators") {
 //         std::string source = "== != <= >= && || ::";
-//         Tokenizer tokenizer(parseSess, source, 0);
+//         Tokenizer tokenizer(parseSess, source);
 //         auto tokens = tokenizer.tokenize();
 
 //         CHECK(tokens.size() == 8); // 7 operators + EndOfFile
@@ -227,7 +227,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 
 //     SUBCASE("Unrecognized Symbol") {
 //         std::string source = "@";
-//         Tokenizer tokenizer(parseSess, source, 0);
+//         Tokenizer tokenizer(parseSess, source);
 //         auto tokens = tokenizer.tokenize();
 
 //         // '@' can be part of identifiers in MASM, so it should be recognized
@@ -241,7 +241,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 
 //     SUBCASE("Simple Line Continuation") {
 //         std::string source = "MOV AX, \\\nBX";
-//         Tokenizer tokenizer(parseSess, source, 0);
+//         Tokenizer tokenizer(parseSess, source);
 //         auto tokens = tokenizer.tokenize();
 
 //         CHECK(tokens.size() == 6); // MOV, AX, ,, BX, EndOfFile
@@ -252,7 +252,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 
 //     SUBCASE("Continuation with Comments") {
 //         std::string source = "MOV AX, \\ ; continue\nBX";
-//         Tokenizer tokenizer(parseSess, source, 0);
+//         Tokenizer tokenizer(parseSess, source);
 //         auto tokens = tokenizer.tokenize();
 
 //         CHECK(tokens.size() == 7); // MOV, AX, ,, BX, EndOfFile
@@ -268,7 +268,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 
 //     SUBCASE("Unrecognized Character") {
 //         std::string source = "#";
-//         Tokenizer tokenizer(parseSess, source, 0);
+//         Tokenizer tokenizer(parseSess, source);
 //         auto tokens = tokenizer.tokenize();
 
 //         CHECK(tokens[0].type == TokenType::Invalid);
@@ -277,7 +277,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 
 //     SUBCASE("Recovery After Error") {
 //         std::string source = "# MOV AX, BX";
-//         Tokenizer tokenizer(parseSess, source, 0);
+//         Tokenizer tokenizer(parseSess, source);
 //         auto tokens = tokenizer.tokenize();
 
 //         // Should report error but continue tokenizing

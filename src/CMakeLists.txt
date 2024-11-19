@@ -29,6 +29,7 @@ set(HEADERS_LIST
     diagnostic_messages.def
     error_codes.h
     tokenize.h
+    ast.h
 )
 
 add_library(masmlint_lib ${SOURCES_LIST} ${HEADERS_LIST})

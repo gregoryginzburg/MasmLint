@@ -9,16 +9,17 @@ Parser::Parser(std::shared_ptr<ParseSession> parseSession, const std::vector<Tok
 {
 }
 
-void Parser::parse()
+ASTPtr Parser::parse()
 {
-    currentIndex = 0;
-    while (currentIndex < tokens.size()) {
-        advance();
-        if (currentToken.type == TokenType::EndOfFile) {
-            return; // End parsing when EOF is reached
-        }
-        parseLine();
-    }
+    return parseExpression();
+    // currentIndex = 0;
+    // while (currentIndex < tokens.size()) {
+    //     advance();
+    //     if (currentToken.type == TokenType::EndOfFile) {
+    //         return; // End parsing when EOF is reached
+    //     }
+    //     parseLine();
+    // }
 }
 
 void Parser::advance()
@@ -30,12 +31,45 @@ void Parser::advance()
     }
 }
 
-void Parser::parseLine() 
+ASTPtr Parser::parseLine() { return nullptr; }
+
+bool Parser::match(TokenType type) { return currentToken.type == type; }
+
+bool Parser::match(TokenType type, const std::string &value)
 {
-    parseExpression();
+    return currentToken.type == type && currentToken.lexeme == value;
 }
 
-void Parser::parseExpression()
+Token Parser::consume(TokenType type)
 {
-    
+    if (currentToken.type == type) {
+        Token token = currentToken;
+        advance();
+        return token;
+    } else {
+        // reportError(currentToken.span, ErrorCode::EXPECTED_TOKEN, "Expected token of type");
+        Token token = currentToken;
+        advance();
+        return token;
+    }
+}
+
+Token Parser::consume(TokenType type, const std::string &value)
+{
+    if (currentToken.type == type && currentToken.lexeme == value) {
+        Token token = currentToken;
+        advance();
+        return token;
+    } else {
+        // reportError(currentToken.span, ErrorCode::EXPECTED_TOKEN, "Expected token '" + value + "'");
+        Token token = currentToken;
+        advance();
+        return token;
+    }
+}
+
+ASTPtr Parser::parseExpression()
+{
+    // ASTPtr multiplicativeExpression = parseMultiplicativeExpression();
+    return nullptr;
 }

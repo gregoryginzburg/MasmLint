@@ -210,7 +210,8 @@ void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, std::string lineCon
     }
 
     // Initialize a marker line
-    std::string markerLine(calculateDisplayWidth(lineContent), ' ');
+    // + 1 needed if we are underlining the '\n' (it's not included in the lineContent)
+    std::string markerLine(calculateDisplayWidth(lineContent) + 1, ' ');
 
     // Vector to hold messages that need to be printed under the marker line
     std::vector<std::tuple<size_t, std::string, bool>> labelMessagesToPrint;
@@ -232,12 +233,10 @@ void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, std::string lineCon
             return;
         }
 
-        size_t lineStartColumn = (startLine == lineNumberZeroBased) ? startColumn : 0;
-        size_t lineEndColumn = (endLine == lineNumberZeroBased) ? endColumn : lineContent.size();
-
         // Adjust for UTF-8 characters
-        size_t startPos = calculateDisplayWidth(lineContent.substr(0, lineStartColumn));
-        size_t endPos = calculateDisplayWidth(lineContent.substr(0, lineEndColumn));
+        size_t startPos = calculateDisplayWidth(lineContent.substr(0, startColumn));
+        size_t endPos = calculateDisplayWidth(lineContent.substr(0, endColumn));
+  
 
         char markerChar = '-';
         bool isPrimaryLabel = primaryLabel && primaryLabel.value().first == span;
@@ -248,6 +247,11 @@ void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, std::string lineCon
         // Fill in the markers
         for (size_t i = startPos; i < endPos && i < markerLine.size(); ++i) {
             markerLine[i] = markerChar;
+        }
+
+        // '\n' has empty width, need to handle separately
+        if (startPos == endPos && startPos < markerLine.size()) {
+            markerLine[startPos] = markerChar;
         }
 
         // Handle label messages
