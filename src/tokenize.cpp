@@ -73,14 +73,14 @@ std::vector<Token> Tokenizer::tokenize()
 
     // because files always ends with a '\n', we can make EndOfFile span equal to the last '\n' 
     // to be able to underline EndOfFile correctly
-    tokens.emplace_back(Token{TokenType::EndOfFile, "", Span(pos - 2, pos - 1, context)});
+    tokens.emplace_back(Token{TokenType::EndOfFile, "", Span(pos - 1, pos, context)});
 
     // TODO: remove testing code
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_NUMBER_FORMAT);
     // diag.addSecondaryLabel(Span(0, 1, nullptr), "pr");
     // diag.addPrimaryLabel(Span(2, 3, nullptr), "hey");
     // diag.addSecondaryLabel(Span(4, 5, nullptr), "hi");
-    diag.addPrimaryLabel(Span(pos - 2, pos - 1, nullptr), "nice");
+    diag.addPrimaryLabel(Span(pos - 1, pos, nullptr), "nice");
     psess->dcx->addDiagnostic(diag);
 
     return tokens;
