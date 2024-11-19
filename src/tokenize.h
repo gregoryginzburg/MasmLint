@@ -36,8 +36,6 @@ struct Token {
     enum TokenType type;
     std::string lexeme;
     Span span;
-
-    // TODO: data about macro expansion
 };
 
 class Tokenizer {

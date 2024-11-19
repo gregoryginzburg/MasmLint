@@ -1,0 +1,974 @@
+File add.cpp:
+
+int add(int aaa, int bbb) { return aaa + bbb; }
+
+int mul(int aaa, int bbb) { return aaa * bbb; }
+File add.h:
+
+#pragma once
+
+int add(int a, int b);
+int mul(int a, int b);
+File ast.h:
+
+#include "tokenize.h"
+
+class AST
+{
+    
+};
+
+class BinaryOperator : public AST
+{
+    
+}
+File diagnostic.cpp:
+
+#include "diagnostic.h"
+#include "fmt/core.h"
+
+// template <typename... Args>
+// Diagnostic::Diagnostic(Level level, ErrorCode code, Args&&... args)
+//     : level(level), code(code), message(fmt::format(getErrorMessage(code), std::forward<Args>(args)...)) {}
+
+
+void Diagnostic::addPrimaryLabel(const Span &span, const std::string &labelMessage)
+{
+    primaryLabel = std::pair<Span, std::string>(span, labelMessage);
+}
+
+void Diagnostic::addSecondaryLabel(const Span &span, const std::string &labelMessage)
+{
+    secondaryLabels.emplace_back(span, labelMessage);
+}
+
+Diagnostic::Level Diagnostic::getLevel() const { return level; }
+
+ErrorCode Diagnostic::getCode() const { return code; }
+
+const std::string &Diagnostic::getMessage() const { return message; }
+
+const std::pair<Span, std::string> &Diagnostic::getPrimaryLabel() const { return primaryLabel; }
+
+const std::vector<std::pair<Span, std::string>> &Diagnostic::getSecondaryLabels() const { return secondaryLabels; }
+
+const std::optional<std::string> &Diagnostic::getNoteMessage() const { return noteMessage; }
+
+const std::optional<std::string> &Diagnostic::getHelpMessage() const {return helpMessage; }
+
+const std::string getErrorMessage(ErrorCode code)
+{
+    switch (code) {
+#define DEFINE_ERROR(code, message)                                                                                    \
+    case ErrorCode::code:                                                                                              \
+        return message;
+#include "diagnostic_messages.def"
+#undef DEFINE_ERROR
+    default:
+        return "Unknown error.";
+    }
+}
+File diagnostic.h:
+
+#pragma once
+
+#include <string>
+#include <vector>
+#include <optional>
+#include <memory>
+#include <fmt/core.h>
+
+#include "span.h"
+#include "error_codes.h"
+
+const std::string getErrorMessage(ErrorCode code);
+
+class Diagnostic {
+public:
+    enum class Level { Error, Warning, Note };
+
+    template <typename... Args>
+    Diagnostic(Level level, ErrorCode code, Args&&... args)
+        : level(level), code(code), message(fmt::format(fmt::runtime(getErrorMessage(code)), std::forward<Args>(args)...)) {}
+
+    void addPrimaryLabel(const Span &span, const std::string &labelMessage);
+    void addSecondaryLabel(const Span &span, const std::string &labelMessage);
+
+    Level getLevel() const;
+    ErrorCode getCode() const;
+    const std::string &getMessage() const;
+    const std::pair<Span, std::string> &getPrimaryLabel() const;
+    const std::vector<std::pair<Span, std::string>> &getSecondaryLabels() const;
+    const std::optional<std::string> &getNoteMessage() const;
+    const std::optional<std::string> &getHelpMessage() const;
+
+private:
+    Level level;
+    ErrorCode code;
+    std::string message;
+    std::pair<Span, std::string> primaryLabel;
+    std::vector<std::pair<Span, std::string>> secondaryLabels;
+
+    std::optional<std::string> noteMessage;
+    std::vector<std::pair<Span, std::string>> noteLabels;
+
+    std::optional<std::string> helpMessage;
+    std::optional <std::string> stringToDelete;
+    std::optional <std::string> stringToInsert;
+    std::vector<Span> insertColor;
+    std::vector<Span> deleteColor;
+};
+
+
+File diag_ctxt.cpp:
+
+#include "diag_ctxt.h"
+#include "emitter.h"
+
+DiagCtxt::DiagCtxt(std::shared_ptr<Emitter> emitter) : emitter(std::move(emitter)) {}
+
+void DiagCtxt::addDiagnostic(const Diagnostic &diag) { diagnostics.push_back(diag); }
+
+bool DiagCtxt::hasErrors() const { return !diagnostics.empty(); }
+
+void DiagCtxt::emitDiagnostics()
+{
+    for (const auto &diag : diagnostics) {
+        emitter->emit(diag);
+    }
+}
+
+void DiagCtxt::emitJsonDiagnostics()
+{
+    emitter->emitJSON(diagnostics);
+}
+File diag_ctxt.h:
+
+#pragma once
+
+#include <vector>
+#include <memory>
+
+#include "emitter.h"
+
+class DiagCtxt {
+public:
+    DiagCtxt(std::shared_ptr<Emitter> emitter);
+
+    void addDiagnostic(const Diagnostic &diag);
+    bool hasErrors() const;
+    void emitDiagnostics();
+    void emitJsonDiagnostics();
+
+private:
+    std::vector<Diagnostic> diagnostics;
+    std::shared_ptr<Emitter> emitter;
+};
+
+File error_codes.h:
+
+#pragma once
+
+enum class ErrorCode {
+#define DEFINE_ERROR(code, message) code,
+#include "diagnostic_messages.def"
+#undef DEFINE_ERROR
+};
+
+File log.h:
+
+#pragma once
+
+#include <fmt/core.h>
+#include <fmt/color.h>
+
+#if defined(__GNUC__) || defined(__clang__)
+    #define PRETTY_FUNCTION __PRETTY_FUNCTION__
+#elif defined(_MSC_VER)
+    #define PRETTY_FUNCTION __FUNCSIG__
+#else
+    #define PRETTY_FUNCTION __func__
+#endif
+
+#define LOG_DETAILED_ERROR(...) \
+    fmt::print(stderr, "{} {} ({}:{}): {}\n", fmt::format(fg(fmt::color::red), "[ERROR]"), __FILE__, __LINE__, PRETTY_FUNCTION, fmt::format(__VA_ARGS__));
+
+File main.cpp:
+
+#include "log.h"
+#include "preprocessor.h"
+#include "symbol_table.h"
+#include "parser.h"
+#include "session.h"
+#include "error_codes.h"
+
+#include <iostream>
+#include <memory>
+#include <fmt/core.h>
+#include <filesystem>
+
+#ifdef _WIN32
+#    include <windows.h>
+#endif
+
+void setupConsoleForUtf8()
+{
+#ifdef _WIN32
+    // Set console output code page to UTF-8 on Windows
+    SetConsoleOutputCP(CP_UTF8);
+#endif
+}
+
+int main(int argc, char *argv[])
+{
+    setupConsoleForUtf8();
+
+    bool jsonOutput = false;
+    for (int i = 1; i < argc; ++i) {
+        if (std::string(argv[i]) == "--json") {
+            jsonOutput = true;
+            break;
+        }
+    }
+    // TODO: Remove in release
+    std::filesystem::path new_path = "C:\\Users\\grigo\\Documents\\MasmLint";
+    std::filesystem::current_path(new_path);
+
+    std::filesystem::path filename = "examples/test1.asm";
+    if (argc > 2) {
+        filename = argv[2];
+    }
+
+    auto parseSess = std::make_shared<ParseSession>();
+    auto sourceFile = parseSess->sourceMap->loadFile(filename);
+
+    if (sourceFile) {
+        auto tokenizer = Tokenizer(parseSess, sourceFile->getSource());
+        auto preprocessor = Preprocessor(parseSess);
+
+        std::vector<Token> tokens = tokenizer.tokenize();
+        tokens = preprocessor.preprocess(tokens);
+        Parser parser(parseSess, tokens);
+        parser.parse();
+    } else {
+        Diagnostic diag(Diagnostic::Level::Error, ErrorCode::FAILED_TO_OPEN_FILE, filename.string());
+        parseSess->dcx->addDiagnostic(diag);
+    }
+
+    if (parseSess->dcx->hasErrors()) {
+        if (jsonOutput) {
+            parseSess->dcx->emitJsonDiagnostics();
+
+        } else {
+            parseSess->dcx->emitDiagnostics();
+        }
+    } else {
+        if (jsonOutput) {
+            fmt::print("[]");
+        } else {
+            fmt::print("Parsing completed successfully with no errors.\n");
+        }
+    }
+    return 0;
+}
+
+File parser.cpp:
+
+#include "parser.h"
+#include "symbol_table.h"
+#include "diag_ctxt.h"
+
+// #include <fmt/core.h>
+
+Parser::Parser(std::shared_ptr<ParseSession> parseSession, const std::vector<Token> &tokens)
+    : parseSess(parseSession), tokens(tokens)
+{
+}
+
+void Parser::parse()
+{
+    currentIndex = 0;
+    while (currentIndex < tokens.size()) {
+        advance();
+        if (currentToken.type == TokenType::EndOfFile) {
+            return; // End parsing when EOF is reached
+        }
+        parseLine();
+    }
+}
+
+void Parser::advance()
+{
+    if (currentIndex < tokens.size()) {
+        currentToken = tokens[currentIndex++];
+    } else {
+        currentToken = {TokenType::EndOfFile, "", Span(1, 2, nullptr)};
+    }
+}
+
+void Parser::parseLine() 
+{
+    parseExpression();
+}
+
+void Parser::parseExpression()
+{
+    
+}
+
+File parser.h:
+
+#pragma once
+
+#include "tokenize.h"
+#include "symbol_table.h"
+#include "diag_ctxt.h"
+#include "preprocessor.h"
+#include "session.h"
+
+class Parser {
+public:
+    Parser(std::shared_ptr<ParseSession> parseSession, const std::vector<Token> &tokens);
+    void parse();
+
+private:
+    std::shared_ptr<ParseSession> parseSess;
+
+    Token currentToken;
+    const std::vector<Token> &tokens;
+    int currentIndex;
+
+    void advance();
+    void parseLine();
+    void parseExpression();
+};
+File preprocessor.cpp:
+
+#include "preprocessor.h"
+#include "tokenize.h"
+#include <sstream>
+#include <algorithm>
+#include <stdexcept>
+
+std::vector<Token> Preprocessor::preprocess(const std::vector<Token> &tokens)
+{
+    // TODO
+    return tokens;
+}
+
+File preprocessor.h:
+
+#pragma once
+
+#include "diag_ctxt.h"
+#include "tokenize.h"
+#include "session.h"
+#include <string>
+#include <vector>
+#include <stack>
+#include <unordered_map>
+#include <memory>
+
+class Preprocessor {
+public:
+    Preprocessor(std::shared_ptr<ParseSession> parseSess) : parseSess(parseSess) {}
+    std::vector<Token> preprocess(const std::vector<Token> &tokens);
+
+private:
+    std::shared_ptr<ParseSession> parseSess;
+};
+
+File session.cpp:
+
+#include "session.h"
+
+#include <iostream>
+
+ParseSession::ParseSession()
+{
+    sourceMap = std::make_shared<SourceMap>();
+    // bool useColor = !isOutputRedirected(std::cout);
+    bool useColor = true;
+    auto emitter = std::make_shared<Emitter>(sourceMap, std::cout, useColor);
+    dcx = std::make_shared<DiagCtxt>(emitter);
+    symbolTable = std::make_shared<SymbolTable>();
+}
+
+File session.h:
+
+#pragma once
+
+#include <memory>
+#include <string>
+#include <filesystem>
+
+#include "symbol_table.h"
+#include "source_map.h"
+#include "diag_ctxt.h"
+
+class ParseSession {
+public:
+    ParseSession();
+
+public:
+    std::shared_ptr<DiagCtxt> dcx;
+    std::shared_ptr<SourceMap> sourceMap;
+    std::shared_ptr<SymbolTable> symbolTable;
+};
+File source_map.cpp:
+
+#include "source_map.h"
+#include "log.h"
+#include "span.h"
+
+#include <fstream>
+#include <filesystem>
+
+SourceFile::SourceFile(const std::filesystem::path &path, const std::string &src, std::size_t startPos)
+    : path(path), src(src), startPos(startPos), endPos(startPos + src.size())
+{
+    // Initialize lineStarts
+    lineStarts.push_back(0);
+    for (std::size_t i = 0; i < src.size(); ++i) {
+        if (src[i] == '\n') {
+            lineStarts.push_back(i + 1);
+        }
+    }
+}
+
+const std::filesystem::path &SourceFile::getPath() const { return path; }
+
+const std::string &SourceFile::getSource() const { return src; }
+
+std::size_t SourceFile::getStartPos() const { return startPos; }
+
+std::size_t SourceFile::getEndPos() const { return endPos; }
+
+std::size_t SourceFile::getLineNumber(std::size_t pos) const
+{
+    if (pos < startPos || pos >= endPos) {
+        LOG_DETAILED_ERROR("Position out of range in getLineNumber");
+        return 0;
+    }
+    std::size_t localPos = pos - startPos;
+    auto it = std::upper_bound(lineStarts.begin(), lineStarts.end(), localPos);
+    return (it - lineStarts.begin()) - 1;
+}
+
+// lineNumber is zero based
+std::string SourceFile::getLine(std::size_t lineNumber) const
+{
+    if (lineNumber >= lineStarts.size()) {
+        LOG_DETAILED_ERROR("Line number out of range in getLine");
+        return "";
+    }
+    std::size_t start = lineStarts[lineNumber];
+    std::size_t end;
+    if (lineNumber + 1 < lineStarts.size()) {
+        end = lineStarts[lineNumber + 1];
+    } else {
+        end = src.size();
+    }
+
+    // Exclude the newline character at the end if present
+    if (end > start && src[end - 1] == '\n') {
+        end--;
+    }
+    return src.substr(start, end - start);
+}
+
+// lineNumber is zero based
+std::size_t SourceFile::getLineStart(std::size_t lineNumber) const
+{
+    if (lineNumber >= lineStarts.size()) {
+        LOG_DETAILED_ERROR("Line number out of range in getLineStart");
+        return 0;
+    }
+    return lineStarts[lineNumber];
+}
+
+std::size_t SourceFile::countCodePoints(const std::string &str, std::size_t startByte, std::size_t endByte)
+{
+    std::size_t codePointCount = 0;
+    std::size_t i = startByte;
+    while (i < endByte) {
+        unsigned char c = static_cast<unsigned char>(str[i]);
+        std::size_t charSize = 1;
+        if ((c & 0x80) == 0x00) {
+            charSize = 1; // ASCII character
+        } else if ((c & 0xE0) == 0xC0) {
+            charSize = 2; // 2-byte sequence
+        } else if ((c & 0xF0) == 0xE0) {
+            charSize = 3; // 3-byte sequence
+        } else if ((c & 0xF8) == 0xF0) {
+            charSize = 4; // 4-byte sequence
+        } else {
+            // Invalid UTF-8 start byte
+            LOG_DETAILED_ERROR("Invalid UTF-8 encoding in countCodePoints");
+            charSize = 1;
+        }
+
+        // Move to the next character
+        i += charSize;
+        codePointCount++;
+    }
+    return codePointCount;
+}
+
+std::size_t SourceFile::getColumnNumber(std::size_t pos) const
+{
+    std::size_t lineNumber = getLineNumber(pos);
+    std::size_t lineStartPos = lineStarts[lineNumber];
+    std::size_t localPos = pos - startPos;
+
+    // Count code points between lineStartPos and localPos
+    return countCodePoints(src, lineStartPos, localPos);
+}
+
+std::size_t SourceFile::getColumnPosition(std::size_t pos) const
+{
+    std::size_t lineNumber = getLineNumber(pos);
+    std::size_t lineStartPos = lineStarts[lineNumber];
+    std::size_t localPos = pos - startPos;
+
+    return localPos - lineStartPos;
+}
+
+std::shared_ptr<SourceFile> SourceMap::newSourceFile(const std::filesystem::path &path, const std::string &src)
+{
+    std::size_t startPos = 0;
+    if (!files.empty()) {
+        startPos = files.back()->getEndPos();
+    }
+    auto file = std::make_shared<SourceFile>(path, src, startPos);
+    files.push_back(file);
+    return file;
+}
+
+std::shared_ptr<SourceFile> SourceMap::loadFile(const std::filesystem::path &path)
+{
+    auto existingFile = getSourceFile(path);
+    if (existingFile) {
+        return existingFile;
+    }
+
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        return nullptr;
+    }
+
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    std::string content = buffer.str();
+
+    return newSourceFile(path, content);
+}
+
+std::shared_ptr<SourceFile> SourceMap::lookupSourceFile(std::size_t pos) const
+{
+    for (const auto &file : files) {
+        if (file->getStartPos() <= pos && pos < file->getEndPos()) {
+            return file;
+        }
+    }
+    return nullptr;
+}
+
+std::shared_ptr<SourceFile> SourceMap::getSourceFile(const std::filesystem::path &path) const
+{
+    for (const auto &file : files) {
+        if (file->getPath() == path) {
+            return file;
+        }
+    }
+    return nullptr;
+}
+
+std::pair<std::size_t, std::size_t> SourceMap::lookupLineColumn(std::size_t pos) const
+{
+    auto file = lookupSourceFile(pos);
+    if (file) {
+        std::size_t lineNumber = file->getLineNumber(pos);
+        std::size_t columnNumber = file->getColumnNumber(pos);
+        return {lineNumber + 1, columnNumber + 1}; // Lines and columns are 1-based
+    } else {
+        return {0, 0};
+    }
+}
+
+void SourceMap::spanToLocation(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
+                               std::size_t &outColumn) const
+{
+    auto file = lookupSourceFile(span.lo);
+    if (file) {
+        outPath = file->getPath();
+        outLine = file->getLineNumber(span.lo);     // Zero-based
+        outColumn = file->getColumnNumber(span.lo); // Zero-based
+    } else {
+        outPath.clear();
+        outLine = 0;
+        outColumn = 0;
+    }
+}
+
+void SourceMap::spanToStartLocation(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
+                                    std::size_t &outColumn) const
+{
+    auto file = lookupSourceFile(span.lo);
+    if (file) {
+        outPath = file->getPath();
+        outLine = file->getLineNumber(span.lo); // Zero-based
+        outColumn = file->getColumnPosition(span.lo);
+    } else {
+        outPath.clear();
+        outLine = 0;
+        outColumn = 0;
+    }
+}
+
+void SourceMap::spanToEndLocation(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
+                                  std::size_t &outColumn) const
+{
+    auto file = lookupSourceFile(span.hi - 1);
+    if (file) {
+        outPath = file->getPath();
+        outLine = file->getLineNumber(span.hi - 1);       // Zero-based
+        // (need to add one because in the span (4, 5) startLocation is column 4 but endLocation column should be 5)
+        outColumn = file->getColumnPosition(span.hi - 1) + 1; // Zero-based
+    } else {
+        outPath.clear();
+        outLine = 0;
+        outColumn = 0;
+    }
+}
+
+std::string SourceMap::spanToSnippet(const Span &span) const
+{
+    auto sourceFile = lookupSourceFile(span.lo);
+    if (!sourceFile) {
+        LOG_DETAILED_ERROR("Span does not belong to any source file");
+        return "";
+    }
+
+    std::size_t start_pos = span.lo - sourceFile->getStartPos();
+    std::size_t end_pos = span.hi - sourceFile->getStartPos();
+
+    if (end_pos > sourceFile->getSource().size()) {
+        LOG_DETAILED_ERROR("Span end position out of range");
+        return "";
+    }
+
+    return sourceFile->getSource().substr(start_pos, end_pos - start_pos);
+}
+File source_map.h:
+
+#pragma once
+
+#include <unordered_map>
+#include <filesystem>
+#include "span.h"
+
+class SourceFile {
+public:
+    SourceFile(const std::filesystem::path &path, const std::string &src, std::size_t startPos);
+
+    const std::filesystem::path &getPath() const;
+    const std::string &getSource() const;
+
+    std::size_t getStartPos() const;
+    std::size_t getEndPos() const;
+
+    // Maps a byte position to a line number (zer based)
+    std::size_t getLineNumber(std::size_t pos) const;
+
+    std::string getLine(std::size_t lineNumber) const;
+
+    // Maps a byte position to a column number within its line (zero based)
+    std::size_t getColumnNumber(std::size_t pos) const;
+
+    std::size_t getColumnPosition(std::size_t pos) const;
+
+    std::size_t getLineStart(std::size_t lineNumber) const;
+
+    static std::size_t countCodePoints(const std::string &str, std::size_t startByte, std::size_t endByte);
+
+private:
+    std::filesystem::path path;          
+    std::string src;                     // Source code content
+    std::size_t startPos;                // Starting position in the global source map (including startPos)
+    std::size_t endPos;                  // Ending position in the global source map (excluding endPos)
+    std::vector<std::size_t> lineStarts; // Byte positions where each line starts
+};
+
+class SourceMap {
+public:
+    SourceMap() {};
+
+    std::shared_ptr<SourceFile> newSourceFile(const std::filesystem::path &path, const std::string &src);
+
+    std::shared_ptr<SourceFile> loadFile(const std::filesystem::path &path);
+
+    std::shared_ptr<SourceFile> lookupSourceFile(std::size_t pos) const;
+
+    std::shared_ptr<SourceFile> getSourceFile(const std::filesystem::path &path) const;
+
+    // Maps a global byte position to line and column (zero based)
+    std::pair<std::size_t, std::size_t> lookupLineColumn(std::size_t pos) const;
+
+    // Maps a span to file path, line, and column (zero based)
+    void spanToLocation(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
+                        std::size_t &outColumn) const;
+
+    // Column doesn't is only position, TODO: refactor
+    void spanToStartLocation(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
+                        std::size_t &outColumn) const;
+
+    void spanToEndLocation(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
+                        std::size_t &outColumn) const;
+
+    // Retrieves the source code snippet corresponding to a span
+    std::string spanToSnippet(const Span &span) const;
+
+private:
+    std::vector<std::shared_ptr<SourceFile>> files;
+};
+File span.cpp:
+
+#include "span.h"
+#include "log.h"
+
+void SyntaxContextData::pushMacro(const std::string &macroName) { macroStack.push_back(macroName); }
+
+void SyntaxContextData::popMacro()
+{
+    if (!macroStack.empty()) {
+        macroStack.pop_back();
+    }
+}
+
+const std::string SyntaxContextData::currentMacro() const { return macroStack.empty() ? "" : macroStack.back(); }
+
+bool Span::contains(std::size_t pos) const { return lo <= pos && pos < hi; }
+
+bool Span::overlaps(const Span &other) const { return lo < other.hi && other.lo < hi; }
+
+Span Span::merge(const Span &first, const Span &second)
+{
+    std::size_t new_lo = std::min(first.lo, second.lo);
+    std::size_t new_hi = std::max(first.hi, second.hi);
+
+    std::shared_ptr<SyntaxContextData> new_context = first.context;
+
+    if (first.context != second.context) {
+        LOG_DETAILED_ERROR("Can't merge spans with different contexts!");
+        return Span(0, 0, nullptr);
+    }
+
+    return Span(new_lo, new_hi, new_context);
+}
+
+bool Span::operator==(const Span &other) const { return lo == other.lo && hi == other.hi && context == other.context; }
+
+bool Span::operator!=(const Span &other) const { return !(*this == other); }
+
+bool Span::operator<(const Span &other) const
+{
+    if (lo != other.lo)
+        return lo < other.lo;
+    if (hi != other.hi)
+        return hi < other.hi;
+    return true;
+}
+
+bool Span::operator>(const Span &other) const { return other < *this; }
+
+bool Span::operator<=(const Span &other) const { return !(other < *this); }
+
+bool Span::operator>=(const Span &other) const { return !(*this < other); }
+File span.h:
+
+#pragma once
+
+#include <cstddef>
+#include <string>
+#include <vector>
+#include <memory>
+
+struct SyntaxContextData {
+    std::vector<std::string> macroStack;
+
+    void pushMacro(const std::string &macroName);
+
+    void popMacro();
+
+    const std::string currentMacro() const;
+};
+
+struct Span {
+    Span() : lo(0), hi(0), context(nullptr) {};
+    Span(std::size_t start, std::size_t end, std::shared_ptr<SyntaxContextData> ctxt)
+        : lo(start), hi(end), context(ctxt) {};
+
+    bool contains(std::size_t pos) const;
+    bool overlaps(const Span &other) const;
+
+    static Span merge(const Span &first, const Span &second);
+
+    bool operator==(const Span &other) const;
+    bool operator!=(const Span &other) const;
+    bool operator<(const Span &other) const;
+    bool operator>(const Span &other) const;
+    bool operator<=(const Span &other) const;
+    bool operator>=(const Span &other) const;
+
+    // absolute offsets in bytes from SourceMap
+    // the range is [lo, hi) bytes
+    std::size_t lo;
+    std::size_t hi;
+
+    std::shared_ptr<SyntaxContextData> context;
+};
+File symbol_table.cpp:
+
+#include "symbol_table.h"
+
+void SymbolTable::addSymbol(const Symbol &symbol) { symbols[symbol.name] = symbol; }
+
+Symbol *SymbolTable::findSymbol(const std::string &name)
+{
+    auto it = symbols.find(name);
+    if (it != symbols.end()) {
+        return &(it->second);
+    }
+    return nullptr;
+}
+
+File symbol_table.h:
+
+#pragma once
+
+#include <string>
+#include <unordered_map>
+
+struct Symbol {
+    std::string name;
+    enum class Type { Label, Variable, Macro, Segment };
+    Type type;
+    int lineNumber;
+    std::string fileName;
+};
+
+class SymbolTable {
+public:
+    void addSymbol(const Symbol &symbol);
+    Symbol *findSymbol(const std::string &name);
+
+private:
+    std::unordered_map<std::string, Symbol> symbols;
+};
+
+File timer.h:
+
+#pragma once
+
+#include <chrono>
+#include <iostream>
+#include <string>
+
+class Timer {
+public:
+    Timer() { reset(); }
+
+    void reset() { m_start = std::chrono::high_resolution_clock::now(); }
+
+    float elapsed()
+    {
+        return static_cast<float>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                      std::chrono::high_resolution_clock::now() - m_start)
+                                      .count()) *
+               0.001f * 0.001f * 0.001f;
+    }
+
+    float elapsed_millis() { return elapsed() * 1000.0f; }
+
+private:
+    std::chrono::time_point<std::chrono::high_resolution_clock> m_start;
+};
+
+File tokenize.h:
+
+#pragma once
+
+#include "span.h"
+#include "session.h"
+#include "diagnostic.h"
+#include <string>
+#include <deque>
+#include <unordered_set>
+
+enum class TokenType {
+    Identifier,
+    Directive,
+    Instruction,
+    Type,
+    Register,
+    Number,
+    StringLiteral,
+    Operator,
+    OpenBracket,        // '('
+    CloseBracket,       // ')'
+    OpenSquareBracket,  // '['
+    CloseSquareBracket, // ']'
+    OpenAngleBracket,   // '<'
+    CloseAngleBracket,  // '>'
+    Comma,              // ','
+    Colon,              // ':'
+    Dollar,             // '$'
+    QuestionMark,       // '?'
+    EndOfFile,
+    EndOfLine,
+    Comment,
+    Invalid
+};
+
+struct Token {
+    enum TokenType type;
+    std::string lexeme;
+    Span span;
+
+    // TODO: data about macro expansion
+};
+
+class Tokenizer {
+public:
+    Tokenizer(std::shared_ptr<ParseSession> psess, const std::string &src) : psess(psess), src(src), pos(0) {}
+    std::vector<Token> tokenize();
+
+private:
+    void skipWhitespace();
+    Token getNextToken();
+    Token getNumberToken();
+    Token getIdentifierOrKeywordToken();
+    Token getStringLiteralToken();
+    Token getSpecialSymbolToken();
+    bool isDotName();
+    bool isValidNumber(const std::string &lexeme);
+    bool isValidIdentifier(const std::string &lexeme);
+    bool isValidIdentifierStart(char c);
+    bool isValidIdentifierChar(char c);
+    bool isValidNumberStart(char c);
+
+    template <typename... Args> void addDiagnostic(size_t start, size_t end, ErrorCode errorCode, Args &&...args)
+    {
+        Diagnostic diag(Diagnostic::Level::Error, errorCode, std::forward<Args>(args)...);
+        diag.addPrimaryLabel(Span(start, end, nullptr), "");
+        psess->dcx->addDiagnostic(diag);
+    }
+
+    std::vector<Token> tokens;
+    std::size_t pos;
+    const std::string &src;
+    std::shared_ptr<ParseSession> psess;
+};
+
+

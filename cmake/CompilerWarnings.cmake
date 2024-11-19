@@ -66,7 +66,6 @@ function(
         -Wunused
         -Wconversion
         -Wshadow
-        # TODO: add more Cuda warnings
     )
 
     if(MSVC)

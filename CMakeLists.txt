@@ -37,7 +37,7 @@ include(CMakePrintHelpers)
 ML_assure_out_of_source_builds()
 # Create all cache varaibles
 ML_declare_options()
-# Setup all th tooling (TODO: better names?)
+# Setup all the tooling
 ML_apply_options()
 
 
@@ -55,7 +55,4 @@ endif()
 
 
 # Installing
-
-
-
-# TODO: Packaging
+# Packaging

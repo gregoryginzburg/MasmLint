@@ -11,16 +11,114 @@ int add(int a, int b);
 int mul(int a, int b);
 File ast.h:
 
-#include "tokenize.h"
+#pragma once
 
-class AST
-{
-    
+#include "tokenize.h"
+#include <memory>
+
+class AST {
+public:
+    virtual ~AST() = default;
 };
 
-class BinaryOperator : public AST
-{
-    
+using ASTPtr = std::shared_ptr<AST>;
+
+class BinaryOperator : public AST {
+public:
+    BinaryOperator(const Token &op, ASTPtr left, ASTPtr right) : op(op), left(left), right(right) {}
+
+    Token op;
+    ASTPtr left;
+    ASTPtr right;
+};
+
+class Brackets : public AST {
+public:
+    Brackets(const Token &leftBracket, const Token &rightBracket, ASTPtr operand)
+        : leftBracket(leftBracket), rightBracket(rightBracket), operand(operand)
+    {
+    }
+    Token leftBracket;
+    Token rightBracket;
+    ASTPtr operand;
+};
+
+class SquareBrackets : public AST {
+public:
+    SquareBrackets(const Token &leftBracket, const Token &rightBracket, ASTPtr operand)
+        : leftBracket(leftBracket), rightBracket(rightBracket), operand(operand)
+    {
+    }
+    Token leftBracket;
+    Token rightBracket;
+    ASTPtr operand;
+};
+
+class ImplicitPlusOperator : public AST {
+public:
+    ImplicitPlusOperator(ASTPtr left, ASTPtr right) : left(left), right(right) {}
+
+    ASTPtr left;
+    ASTPtr right;
+};
+
+class UnaryOperator : public AST {
+public:
+    UnaryOperator(const Token &op, ASTPtr operand) : op(op), operand(operand) {}
+
+    Token op;
+    ASTPtr operand;
+};
+
+class Leaf : public AST {
+public:
+    Leaf(const Token &token) : token(token) {}
+
+    Token token;
+};
+
+
+inline void printAST(const ASTPtr& node, int indent) {
+    if (!node) return;
+
+    // Create indentation string
+    std::string indentation(indent, ' ');
+
+    if (auto binaryOp = std::dynamic_pointer_cast<BinaryOperator>(node)) {
+        std::cout << indentation << "BinaryOperator (" << binaryOp->op.lexeme << ")\n";
+        std::cout << indentation << "Left:\n";
+        printAST(binaryOp->left, indent + 2);
+        std::cout << indentation << "Right:\n";
+        printAST(binaryOp->right, indent + 2);
+    }
+    else if (auto unaryOp = std::dynamic_pointer_cast<UnaryOperator>(node)) {
+        std::cout << indentation << "UnaryOperator (" << unaryOp->op.lexeme << ")\n";
+        std::cout << indentation << "Operand:\n";
+        printAST(unaryOp->operand, indent + 2);
+    }
+    else if (auto brackets = std::dynamic_pointer_cast<Brackets>(node)) {
+        std::cout << indentation << "Brackets\n";
+        std::cout << indentation << "Operand:\n";
+        printAST(brackets->operand, indent + 2);
+    }
+    else if (auto squareBrackets = std::dynamic_pointer_cast<SquareBrackets>(node)) {
+        std::cout << indentation << "SquareBrackets\n";
+        std::cout << indentation << "Operand:\n";
+        printAST(squareBrackets->operand, indent + 2);
+    }
+    else if (auto implicitPlus = std::dynamic_pointer_cast<ImplicitPlusOperator>(node)) {
+        std::cout << indentation << "ImplicitPlusOperator\n";
+        std::cout << indentation << "Left:\n";
+        printAST(implicitPlus->left, indent + 2);
+        std::cout << indentation << "Right:\n";
+        printAST(implicitPlus->right, indent + 2);
+    }
+    else if (auto leaf = std::dynamic_pointer_cast<Leaf>(node)) {
+        std::cout << indentation << "Leaf (" << leaf->token.lexeme << ")\n";
+    }
+    else {
+        std::cout << indentation << "Unknown AST Node\n";
+    }
 }
 File diagnostic.cpp:
 
@@ -164,6 +262,476 @@ private:
     std::vector<Diagnostic> diagnostics;
     std::shared_ptr<Emitter> emitter;
 };
+File emitter.cpp:
+
+#include "emitter.h"
+#include "log.h"
+
+#include <fmt/core.h>
+#include <fmt/color.h>
+#include <fmt/ostream.h>
+#include <map>
+#include <algorithm>
+
+#include <nlohmann/json.hpp>
+using json = nlohmann::json;
+
+#include <utf8proc.h>
+
+Emitter::Emitter(std::shared_ptr<SourceMap> sourceMap, std::ostream &outStream, bool useColor)
+    : sourceMap(sourceMap), out(outStream), useColor(useColor)
+{
+}
+
+void Emitter::emit(const Diagnostic &diag)
+{
+    printHeader(diag);
+    printDiagnosticBody(diag);
+    if (diag.getNoteMessage()) {
+        printNote(diag);
+    }
+    if (diag.getHelpMessage()) {
+        printHelp(diag);
+    }
+}
+
+void Emitter::printHeader(const Diagnostic &diag)
+{
+    auto levelStr = formatLevel(diag.getLevel());
+    auto codeStr = formatErrorCode(diag.getLevel(), diag.getCode());
+    auto message = format(fmt::emphasis::bold | fg(whiteColor), "{}", diag.getMessage());
+    auto colon = format(fmt::emphasis::bold | fg(whiteColor), ":");
+
+    std::string result = fmt::format("{}{}: {}\n", levelStr, codeStr, message);
+    out.write(result.data(), result.size());
+}
+
+std::string Emitter::formatLevel(Diagnostic::Level level)
+{
+
+    switch (level) {
+    case Diagnostic::Level::Error:
+        return format(fmt::emphasis::bold | fg(redColor), "error");
+    case Diagnostic::Level::Warning:
+        return format(fmt::emphasis::bold | fg(yellowColor), "warning");
+    case Diagnostic::Level::Note:
+        return format(fmt::emphasis::bold | fg(cyanColor), "note");
+    }
+
+    return "unknown";
+}
+
+std::string Emitter::formatErrorCode(Diagnostic::Level level, ErrorCode code)
+{
+    switch (level) {
+    case Diagnostic::Level::Error:
+        return format(fmt::emphasis::bold | fg(redColor), "[E{:02d}]", static_cast<int>(code));
+    case Diagnostic::Level::Warning:
+        return format(fmt::emphasis::bold | fg(yellowColor), "[E{:02d}]", static_cast<int>(code));
+    case Diagnostic::Level::Note:
+        return format(fmt::emphasis::bold | fg(cyanColor), "[E{:02d}]", static_cast<int>(code));
+    }
+
+    return "unknown";
+}
+
+void Emitter::printDiagnosticBody(const Diagnostic &diag)
+{
+    // Collect all labels
+    std::map<std::filesystem::path, std::map<size_t, std::vector<LabelType>>> labelsMapping;
+
+    size_t maxLineNumber = 0;
+    // primary label
+    const auto &[primarySpan, primaryLabelMsg] = diag.getPrimaryLabel();
+    std::filesystem::path primaryFilePath;
+    std::size_t primaryLineNumberZeroBased, primaryColumnNumberZeroBased;
+    sourceMap->spanToLocation(primarySpan, primaryFilePath, primaryLineNumberZeroBased, primaryColumnNumberZeroBased);
+    labelsMapping[primaryFilePath][primaryLineNumberZeroBased] =
+        std::vector<LabelType>(1, LabelType(primarySpan, primaryLabelMsg));
+    maxLineNumber = std::max(maxLineNumber, primaryLineNumberZeroBased + 1);
+
+    // secondary labels
+    for (const auto &[span, labelMsg] : diag.getSecondaryLabels()) {
+        std::filesystem::path filePath;
+        std::size_t lineNumberZeroBased, columnNumberZeroBased;
+        sourceMap->spanToLocation(span, filePath, lineNumberZeroBased, columnNumberZeroBased);
+        if (labelsMapping.contains(filePath) && labelsMapping[filePath].contains(lineNumberZeroBased)) {
+            labelsMapping[filePath][lineNumberZeroBased].emplace_back(span, labelMsg);
+        } else {
+            labelsMapping[filePath][lineNumberZeroBased] = std::vector<LabelType>(1, LabelType(span, labelMsg));
+        }
+        maxLineNumber = std::max(maxLineNumber, lineNumberZeroBased + 1);
+    }
+
+    int spaceCount = calculateDisplayWidth(std::to_string(maxLineNumber)) + 1;
+    fmt::memory_buffer buffer;
+    int primaryLineNumberWidth = calculateDisplayWidth(std::to_string(primaryLineNumberZeroBased + 1));
+    // Print the location header
+    fmt::format_to(std::back_inserter(buffer), "{}{} {}:{}:{}\n", std::string(spaceCount, ' '),
+                   format(fg(cyanColor), "-->"), primaryFilePath.string(), primaryLineNumberZeroBased + 1,
+                   primaryColumnNumberZeroBased + 1);
+
+    // print empty line
+    fmt::format_to(std::back_inserter(buffer), "{} {}\n", std::string(spaceCount, ' '), format(fg(cyanColor), "|"));
+
+    // print primary string
+    auto primarySourceFile = sourceMap->getSourceFile(primaryFilePath);
+    std::string primaryLineContent = primarySourceFile->getLine(primaryLineNumberZeroBased);
+    fmt::format_to(std::back_inserter(buffer), "{}{} {} {}\n", std::string(spaceCount - primaryLineNumberWidth, ' '),
+                   format(fg(cyanColor), "{}", primaryLineNumberZeroBased + 1), format(fg(cyanColor), "|"),
+                   primaryLineContent);
+
+    // print labels in primary string
+    std::vector<LabelType> primarySecondaryLabels;
+    printLabelsForLine(buffer, primaryLineContent, primaryLineNumberZeroBased, spaceCount,
+                       LabelType(primarySpan, primaryLabelMsg),
+                       labelsMapping[primaryFilePath][primaryLineNumberZeroBased], diag.getLevel());
+
+    // print all other lines in primary file
+    for (const auto &[lineNumberZeroBased, labels] : labelsMapping[primaryFilePath]) {
+        if (lineNumberZeroBased == primaryLineNumberZeroBased) {
+            continue;
+        }
+        // print "..."
+        fmt::format_to(std::back_inserter(buffer), "{}{}\n", std::string(spaceCount, ' '),
+                       format(fg(cyanColor), "..."));
+        // print empty line
+        fmt::format_to(std::back_inserter(buffer), "{} {}\n", std::string(spaceCount, ' '), format(fg(cyanColor), "|"));
+
+        // print string
+        std::string lineContent = primarySourceFile->getLine(lineNumberZeroBased);
+        int lineNumberWidth = calculateDisplayWidth(std::to_string(lineNumberZeroBased + 1));
+        fmt::format_to(std::back_inserter(buffer), "{}{} {} {}\n", std::string(spaceCount - lineNumberWidth, ' '),
+                       format(fg(cyanColor), "{}", lineNumberZeroBased + 1), format(fg(cyanColor), "|"), lineContent);
+        printLabelsForLine(buffer, lineContent, lineNumberZeroBased, spaceCount, std::nullopt,
+                           labelsMapping[primaryFilePath][lineNumberZeroBased], diag.getLevel());
+    }
+
+    // print all other files and labels
+    for (const auto &[filePath, linesToLabelsMap] : labelsMapping) {
+        if (filePath == primaryFilePath) {
+            continue;
+        }
+        // print location
+        // print all lines
+        // TODO: finish this
+        fmt::format_to(std::back_inserter(buffer), "{}\n",
+                       format(fg(redColor), "Labels in different files not implemented!"));
+    }
+
+    out.write(buffer.data(), buffer.size());
+}
+
+int Emitter::calculateDisplayWidth(const std::string &text)
+{
+    int width = 0;
+    const char *str = text.c_str();
+    utf8proc_ssize_t len = text.size();
+    utf8proc_ssize_t idx = 0;
+    utf8proc_int32_t codepoint;
+    while (idx < len) {
+        utf8proc_ssize_t charLen = utf8proc_iterate((const utf8proc_uint8_t *)(str + idx), len - idx, &codepoint);
+        if (charLen <= 0) {
+            LOG_DETAILED_ERROR("Invalid utf-8 formatting in calculateDisplayWidth");
+            break;
+        }
+
+        width += utf8proc_charwidth(codepoint);
+        idx += charLen;
+    }
+    return width;
+}
+
+int Emitter::calculateCodePoints(const std::string &text)
+{
+    int codePoints = 0;
+    const char *str = text.c_str();
+    utf8proc_ssize_t len = text.size();
+    utf8proc_ssize_t idx = 0;
+    utf8proc_int32_t codepoint;
+    while (idx < len) {
+        utf8proc_ssize_t charLen = utf8proc_iterate((const utf8proc_uint8_t *)(str + idx), len - idx, &codepoint);
+        if (charLen <= 0) {
+            LOG_DETAILED_ERROR("Invalid utf-8 formatting in calculateCodePoints");
+            break;
+        }
+        idx += charLen;
+        codePoints += static_cast<int>(charLen);
+    }
+    return codePoints;
+}
+
+void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, std::string lineContent, size_t lineNumberZeroBased,
+                                 int spacesCount, const std::optional<LabelType> &primaryLabel,
+                                 std::vector<LabelType> &labels, Diagnostic::Level level)
+{
+    fmt::rgb primaryColor;
+    switch (level) {
+    case Diagnostic::Level::Error:
+        primaryColor = redColor;
+        break;
+    case Diagnostic::Level::Warning:
+        primaryColor = yellowColor;
+        break;
+    }
+
+    // Initialize a marker line
+    // + 1 needed if we are underlining the '\n' (it's not included in the lineContent)
+    std::string markerLine(calculateDisplayWidth(lineContent) + 1, ' ');
+
+    // Vector to hold messages that need to be printed under the marker line
+    std::vector<std::tuple<size_t, std::string, bool>> labelMessagesToPrint;
+    // Label Message to print on the same line
+    std::string labelMessageToAdd = "";
+
+    // Sort in the descneding order
+    std::sort(labels.begin(), labels.end(), [](auto a, auto b) { return a > b; });
+
+    // Apply labels to the marker line
+    for (const auto &[span, labelMsg] : labels) {
+        std::filesystem::path filePath;
+        std::size_t startLine, startColumn, endLine, endColumn;
+        sourceMap->spanToStartLocation(span, filePath, startLine, startColumn);
+        sourceMap->spanToEndLocation(span, filePath, endLine, endColumn);
+
+        if (startLine != lineNumberZeroBased || endLine != lineNumberZeroBased) {
+            LOG_DETAILED_ERROR("In printLabelsForLine label span isn't the same as specified");
+            return;
+        }
+
+        // Adjust for UTF-8 characters
+        size_t startPos = calculateDisplayWidth(lineContent.substr(0, startColumn));
+        size_t endPos = calculateDisplayWidth(lineContent.substr(0, endColumn));
+  
+
+        char markerChar = '-';
+        bool isPrimaryLabel = primaryLabel && primaryLabel.value().first == span;
+        if (isPrimaryLabel) {
+            markerChar = '^';
+        }
+
+        // Fill in the markers
+        for (size_t i = startPos; i < endPos && i < markerLine.size(); ++i) {
+            markerLine[i] = markerChar;
+        }
+
+        // '\n' has empty width, need to handle separately
+        if (startPos == endPos && startPos < markerLine.size()) {
+            markerLine[startPos] = markerChar;
+        }
+
+        // Handle label messages
+        if (!labelMsg.empty()) {
+            // Append the message after the markers if it's the first from the right and it's the primary
+            if (labels[0].first == span && isPrimaryLabel) {
+                labelMessageToAdd = " " + labelMsg;
+            } else {
+                labelMessagesToPrint.emplace_back(startPos, labelMsg, isPrimaryLabel);
+            }
+        }
+    }
+
+    // Print the marker line with appropriate color
+    std::string coloredMarkerLine;
+    for (size_t i = 0; i < markerLine.size(); ++i) {
+        char c = markerLine[i];
+        if (c == '^') {
+            // Color primary markers red
+            coloredMarkerLine += format(fmt::emphasis::bold | fg(primaryColor), "{}", c);
+        } else if (c == '-') {
+            // Color secondary markers cyan
+            coloredMarkerLine += format(fmt::emphasis::bold | fg(cyanColor), "{}", c);
+        } else if (c == ' ') {
+            // Keep spaces
+            coloredMarkerLine += c;
+        }
+    }
+
+    if (!labelMessageToAdd.empty()) {
+        coloredMarkerLine += format(fg(primaryColor), "{}", labelMessageToAdd);
+    }
+
+    fmt::format_to(std::back_inserter(buffer), "{} {} {}\n", std::string(spacesCount, ' '), format(fg(cyanColor), "|"),
+                   coloredMarkerLine);
+
+    if (labelMessagesToPrint.empty()) {
+        return;
+    }
+
+    // Now print any label messages that didn't fit on the marker line
+    // first print initial line of | | | ...
+    {
+        const auto &[currentStartPos, currentLabelMsg, currentIsPrimaryLabel] = labelMessagesToPrint[0];
+        size_t lineLength = currentStartPos + 1;
+        std::string messageLine(lineLength, ' ');
+
+        std::optional<size_t> primaryLabelIndex;
+        for (const auto &[startPos, _, isPrimaryLabel] : labelMessagesToPrint) {
+            if (startPos > currentStartPos) {
+                continue;
+            }
+            messageLine[startPos] = '|';
+            if (isPrimaryLabel) {
+                primaryLabelIndex = startPos;
+            }
+        }
+
+        std::string coloredLine;
+        for (size_t i = 0; i < messageLine.size(); ++i) {
+            char c = messageLine[i];
+            if (c == '|') {
+                if (primaryLabelIndex && primaryLabelIndex == i) {
+                    coloredLine += format(fg(primaryColor), "{}", "│");
+                } else {
+                    coloredLine += format(fg(cyanColor), "{}", "│");
+                }
+            } else {
+                coloredLine += c;
+            }
+        }
+        fmt::format_to(std::back_inserter(buffer), "{} {} {}\n", std::string(spacesCount, ' '),
+                       format(fg(cyanColor), "|"), coloredLine);
+    }
+
+    // then print all the messages
+    for (const auto &[currentStartPos, currentLabelMsg, currentIsPrimaryLabel] : labelMessagesToPrint) {
+        // + 1 isn't needed, because last can't be a |
+        size_t lineLength = currentStartPos;
+        std::string messageLine(lineLength, ' ');
+
+        std::optional<size_t> primaryLabelIndex;
+        for (const auto &[startPos, _, isPrimaryLabel] : labelMessagesToPrint) {
+            if (startPos >= currentStartPos) {
+                continue;
+            }
+            messageLine[startPos] = '|';
+            if (isPrimaryLabel) {
+                primaryLabelIndex = startPos;
+            }
+        }
+        std::string coloredLine;
+        for (size_t i = 0; i < messageLine.size(); ++i) {
+            char c = messageLine[i];
+            if (c == '|') {
+                if (primaryLabelIndex && primaryLabelIndex == i) {
+                    coloredLine += format(fg(primaryColor), "{}", "│");
+                } else {
+                    coloredLine += format(fg(cyanColor), "{}", "│");
+                }
+            } else {
+                coloredLine += c;
+            }
+        }
+        std::string labelMessage = currentLabelMsg;
+        if (currentIsPrimaryLabel) {
+            coloredLine += format(fg(primaryColor), "{}", labelMessage);
+        } else {
+            coloredLine += format(fg(cyanColor), "{}", labelMessage);
+        }
+
+        fmt::format_to(std::back_inserter(buffer), "{} {} {}\n", std::string(spacesCount, ' '),
+                       format(fg(cyanColor), "|"), coloredLine);
+    }
+}
+
+void Emitter::printNote(const Diagnostic &diag) {}
+
+void Emitter::printHelp(const Diagnostic &diag) {}
+
+void Emitter::emitJSON(const std::vector<Diagnostic> &diagnostics)
+{
+    json arr = json::array();
+    for (const auto &diag : diagnostics) {
+        json item;
+        item["message"] = diag.getMessage();
+        item["severity"] = static_cast<int>(diag.getLevel());
+
+        for (const auto &[span, labelMsg] : diag.getSecondaryLabels()) {
+            int startLine, startChar, endLine, endChar;
+            spanToLineChar(span, startLine, startChar, endLine, endChar);
+
+            item["range"] = {{"start", {{"line", startLine}, {"character", startChar}}},
+                             {"end", {{"line", endLine}, {"character", endChar}}}};
+        }
+
+        arr.push_back(item);
+    }
+    std::string result = arr.dump(4);
+    out.write(result.data(), result.size());
+}
+
+void Emitter::spanToLineChar(const Span &span, int &startLine, int &startChar, int &endLine, int &endChar)
+{
+    std::filesystem::path filePath;
+    std::size_t lineNumberZeroBased, columnNumberZeroBased;
+
+    sourceMap->spanToLocation(span, filePath, lineNumberZeroBased, columnNumberZeroBased);
+    startLine = endLine = static_cast<int>(lineNumberZeroBased);
+    startChar = static_cast<int>(columnNumberZeroBased);
+
+    auto sourceFile = sourceMap->lookupSourceFile(span.lo);
+    if (sourceFile) {
+        std::string lineContent = sourceFile->getLine(lineNumberZeroBased);
+        std::size_t lineStartByte = sourceFile->getLineStart(lineNumberZeroBased);
+        std::size_t byteOffsetInLine = span.lo - lineStartByte;
+        std::size_t byteLength = span.hi - span.lo;
+        std::string underlineText = lineContent.substr(byteOffsetInLine, byteLength);
+        endChar = startChar + calculateCodePoints(underlineText) + 1;
+    }
+}
+File emitter.h:
+
+#pragma once
+
+#include "source_map.h"
+#include "diagnostic.h"
+
+#include <memory>
+#include <ostream>
+#include <iostream>
+#include <fmt/color.h>
+
+using LabelType = std::pair<Span, std::string>;
+
+class Emitter {
+public:
+    Emitter(std::shared_ptr<SourceMap> sourceMap, std::ostream &outStream = std::cout, bool useColor = true);
+
+    void emit(const Diagnostic &diag);
+    void emitJSON(const std::vector<Diagnostic> &diagnostics);
+
+private:
+    std::shared_ptr<SourceMap> sourceMap;
+    std::ostream &out;
+    bool useColor;
+    fmt::rgb whiteColor = fmt::rgb(200, 200, 200);
+    fmt::rgb redColor = fmt::rgb(254,89,89);
+    fmt::rgb yellowColor = fmt::rgb(255, 191, 0);
+    fmt::rgb cyanColor = fmt::rgb(0, 200, 200);
+
+    template <typename... Args>
+    std::string format(const fmt::text_style &ts, fmt::format_string<Args...> fmt_str, Args &&...args)
+    {
+        return fmt::format(useColor ? ts : fmt::text_style(), fmt_str, std::forward<Args>(args)...);
+    }
+
+    void printHeader(const Diagnostic &diag);
+    void printDiagnosticBody(const Diagnostic &diag);
+    void printNote(const Diagnostic &diag);
+    void printHelp(const Diagnostic &diag);
+    void printLabelsForLine(fmt::memory_buffer &buffer, std::string lineContent, size_t lineNumberZeroBased,
+                            int spacesCount, const std::optional<LabelType> &primaryLabel,
+                            std::vector<LabelType> &labels, Diagnostic::Level level);
+
+    std::string formatLevel(Diagnostic::Level level);
+    std::string formatErrorCode(Diagnostic::Level level, ErrorCode code);
+    std::string createUnderline(std::shared_ptr<SourceFile> sourceFile, size_t lineNumberZeroBased,
+                                std::optional<Span> primarySpan, std::vector<Span> spans);
+    std::string createUnderline(const std::string &lineContent, std::size_t byteOffsetInLine, std::size_t byteLength);
+    int calculateDisplayWidth(const std::string &text);
+    int calculateCodePoints(const std::string &text);
+    void spanToLineChar(const Span &span, int &startLine, int &startChar, int &endLine, int &endChar);
+};
 
 File error_codes.h:
 
@@ -179,6 +747,33 @@ File log.h:
 
 #pragma once
 
+// Regular logging macros
+// #define LOG_TRACE(...) Log::get_core_logger()->trace(__VA_ARGS__)
+// #define LOG_INFO(...) Log::get_core_logger()->info(__VA_ARGS__)
+// #define LOG_WARN(...) Log::get_core_logger()->warn(__VA_ARGS__)
+// #define LOG_ERROR(...) Log::get_core_logger()->error(__VA_ARGS__)
+
+// // Detailed logging macros
+// #if defined(__clang__)
+// #    define PRETTY_FUNCTION __PRETTY_FUNCTION__
+// #elif defined(__GNUC__) || defined(__GNUG__)
+// #    define PRETTY_FUNCTION __PRETTY_FUNCTION__
+// #elif defined(_MSC_VER)
+// #    define PRETTY_FUNCTION __FUNCSIG__
+// #else
+// #    define PRETTY_FUNCTION __func__
+// #endif
+
+// #define LOG_FORMAT_DETAILED(message, file, line, function) "[{}:{} ({})] {}", file, line, function, message
+
+// #define LOG_DETAILED_TRACE(...)                                                                                        \
+//     Log::get_core_logger()->trace(LOG_FORMAT_DETAILED(fmt::format(__VA_ARGS__), __FILE__, __LINE__, PRETTY_FUNCTION))
+// #define LOG_DETAILED_INFO(...)                                                                                         \
+//     Log::get_core_logger()->info(LOG_FORMAT_DETAILED(fmt::format(__VA_ARGS__), __FILE__, __LINE__, PRETTY_FUNCTION))
+// #define LOG_DETAILED_WARN(...)                                                                                         \
+//     Log::get_core_logger()->warn(LOG_FORMAT_DETAILED(fmt::format(__VA_ARGS__), __FILE__, __LINE__, PRETTY_FUNCTION))
+// #define LOG_DETAILED_ERROR(...)                                                                                        \
+//     Log::get_core_logger()->error(LOG_FORMAT_DETAILED(fmt::format(__VA_ARGS__), __FILE__, __LINE__, PRETTY_FUNCTION))
 #include <fmt/core.h>
 #include <fmt/color.h>
 
@@ -201,6 +796,7 @@ File main.cpp:
 #include "parser.h"
 #include "session.h"
 #include "error_codes.h"
+#include "ast.h"
 
 #include <iostream>
 #include <memory>
@@ -249,7 +845,9 @@ int main(int argc, char *argv[])
         std::vector<Token> tokens = tokenizer.tokenize();
         tokens = preprocessor.preprocess(tokens);
         Parser parser(parseSess, tokens);
-        parser.parse();
+        ASTPtr root = parser.parse();
+        printAST(root, 0);
+
     } else {
         Diagnostic diag(Diagnostic::Level::Error, ErrorCode::FAILED_TO_OPEN_FILE, filename.string());
         parseSess->dcx->addDiagnostic(diag);
@@ -278,42 +876,227 @@ File parser.cpp:
 #include "symbol_table.h"
 #include "diag_ctxt.h"
 
+#include <ranges>
+
 // #include <fmt/core.h>
 
 Parser::Parser(std::shared_ptr<ParseSession> parseSession, const std::vector<Token> &tokens)
-    : parseSess(parseSession), tokens(tokens)
+    : parseSess(parseSession), tokens(tokens), currentIndex(0)
 {
+    currentToken = tokens[currentIndex];
 }
 
-void Parser::parse()
+ASTPtr Parser::parse()
 {
-    currentIndex = 0;
-    while (currentIndex < tokens.size()) {
-        advance();
-        if (currentToken.type == TokenType::EndOfFile) {
-            return; // End parsing when EOF is reached
-        }
-        parseLine();
-    }
+    return parseExpression();
+    // currentIndex = 0;
+    // while (currentIndex < tokens.size()) {
+    //     advance();
+    //     if (currentToken.type == TokenType::EndOfFile) {
+    //         return; // End parsing when EOF is reached
+    //     }
+    //     parseLine();
+    // }
 }
 
+// TODO: refactor this?
 void Parser::advance()
 {
     if (currentIndex < tokens.size()) {
-        currentToken = tokens[currentIndex++];
+        currentToken = tokens[++currentIndex];
     } else {
         currentToken = {TokenType::EndOfFile, "", Span(1, 2, nullptr)};
     }
 }
 
-void Parser::parseLine() 
+ASTPtr Parser::parseLine() { return nullptr; }
+
+bool Parser::match(TokenType type) { return currentToken.type == type; }
+
+bool Parser::match(TokenType type, const std::string &value)
 {
-    parseExpression();
+    return currentToken.type == type && currentToken.lexeme == value;
 }
 
-void Parser::parseExpression()
+Token Parser::consume(TokenType type)
 {
-    
+    if (currentToken.type == type) {
+        Token token = currentToken;
+        advance();
+        return token;
+    } else {
+        // reportError(currentToken.span, ErrorCode::EXPECTED_TOKEN, "Expected token of type");
+        Token token = currentToken;
+        advance();
+        return token;
+    }
+}
+
+Token Parser::consume(TokenType type, const std::string &value)
+{
+    if (currentToken.type == type && currentToken.lexeme == value) {
+        Token token = currentToken;
+        advance();
+        return token;
+    } else {
+        // reportError(currentToken.span, ErrorCode::EXPECTED_TOKEN, "Expected token '" + value + "'");
+        Token token = currentToken;
+        advance();
+        return token;
+    }
+}
+
+ASTPtr Parser::parseExpression()
+{
+    ASTPtr term1 = parseMultiplicativeExpression();
+    while (match(TokenType::Operator, "+") || match(TokenType::Operator, "-")) {
+        Token op = currentToken;
+        advance();
+        ASTPtr term2 = parseMultiplicativeExpression();
+        term1 = std::make_shared<BinaryOperator>(op, term1, term2);
+    }
+    return term1;
+}
+
+ASTPtr Parser::parseMultiplicativeExpression()
+{
+    ASTPtr term1 = parseUnaryExpression();
+    while (match(TokenType::Operator, "*") || match(TokenType::Operator, "/") || match(TokenType::Operator, "MOD") ||
+           match(TokenType::Instruction, "SHL") || match(TokenType::Instruction, "SHR")) {
+        Token op = currentToken;
+        advance();
+        ASTPtr term2 = parseUnaryExpression();
+        term1 = std::make_shared<BinaryOperator>(op, term1, term2);
+    }
+    return term1;
+}
+
+ASTPtr Parser::parseUnaryExpression()
+{
+    std::vector<Token> operators;
+    while (match(TokenType::Operator, "+") || match(TokenType::Operator, "-") ||
+           match(TokenType::Operator, "OFFSET") || match(TokenType::Operator, "TYPE")) {
+        Token op = currentToken;
+        operators.push_back(op);
+        advance();
+    }
+    ASTPtr term = parsePostfixExpression();
+    for (Token op : std::ranges::reverse_view(operators)) {
+        term = std::make_shared<UnaryOperator>(op, term);
+    }
+    return term;
+}
+
+ASTPtr Parser::parsePostfixExpression()
+{
+    ASTPtr term1 = parseMemberAccessExpression();
+    while (match(TokenType::Operator, "PTR")) {
+        Token op = currentToken;
+        advance();
+        ASTPtr term2 = parseMemberAccessExpression();
+        term1 = std::make_shared<BinaryOperator>(op, term1, term2);
+    }
+    return term1;
+}
+
+ASTPtr Parser::parseMemberAccessExpression()
+{
+    ASTPtr term1 = parseHighPrecedenceUnaryExpression();
+    while (match(TokenType::Operator, ".")) {
+        Token op = currentToken;
+        advance();
+        ASTPtr term2 = parseHighPrecedenceUnaryExpression();
+        term1 = std::make_shared<BinaryOperator>(op, term1, term2);
+    }
+    return term1;
+}
+
+ASTPtr Parser::parseHighPrecedenceUnaryExpression()
+{
+    std::vector<Token> operators;
+    while (match(TokenType::Operator, "LENGTH") || match(TokenType::Operator, "LENGTHOF") ||
+           match(TokenType::Operator, "SIZE") || match(TokenType::Operator, "SIZEOF") ||
+           match(TokenType::Operator, "WIDTH") || match(TokenType::Operator, "MASK")) {
+        Token op = currentToken;
+        operators.push_back(op);
+        advance();
+    }
+
+    ASTPtr term = parseIndexSequence();
+    for (Token op : std::ranges::reverse_view(operators)) {
+        term = std::make_shared<UnaryOperator>(op, term);
+    }
+    return term;
+}
+
+ASTPtr Parser::parseIndexSequence()
+{
+    ASTPtr term1 = parsePrimaryExpression();
+    while (match(TokenType::OpenSquareBracket) || match(TokenType::OpenBracket)) {
+        if (match(TokenType::OpenSquareBracket)) {
+            Token leftBracket = currentToken;
+            advance();
+            ASTPtr expr = parseExpression();
+            Token rightBracket = consume(TokenType::CloseSquareBracket);
+            ASTPtr term2 = std::make_shared<SquareBrackets>(leftBracket, rightBracket, expr);
+            term1 = std::make_shared<ImplicitPlusOperator>(term1, term2);
+        } else if (match(TokenType::OpenBracket)) {
+            Token leftBracket = currentToken;
+            advance();
+            ASTPtr expr = parseExpression();
+            Token rightBracket = consume(TokenType::CloseBracket);
+            ASTPtr term2 = std::make_shared<Brackets>(leftBracket, rightBracket, expr);
+            term1 = std::make_shared<ImplicitPlusOperator>(term1, term2);
+        }
+    }
+    return term1;
+}
+
+ASTPtr Parser::parsePrimaryExpression()
+{
+    if (match(TokenType::OpenBracket)) {
+        Token leftBracket = currentToken;
+        advance();
+        ASTPtr expr = parseExpression();
+        Token rightBracket = consume(TokenType::CloseBracket);
+        return std::make_shared<Brackets>(leftBracket, rightBracket, expr);
+
+    } else if (match(TokenType::OpenSquareBracket)) {
+        Token leftBracket = currentToken;
+        advance();
+        ASTPtr expr = parseExpression();
+        Token rightBracket = consume(TokenType::CloseSquareBracket);
+        return std::make_shared<SquareBrackets>(leftBracket, rightBracket, expr);
+    } else if (match(TokenType::Identifier)) {
+        Token idToken = currentToken;
+        advance();
+        return std::make_shared<Leaf>(idToken);
+    } else if (match(TokenType::Number)) {
+        Token numberToken = currentToken;
+        advance();
+        return std::make_shared<Leaf>(numberToken);
+    } else if (match(TokenType::StringLiteral)) {
+        Token stringToken = currentToken;
+        advance();
+        return std::make_shared<Leaf>(stringToken);
+    } else if (match(TokenType::Register)) {
+        Token registerToken = currentToken;
+        advance();
+        return std::make_shared<Leaf>(registerToken);
+    } else if (match(TokenType::QuestionMark, "$")) {
+        Token dollarToken = currentToken;
+        advance();
+        return std::make_shared<Leaf>(dollarToken);
+    } else if (match(TokenType::Type)) {
+        Token typeToken = currentToken;
+        advance();
+        return std::make_shared<Leaf>(typeToken);
+    } 
+    else {
+        // reportError(currentToken.span, ErrorCode::EXPECTED_PRIMARY_EXPRESSION, "Expected primary expression");
+        advance(); // Attempt to recover
+        return nullptr;
+    }
 }
 
 File parser.h:
@@ -325,22 +1108,35 @@ File parser.h:
 #include "diag_ctxt.h"
 #include "preprocessor.h"
 #include "session.h"
+#include "ast.h"
 
 class Parser {
 public:
     Parser(std::shared_ptr<ParseSession> parseSession, const std::vector<Token> &tokens);
-    void parse();
+    ASTPtr parse();
 
 private:
     std::shared_ptr<ParseSession> parseSess;
 
+    int currentIndex;
     Token currentToken;
     const std::vector<Token> &tokens;
-    int currentIndex;
 
     void advance();
-    void parseLine();
-    void parseExpression();
+    bool match(TokenType type);
+    bool match(TokenType type, const std::string &value);
+    Token consume(TokenType type);
+    Token consume(TokenType type, const std::string &value);
+
+    ASTPtr parseLine();
+    ASTPtr parseExpression();
+    ASTPtr parseMultiplicativeExpression();
+    ASTPtr parseUnaryExpression();
+    ASTPtr parsePostfixExpression();
+    ASTPtr parseMemberAccessExpression();
+    ASTPtr parseHighPrecedenceUnaryExpression();
+    ASTPtr parseIndexSequence();
+    ASTPtr parsePrimaryExpression();
 };
 File preprocessor.cpp:
 
@@ -560,6 +1356,8 @@ std::shared_ptr<SourceFile> SourceMap::loadFile(const std::filesystem::path &pat
     std::stringstream buffer;
     buffer << file.rdbuf();
     std::string content = buffer.str();
+    // TODO: remove this hack to handle EndOfFile drawing
+    content += "\n";
 
     return newSourceFile(path, content);
 }
@@ -599,6 +1397,8 @@ std::pair<std::size_t, std::size_t> SourceMap::lookupLineColumn(std::size_t pos)
 void SourceMap::spanToLocation(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
                                std::size_t &outColumn) const
 {
+    // check if span corresponds to EndOfFile
+    // if (files->())
     auto file = lookupSourceFile(span.lo);
     if (file) {
         outPath = file->getPath();
@@ -632,7 +1432,7 @@ void SourceMap::spanToEndLocation(const Span &span, std::filesystem::path &outPa
     auto file = lookupSourceFile(span.hi - 1);
     if (file) {
         outPath = file->getPath();
-        outLine = file->getLineNumber(span.hi - 1);       // Zero-based
+        outLine = file->getLineNumber(span.hi - 1); // Zero-based
         // (need to add one because in the span (4, 5) startLocation is column 4 but endLocation column should be 5)
         outColumn = file->getColumnPosition(span.hi - 1) + 1; // Zero-based
     } else {
@@ -895,6 +1695,406 @@ private:
     std::chrono::time_point<std::chrono::high_resolution_clock> m_start;
 };
 
+// class ScopedTimer
+// {
+// public:
+//     explicit ScopedTimer(const std::string &name) : m_name(name) {}
+//     ~ScopedTimer() // NOLINT(cppcoreguidelines-special-member-functions): not using heap allocated memory here
+//     {
+//         const float time = m_timer.elapsed_millis();
+//          LOG
+//     }
+
+// private:
+//     std::string m_name;
+//     Timer m_timer;
+// };
+File tokenize.cpp:
+
+#include "tokenize.h"
+#include "diagnostic.h"
+#include "session.h"
+#include "log.h"
+#include "error_codes.h"
+
+#include <cctype>
+#include <algorithm>
+#include <unordered_set>
+#include <string>
+
+static const std::unordered_set<std::string> directives = {"INCLUDE", "EQU",    "DB",     "DW",    "DD",   "DQ",
+                                                           "END",     ".STACK", ".DATA",  ".CODE", "PROC", "ENDP",
+                                                           "STRUC",   "ENDS",   "RECORD", "="};
+
+static const std::unordered_set<std::string> reservedWords = {"DUP"};
+
+static const std::unordered_set<std::string> operators = {"+",
+                                                          "-",
+                                                          "*",
+                                                          "/",
+                                                          "."
+                                                          "MOD",
+                                                          "SHL",
+                                                          "SHR",
+                                                          "PTR",
+                                                          "TYPE",
+                                                          "SIZE",
+                                                          "SIZEOF",
+                                                          "LENGTH",
+                                                          "LENGTHOF",
+                                                          "WIDTH",
+                                                          "MASK",
+                                                          "OFFSET"};
+
+static const std::unordered_set<std::string> types = {"BYTE", "WORD", "DWORD", "QWORD"};
+
+static const std::unordered_set<std::string> instructions = {
+    "MOV",   "XCHG",  "MOVZX", "MOVSX", "DIV",   "IDIV",  "MUL",   "IMUL",  "ADD",   "ADC",   "INC",   "SUB",
+    "SBB",   "DEC",   "NEG",   "JE",    "JNE",   "JA",    "JAE",   "JB",    "JBE",   "JL",    "JLE",   "JG",
+    "JGE",   "JC",    "JNC",   "JZ",    "JNZ",   "JMP",   "CALL",  "RET",   "SHL",   "SHR",   "ROL",   "RCL",
+    "ROR",   "RCR",   "AND",   "OR",    "XOR",   "REP",   "REPE",  "REPNE", "MOVSB", "MOVSW", "MOVSD", "LODSB",
+    "LODSW", "LODSD", "STOSB", "STOSW", "STOSD", "SCASB", "SCASW", "SCASD", "CMPSB", "CMPSW", "CMPSD",
+};
+
+static const std::unordered_set<std::string> registers = {"AL", "AX",  "EAX", "BL",  "BX",  "EBX", "CL",
+                                                          "CX", "ECX", "DL",  "DX",  "EDX", "SI",  "ESI",
+                                                          "DI", "EDI", "BP",  "EBP", "SP",  "ESP"};
+
+std::vector<Token> Tokenizer::tokenize()
+{
+    size_t length = src.size();
+    std::shared_ptr<SyntaxContextData> context = std::make_shared<SyntaxContextData>();
+
+    while (pos < length) {
+        skipWhitespace();
+
+        if (pos >= length)
+            break;
+
+        Token token = getNextToken();
+        // if (token.type == TokenType::Invalid) {
+        //     // Stop tokenizing on error
+        //     break;
+        // }
+        tokens.push_back(token);
+
+        if (pos < length && (src[pos] == '\n' || src[pos] == '\r')) {
+            tokens.emplace_back(Token{TokenType::EndOfLine, "", Span(pos, pos + 1, context)});
+            ++pos;
+        }
+    }
+
+    // because files always ends with a '\n', we can make EndOfFile span equal to the last '\n' 
+    // to be able to underline EndOfFile correctly
+    tokens.emplace_back(Token{TokenType::EndOfFile, "", Span(pos - 1, pos, context)});
+
+    // TODO: remove testing code
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_NUMBER_FORMAT);
+    // diag.addSecondaryLabel(Span(0, 1, nullptr), "pr");
+    // diag.addPrimaryLabel(Span(2, 3, nullptr), "hey");
+    // diag.addSecondaryLabel(Span(4, 5, nullptr), "hi");
+    diag.addPrimaryLabel(Span(pos - 1, pos, nullptr), "nice");
+    psess->dcx->addDiagnostic(diag);
+
+    return tokens;
+}
+
+void Tokenizer::skipWhitespace()
+{
+    // TODO fix isspace to handle utf8
+    while (pos < src.size() && isspace(src[pos])) {
+        ++pos;
+    }
+}
+
+Token Tokenizer::getNextToken()
+{
+    char currentChar = src[pos];
+
+    if (isValidNumberStart(currentChar)) {
+        return getNumberToken();
+    } else if (isValidIdentifierStart(currentChar)) {
+        return getIdentifierOrKeywordToken();
+    } else if (currentChar == '.' && isDotName()) {
+        return getIdentifierOrKeywordToken();
+    } else if (currentChar == '"' || currentChar == '\'' || currentChar == '<' || currentChar == '{') {
+        return getStringLiteralToken();
+    } else if (currentChar == '\\') {
+        // Line continuations are not handled; report an error
+        size_t errorStart = pos;
+        ++pos;
+        addDiagnostic(errorStart, pos, ErrorCode::LINE_CONTINUATION_NOT_SUPPORTED);
+        return Token{TokenType::Invalid, "\\", Span(errorStart, pos, nullptr)};
+    } else if (currentChar == ';') {
+        size_t commentStart = pos;
+        while (pos < src.size() && src[pos] != '\n') {
+            ++pos;
+        }
+        std::string commentText = src.substr(commentStart, pos - commentStart);
+        return Token{TokenType::Comment, commentText, Span(commentStart, pos, nullptr)};
+    } else {
+        return getSpecialSymbolToken();
+    }
+}
+
+bool Tokenizer::isDotName()
+{
+    if (pos + 1 >= src.size())
+        return false;
+    char nextChar = src[pos + 1];
+
+    if (!isValidIdentifierChar(nextChar))
+        return false;
+
+    // Check previous token
+    if (tokens.empty()) {
+        // No previous token, accept the dotted name
+        return true;
+    }
+
+    TokenType prevType = tokens.back().type;
+    std::string prevLexeme = tokens.back().lexeme;
+
+    if (prevType == TokenType::Register || prevType == TokenType::Identifier || prevLexeme == ")" ||
+        prevLexeme == "]") {
+        // Previous token is a register, identifier, or closing bracket; dot is an operator
+        return false;
+    }
+
+    return true;
+}
+
+bool Tokenizer::isValidNumberStart(char c)
+{
+    return isdigit(static_cast<unsigned char>(c)) || (tolower(c) >= 'a' && tolower(c) <= 'f');
+}
+
+Token Tokenizer::getIdentifierOrKeywordToken()
+{
+    size_t start = pos;
+
+    // Handle optional starting dot
+    if (src[pos] == '.') {
+        ++pos;
+    }
+
+    while (pos < src.size() && isValidIdentifierChar(src[pos])) {
+        ++pos;
+    }
+
+    std::string lexeme = src.substr(start, pos - start);
+    std::string lexemeUpper = lexeme;
+    std::transform(lexemeUpper.begin(), lexemeUpper.end(), lexemeUpper.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+    Span tokenSpan(start, pos, nullptr);
+
+    if (directives.count(lexemeUpper)) {
+        return Token{TokenType::Directive, lexeme, tokenSpan};
+    } else if (instructions.count(lexemeUpper)) {
+        return Token{TokenType::Instruction, lexeme, tokenSpan};
+    } else if (registers.count(lexemeUpper)) {
+        return Token{TokenType::Register, lexeme, tokenSpan};
+    } else if (operators.count(lexemeUpper)) {
+        return Token{TokenType::Operator, lexeme, tokenSpan};
+    } else if (types.count(lexemeUpper)) {
+        return Token{TokenType::Type, lexeme, tokenSpan};
+    } else {
+        return Token{TokenType::Identifier, lexeme, tokenSpan};
+    }
+}
+
+Token Tokenizer::getNumberToken()
+{
+    size_t start = pos;
+    size_t length = src.size();
+
+    // Collect alphanumeric characters until whitespace or operator
+    while (pos < length && isalnum(static_cast<unsigned char>(src[pos]))) {
+        ++pos;
+    }
+    std::string lexeme = src.substr(start, pos - start);
+
+    // Now check if the lexeme is a valid number
+    if (isValidNumber(lexeme)) {
+        return Token{TokenType::Number, lexeme, Span(start, pos, nullptr)};
+    } else {
+        // check in cases like fffrh
+        if (isValidIdentifier(lexeme)) {
+            pos = start;
+            return getIdentifierOrKeywordToken();
+        }
+        addDiagnostic(start, pos, ErrorCode::INVALID_NUMBER_FORMAT);
+        return Token{TokenType::Invalid, lexeme, Span(start, pos, nullptr)};
+    }
+}
+
+bool Tokenizer::isValidNumber(const std::string &lexeme)
+{
+    if (lexeme.empty()) {
+        return false;
+    }
+
+    size_t len = lexeme.size();
+    char suffix = static_cast<char>(tolower(lexeme[len - 1]));
+    std::string digits = lexeme.substr(0, len - 1);
+    unsigned int base = 10;
+
+    // Determine base from suffix
+    switch (suffix) {
+    case 'h':
+        base = 16;
+        break;
+    case 'b':
+    case 'y':
+        base = 2;
+        break;
+    case 'o':
+    case 'q':
+        base = 8;
+        break;
+    case 'd':
+    case 't':
+        base = 10;
+        break;
+    default:
+        // No valid suffix; include the last character
+        digits = lexeme;
+        suffix = '\0';
+        break;
+    }
+
+    // check that digits are valid for the base
+    if (digits.empty()) {
+        return false;
+    }
+    for (char c : digits) {
+        c = static_cast<char>(tolower(c));
+        if (base == 16) {
+            if (!isxdigit(static_cast<unsigned char>(c))) {
+                return false;
+            }
+        } else if (base == 10) {
+            if (!isdigit(static_cast<unsigned char>(c))) {
+                return false;
+            }
+        } else if (base == 8) {
+            if (c < '0' || c > '7') {
+                return false;
+            }
+        } else if (base == 2) {
+            if (c != '0' && c != '1') {
+                return false;
+            }
+        } else {
+            return false; // Invalid base
+        }
+    }
+
+    return true;
+}
+
+Token Tokenizer::getStringLiteralToken()
+{
+    char quoteChar = src[pos];
+    size_t start = pos;
+    ++pos; // skip the opening quote
+    while (pos < src.size() && src[pos] != quoteChar) {
+        if (src[pos] == '\n') {
+            break;
+        } else {
+            ++pos;
+        }
+    }
+    if (pos >= src.size() || src[pos] != quoteChar) {
+        addDiagnostic(start, pos, ErrorCode::UNTERMINATED_STRING_LITERAL);
+        return Token{TokenType::Invalid, src.substr(start, pos - start), Span(start, pos, nullptr)};
+    }
+    ++pos; // Skip the closing quote
+    std::string lexeme = src.substr(start, pos - start);
+    return Token{TokenType::StringLiteral, lexeme, Span(start, pos, nullptr)};
+}
+
+Token Tokenizer::getSpecialSymbolToken()
+{
+    size_t start = pos;
+    char currentChar = src[pos];
+    ++pos;
+
+    std::string lexeme(1, currentChar);
+    TokenType type = TokenType::Operator;
+
+    switch (currentChar) {
+    case '(':
+        type = TokenType::OpenBracket;
+        break;
+    case ')':
+        type = TokenType::CloseBracket;
+        break;
+    case '[':
+        type = TokenType::OpenSquareBracket;
+        break;
+    case ']':
+        type = TokenType::CloseSquareBracket;
+        break;
+    case ',':
+        type = TokenType::Comma;
+        break;
+    case ':':
+        type = TokenType::Colon;
+        break;
+    case '+':
+    case '-':
+    case '*':
+    case '/':
+    case '.':
+        type = TokenType::Operator;
+        break;
+    case '=':
+        type = TokenType::Directive;
+        break;
+    case '<':
+        type = TokenType::OpenAngleBracket;
+        break;
+    case '>':
+        type = TokenType::CloseAngleBracket;
+        break;
+    case '?':
+        type = TokenType::QuestionMark;
+        break;
+    case '$':
+        type = TokenType::Dollar;
+        break;
+    default:
+        addDiagnostic(start, pos, ErrorCode::UNRECOGNIZED_SYMBOL);
+        return Token{TokenType::Invalid, lexeme, Span(start, pos, nullptr)};
+    }
+
+    return Token{type, lexeme, Span(start, pos, nullptr)};
+}
+
+// TODO fix isalpha to handle utf8
+bool Tokenizer::isValidIdentifierStart(char c) { return isalpha(c) || c == '_' || c == '@' || c == '$' || c == '?'; }
+
+// TODO fix isalnum to handle utf8
+bool Tokenizer::isValidIdentifierChar(char c) { return isalnum(c) || c == '_' || c == '@' || c == '$' || c == '?'; }
+
+bool Tokenizer::isValidIdentifier(const std::string &lexeme)
+{
+    if (lexeme.empty())
+        return false;
+
+    if (!isValidIdentifierStart(lexeme[0])) {
+        return false;
+    }
+
+    for (size_t i = 1; i < lexeme.size(); ++i) {
+        if (!isValidIdentifierChar(lexeme[i])) {
+            return false;
+        }
+    }
+
+    return true;
+}
 File tokenize.h:
 
 #pragma once
@@ -970,5 +2170,295 @@ private:
     const std::string &src;
     std::shared_ptr<ParseSession> psess;
 };
+File test_add.cpp:
 
+#define DOCTEST_CONFIG_COLORS_ANSI
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+#include <doctest/doctest.h>
+#include "add.h"
+#include "tokenize.h"
+#include "session.h"
+#include "diagnostic.h"
+#include <memory>
+
+// int add(int a, int b) { return a + b; }
+
+TEST_CASE("testing the add function")
+{
+    CHECK(add(1, 2) == 3);
+    CHECK(add(2, 5) == 7);
+}
+
+TEST_CASE("Tokenizer: Identifiers and Keywords")
+{
+    auto parseSess = std::make_shared<ParseSession>();
+
+    SUBCASE("Valid Identifier")
+    {
+        std::string source = "myVar";
+        Tokenizer tokenizer(parseSess, source);
+        auto tokens = tokenizer.tokenize();
+
+        CHECK(tokens.size() == 2); // Identifier + EndOfFile
+        CHECK(tokens[0].type == TokenType::Identifier);
+        CHECK(tokens[0].lexeme == "myVar");
+    }
+
+    SUBCASE("Directive Keyword")
+    {
+        std::string source = "EQU";
+        Tokenizer tokenizer(parseSess, source);
+        auto tokens = tokenizer.tokenize();
+
+        CHECK(tokens[0].type == TokenType::Directive);
+        CHECK(tokens[0].lexeme == "EQU");
+    }
+
+    SUBCASE("Instruction Keyword")
+    {
+        std::string source = "mov";
+        Tokenizer tokenizer(parseSess, source);
+        auto tokens = tokenizer.tokenize();
+
+        CHECK(tokens[0].type == TokenType::Instruction);
+        CHECK(tokens[0].lexeme == "mov");
+    }
+
+    SUBCASE("Register Keyword")
+    {
+        std::string source = "AX";
+        Tokenizer tokenizer(parseSess, source);
+        auto tokens = tokenizer.tokenize();
+
+        CHECK(tokens[0].type == TokenType::Register);
+        CHECK(tokens[0].lexeme == "AX");
+    }
+
+    SUBCASE("Identifier Starting with Dot")
+    {
+        std::string source = ".myLabel";
+        Tokenizer tokenizer(parseSess, source);
+        auto tokens = tokenizer.tokenize();
+
+        CHECK(tokens[0].type == TokenType::Identifier);
+        CHECK(tokens[0].lexeme == ".myLabel");
+    }
+}
+
+// TEST_CASE("Tokenizer: Numbers") {
+//     auto parseSess = std::make_shared<ParseSession>();
+
+//     SUBCASE("Decimal Number") {
+//         std::string source = "12345";
+//         Tokenizer tokenizer(parseSess, source);
+//         auto tokens = tokenizer.tokenize();
+
+//         CHECK(tokens[0].type == TokenType::Number);
+//         CHECK(tokens[0].lexeme == "12345");
+//     }
+
+//     SUBCASE("Hexadecimal Number with 'h' Suffix") {
+//         std::string source = "0FFh";
+//         Tokenizer tokenizer(parseSess, source);
+//         auto tokens = tokenizer.tokenize();
+
+//         CHECK(tokens[0].type == TokenType::Number);
+//         CHECK(tokens[0].lexeme == "0FFh");
+//     }
+
+//     SUBCASE("Binary Number with 'b' Suffix") {
+//         std::string source = "1010b";
+//         Tokenizer tokenizer(parseSess, source);
+//         auto tokens = tokenizer.tokenize();
+
+//         CHECK(tokens[0].type == TokenType::Number);
+//         CHECK(tokens[0].lexeme == "1010b");
+//     }
+
+//     SUBCASE("Octal Number with 'o' Suffix") {
+//         std::string source = "77o";
+//         Tokenizer tokenizer(parseSess, source);
+//         auto tokens = tokenizer.tokenize();
+
+//         CHECK(tokens[0].type == TokenType::Number);
+//         CHECK(tokens[0].lexeme == "77o");
+//     }
+
+//     SUBCASE("Floating Point Number") {
+//         std::string source = "3.14";
+//         Tokenizer tokenizer(parseSess, source);
+//         auto tokens = tokenizer.tokenize();
+
+//         CHECK(tokens[0].type == TokenType::Number);
+//         CHECK(tokens[0].lexeme == "3.14");
+//     }
+
+//     SUBCASE("Invalid Number Format") {
+//         std::string source = "123XYZ";
+//         Tokenizer tokenizer(parseSess, source);
+//         auto tokens = tokenizer.tokenize();
+
+//         CHECK(tokens[0].type == TokenType::Invalid);
+//         CHECK(parseSess->dcx->hasErrors());
+//     }
+// }
+
+// TEST_CASE("Tokenizer: Strings") {
+//     auto parseSess = std::make_shared<ParseSession>();
+
+//     SUBCASE("Double-Quoted String") {
+//         std::string source = "\"Hello, World!\"";
+//         Tokenizer tokenizer(parseSess, source);
+//         auto tokens = tokenizer.tokenize();
+
+//         CHECK(tokens[0].type == TokenType::StringLiteral);
+//         CHECK(tokens[0].lexeme == "\"Hello, World!\"");
+//     }
+
+//     SUBCASE("Single-Quoted String") {
+//         std::string source = "'Hello, MASM'";
+//         Tokenizer tokenizer(parseSess, source);
+//         auto tokens = tokenizer.tokenize();
+
+//         CHECK(tokens[0].type == TokenType::StringLiteral);
+//         CHECK(tokens[0].lexeme == "'Hello, MASM'");
+//     }
+
+//     SUBCASE("String with Escaped Quote") {
+//         std::string source = "\"She said, \\\"Hello\\\"\"";
+//         Tokenizer tokenizer(parseSess, source);
+//         auto tokens = tokenizer.tokenize();
+
+//         CHECK(tokens[0].type == TokenType::StringLiteral);
+//         CHECK(tokens[0].lexeme == "\"She said, \\\"Hello\\\"\"");
+//     }
+
+//     SUBCASE("Unterminated String") {
+//         std::string source = "\"This string is not closed";
+//         Tokenizer tokenizer(parseSess, source);
+//         auto tokens = tokenizer.tokenize();
+
+//         CHECK(tokens[0].type == TokenType::Invalid);
+//         CHECK(parseSess->dcx->hasErrors());
+//     }
+// }
+
+// TEST_CASE("Tokenizer: Comments") {
+//     auto parseSess = std::make_shared<ParseSession>();
+
+//     SUBCASE("Single-Line Comment") {
+//         std::string source = "; This is a comment";
+//         Tokenizer tokenizer(parseSess, source);
+//         auto tokens = tokenizer.tokenize();
+
+//         CHECK(tokens[0].type == TokenType::Comment);
+//         CHECK(tokens[0].lexeme == "; This is a comment");
+//     }
+
+//     SUBCASE("Code with Comment") {
+//         std::string source = "MOV AX, BX ; Move BX into AX";
+//         Tokenizer tokenizer(parseSess, source);
+//         auto tokens = tokenizer.tokenize();
+
+//         CHECK(tokens.size() == 7); // MOV, AX, ,, BX, Comment, EndOfFile
+//         CHECK(tokens[0].type == TokenType::Instruction);
+//         CHECK(tokens[0].lexeme == "MOV");
+//         CHECK(tokens[5].type == TokenType::Comment);
+//         CHECK(tokens[5].lexeme == "; Move BX into AX");
+//     }
+// }
+
+// TEST_CASE("Tokenizer: Operators and Special Symbols") {
+//     auto parseSess = std::make_shared<ParseSession>();
+
+//     SUBCASE("Single-Character Operators") {
+//         std::string source = "+ - * / % = < > & | ^ ~";
+//         Tokenizer tokenizer(parseSess, source);
+//         auto tokens = tokenizer.tokenize();
+
+//         CHECK(tokens.size() == 14); // 12 operators + EndOfFile
+//         CHECK(tokens[0].lexeme == "+");
+//         CHECK(tokens[2].lexeme == "-");
+//         CHECK(tokens[4].lexeme == "*");
+//         CHECK(tokens[6].lexeme == "/");
+//         // ... continue checking other operators
+//     }
+
+//     SUBCASE("Multi-Character Operators") {
+//         std::string source = "== != <= >= && || ::";
+//         Tokenizer tokenizer(parseSess, source);
+//         auto tokens = tokenizer.tokenize();
+
+//         CHECK(tokens.size() == 8); // 7 operators + EndOfFile
+//         CHECK(tokens[0].lexeme == "==");
+//         CHECK(tokens[1].lexeme == "!=");
+//         CHECK(tokens[2].lexeme == "<=");
+//         CHECK(tokens[3].lexeme == ">=");
+//         CHECK(tokens[4].lexeme == "&&");
+//         CHECK(tokens[5].lexeme == "||");
+//         CHECK(tokens[6].lexeme == "::");
+//     }
+
+//     SUBCASE("Unrecognized Symbol") {
+//         std::string source = "@";
+//         Tokenizer tokenizer(parseSess, source);
+//         auto tokens = tokenizer.tokenize();
+
+//         // '@' can be part of identifiers in MASM, so it should be recognized
+//         CHECK(tokens[0].type == TokenType::Identifier);
+//         CHECK(tokens[0].lexeme == "@");
+//     }
+// }
+
+// TEST_CASE("Tokenizer: Line Continuations") {
+//     auto parseSess = std::make_shared<ParseSession>();
+
+//     SUBCASE("Simple Line Continuation") {
+//         std::string source = "MOV AX, \\\nBX";
+//         Tokenizer tokenizer(parseSess, source);
+//         auto tokens = tokenizer.tokenize();
+
+//         CHECK(tokens.size() == 6); // MOV, AX, ,, BX, EndOfFile
+//         CHECK(tokens[0].type == TokenType::Instruction);
+//         CHECK(tokens[0].lexeme == "MOV");
+//         CHECK(tokens[3].lexeme == "BX");
+//     }
+
+//     SUBCASE("Continuation with Comments") {
+//         std::string source = "MOV AX, \\ ; continue\nBX";
+//         Tokenizer tokenizer(parseSess, source);
+//         auto tokens = tokenizer.tokenize();
+
+//         CHECK(tokens.size() == 7); // MOV, AX, ,, BX, EndOfFile
+//         CHECK(tokens[0].type == TokenType::Instruction);
+//         CHECK(tokens[0].lexeme == "MOV");
+//         CHECK(tokens[5].type == TokenType::Identifier);
+//         CHECK(tokens[5].lexeme == "BX");
+//     }
+// }
+
+// TEST_CASE("Tokenizer: Error Handling") {
+//     auto parseSess = std::make_shared<ParseSession>();
+
+//     SUBCASE("Unrecognized Character") {
+//         std::string source = "#";
+//         Tokenizer tokenizer(parseSess, source);
+//         auto tokens = tokenizer.tokenize();
+
+//         CHECK(tokens[0].type == TokenType::Invalid);
+//         CHECK(parseSess->dcx->hasErrors());
+//     }
+
+//     SUBCASE("Recovery After Error") {
+//         std::string source = "# MOV AX, BX";
+//         Tokenizer tokenizer(parseSess, source);
+//         auto tokens = tokenizer.tokenize();
+
+//         // Should report error but continue tokenizing
+//         CHECK(tokens[0].type == TokenType::Invalid);
+//         CHECK(tokens[1].type == TokenType::Instruction);
+//         CHECK(tokens[1].lexeme == "MOV");
+//         CHECK(parseSess->dcx->hasErrors());
+//     }
+// }
 

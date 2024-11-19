@@ -50,7 +50,6 @@ macro(ML_ENABLE_SANITIZERS project_name)
         endif()
     endif()
 
-    # TODO: add cuda sanitizers
     list(
         JOIN
         SANITIZERS

@@ -35,7 +35,7 @@ macro(ML_apply_options)
     add_library(ml_warnings INTERFACE)
     
     # General options
-    include(cmake/StandartProjectSettings.cmake) # TODO: ?better name or separation?
+    include(cmake/StandartProjectSettings.cmake)
     ML_setup_build_type()
     RL_enable_colored_warnings() # TODO: not working, why???  
 
