@@ -21,6 +21,10 @@ private:
     std::shared_ptr<SourceMap> sourceMap;
     std::ostream &out;
     bool useColor;
+    fmt::rgb whiteColor = fmt::rgb(200, 200, 200);
+    fmt::rgb redColor = fmt::rgb(235, 0, 0);
+    fmt::rgb yellowColor = fmt::rgb(255, 191, 0);
+    fmt::rgb cyanColor = fmt::rgb(0, 200, 200);
 
     template <typename... Args>
     std::string format(const fmt::text_style &ts, fmt::format_string<Args...> fmt_str, Args &&...args)
@@ -32,11 +36,12 @@ private:
     void printDiagnosticBody(const Diagnostic &diag);
     void printNote(const Diagnostic &diag);
     void printHelp(const Diagnostic &diag);
-    void printLabelsForLine(fmt::memory_buffer &buffer, std::string lineContent, size_t lineNumberZeroBased, int spacesCount,
-                                 const std::optional<LabelType> &primaryLabel, std::vector<LabelType> &labels);
+    void printLabelsForLine(fmt::memory_buffer &buffer, std::string lineContent, size_t lineNumberZeroBased,
+                            int spacesCount, const std::optional<LabelType> &primaryLabel,
+                            std::vector<LabelType> &labels, Diagnostic::Level level);
 
     std::string formatLevel(Diagnostic::Level level);
-    std::string formatErrorCode(ErrorCode code);
+    std::string formatErrorCode(Diagnostic::Level level, ErrorCode code);
     std::string createUnderline(std::shared_ptr<SourceFile> sourceFile, size_t lineNumberZeroBased,
                                 std::optional<Span> primarySpan, std::vector<Span> spans);
     std::string createUnderline(const std::string &lineContent, std::size_t byteOffsetInLine, std::size_t byteLength);

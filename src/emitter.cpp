@@ -32,10 +32,10 @@ void Emitter::emit(const Diagnostic &diag)
 void Emitter::printHeader(const Diagnostic &diag)
 {
     auto levelStr = formatLevel(diag.getLevel());
-    auto codeStr = formatErrorCode(diag.getCode());
-    auto message = format(fmt::emphasis::bold, "{}", diag.getMessage());
+    auto codeStr = formatErrorCode(diag.getLevel(), diag.getCode());
+    auto message = format(fmt::emphasis::bold | fg(whiteColor), "{}", diag.getMessage());
 
-    std::string result = format(fmt::emphasis::bold, "{}[{}]: {}\n", levelStr, codeStr, message);
+    std::string result = format(fmt::emphasis::bold, "{}{}: {}\n", levelStr, codeStr, message);
     out.write(result.data(), result.size());
 }
 
@@ -44,19 +44,28 @@ std::string Emitter::formatLevel(Diagnostic::Level level)
 
     switch (level) {
     case Diagnostic::Level::Error:
-        return format(fmt::emphasis::bold | fg(fmt::color::red), "error");
+        return format(fmt::emphasis::bold | fg(redColor), "error");
     case Diagnostic::Level::Warning:
-        return format(fmt::emphasis::bold | fg(fmt::color::yellow), "warning");
+        return format(fmt::emphasis::bold | fg(yellowColor), "warning");
     case Diagnostic::Level::Note:
-        return format(fmt::emphasis::bold | fg(fmt::color::cyan), "note");
+        return format(fmt::emphasis::bold | fg(cyanColor), "note");
     }
 
     return "unknown";
 }
 
-std::string Emitter::formatErrorCode(ErrorCode code)
+std::string Emitter::formatErrorCode(Diagnostic::Level level, ErrorCode code)
 {
-    return format(fmt::emphasis::bold, "E{:02d}", static_cast<int>(code));
+    switch (level) {
+    case Diagnostic::Level::Error:
+        return format(fmt::emphasis::bold | fg(redColor), "[E{:02d}]", static_cast<int>(code));
+    case Diagnostic::Level::Warning:
+        return format(fmt::emphasis::bold | fg(yellowColor), "[E{:02d}]", static_cast<int>(code));
+    case Diagnostic::Level::Note:
+        return format(fmt::emphasis::bold | fg(cyanColor), "[E{:02d}]", static_cast<int>(code));
+    }
+
+    return "unknown";
 }
 
 void Emitter::printDiagnosticBody(const Diagnostic &diag)
@@ -92,21 +101,21 @@ void Emitter::printDiagnosticBody(const Diagnostic &diag)
     int primaryLineNumberWidth = calculateDisplayWidth(std::to_string(primaryLineNumberZeroBased + 1));
     // Print the location header
     fmt::format_to(std::back_inserter(buffer), "{}{} {}:{}:{}\n", std::string(spaceCount, ' '),
-                   format(fg(fmt::color::cyan), "-->"), primaryFilePath.string(), primaryLineNumberZeroBased + 1,
+                   format(fg(cyanColor), "-->"), primaryFilePath.string(), primaryLineNumberZeroBased + 1,
                    primaryColumnNumberZeroBased + 1);
 
     // print primary string
     auto primarySourceFile = sourceMap->getSourceFile(primaryFilePath);
     std::string primaryLineContent = primarySourceFile->getLine(primaryLineNumberZeroBased);
     fmt::format_to(std::back_inserter(buffer), "{}{} {} {}\n", std::string(spaceCount - primaryLineNumberWidth, ' '),
-                   format(fg(fmt::color::cyan), "{}", primaryLineNumberZeroBased + 1),
-                   format(fg(fmt::color::cyan), "|"), primaryLineContent);
+                   format(fg(cyanColor), "{}", primaryLineNumberZeroBased + 1), format(fg(cyanColor), "|"),
+                   primaryLineContent);
 
     // print labels in primary string
     std::vector<LabelType> primarySecondaryLabels;
     printLabelsForLine(buffer, primaryLineContent, primaryLineNumberZeroBased, spaceCount,
                        LabelType(primarySpan, primaryLabelMsg),
-                       labelsMapping[primaryFilePath][primaryLineNumberZeroBased]);
+                       labelsMapping[primaryFilePath][primaryLineNumberZeroBased], diag.getLevel());
 
     // print all other lines in primary file
     for (const auto &[lineNumberZeroBased, labels] : labelsMapping[primaryFilePath]) {
@@ -114,15 +123,15 @@ void Emitter::printDiagnosticBody(const Diagnostic &diag)
             continue;
         }
         // print "..."
-        fmt::format_to(std::back_inserter(buffer), "{}{}\n", std::string(spaceCount, ' '), format(fg(fmt::color::cyan), "..."));
+        fmt::format_to(std::back_inserter(buffer), "{}{}\n", std::string(spaceCount, ' '),
+                       format(fg(cyanColor), "..."));
         // print string
         std::string lineContent = primarySourceFile->getLine(lineNumberZeroBased);
         int lineNumberWidth = calculateDisplayWidth(std::to_string(lineNumberZeroBased + 1));
         fmt::format_to(std::back_inserter(buffer), "{}{} {} {}\n", std::string(spaceCount - lineNumberWidth, ' '),
-                   format(fg(fmt::color::cyan), "{}", lineNumberZeroBased + 1),
-                   format(fg(fmt::color::cyan), "|"), lineContent);
+                       format(fg(cyanColor), "{}", lineNumberZeroBased + 1), format(fg(cyanColor), "|"), lineContent);
         printLabelsForLine(buffer, lineContent, lineNumberZeroBased, spaceCount, std::nullopt,
-                           labelsMapping[primaryFilePath][lineNumberZeroBased]);
+                           labelsMapping[primaryFilePath][lineNumberZeroBased], diag.getLevel());
     }
 
     // print all other files and labels
@@ -133,7 +142,8 @@ void Emitter::printDiagnosticBody(const Diagnostic &diag)
         // print location
         // print all lines
         // TODO: finish this
-        fmt::format_to(std::back_inserter(buffer), "{}\n", format(fg(fmt::color::red), "Labels in different files not implemented!"));
+        fmt::format_to(std::back_inserter(buffer), "{}\n",
+                       format(fg(redColor), "Labels in different files not implemented!"));
     }
 
     out.write(buffer.data(), buffer.size());
@@ -180,8 +190,18 @@ int Emitter::calculateCodePoints(const std::string &text)
 
 void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, std::string lineContent, size_t lineNumberZeroBased,
                                  int spacesCount, const std::optional<LabelType> &primaryLabel,
-                                 std::vector<LabelType> &labels)
+                                 std::vector<LabelType> &labels, Diagnostic::Level level)
 {
+    fmt::rgb primaryColor;
+    switch (level) {
+    case Diagnostic::Level::Error:
+        primaryColor = redColor;
+        break;
+    case Diagnostic::Level::Warning:
+        primaryColor = yellowColor;
+        break;
+    }
+
     // Initialize a marker line
     std::string markerLine(calculateDisplayWidth(lineContent), ' ');
 
@@ -240,10 +260,10 @@ void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, std::string lineCon
         char c = markerLine[i];
         if (c == '^') {
             // Color primary markers red
-            coloredMarkerLine += format(fg(fmt::color::red), "{}", c);
+            coloredMarkerLine += format(fmt::emphasis::bold | fg(primaryColor), "{}", c);
         } else if (c == '-') {
             // Color secondary markers cyan
-            coloredMarkerLine += format(fg(fmt::color::cyan), "{}", c);
+            coloredMarkerLine += format(fmt::emphasis::bold | fg(cyanColor), "{}", c);
         } else if (c == ' ') {
             // Keep spaces
             coloredMarkerLine += c;
@@ -251,11 +271,11 @@ void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, std::string lineCon
     }
 
     if (!labelMessageToAdd.empty()) {
-        coloredMarkerLine += format(fg(fmt::color::red), "{}", labelMessageToAdd);
+        coloredMarkerLine += format(fg(primaryColor), "{}", labelMessageToAdd);
     }
 
-    fmt::format_to(std::back_inserter(buffer), "{} {} {}\n", std::string(spacesCount, ' '),
-                   format(fg(fmt::color::cyan), "|"), coloredMarkerLine);
+    fmt::format_to(std::back_inserter(buffer), "{} {} {}\n", std::string(spacesCount, ' '), format(fg(cyanColor), "|"),
+                   coloredMarkerLine);
 
     if (labelMessagesToPrint.empty()) {
         return;
@@ -283,16 +303,16 @@ void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, std::string lineCon
             char c = messageLine[i];
             if (c == '|') {
                 if (primaryLabelIndex && primaryLabelIndex == i) {
-                    coloredLine += format(fg(fmt::color::red), "{}", c);
+                    coloredLine += format(fg(primaryColor), "{}", c);
                 } else {
-                    coloredLine += format(fg(fmt::color::cyan), "{}", c);
+                    coloredLine += format(fg(cyanColor), "{}", c);
                 }
             } else {
                 coloredLine += c;
             }
         }
         fmt::format_to(std::back_inserter(buffer), "{} {} {}\n", std::string(spacesCount, ' '),
-                       format(fg(fmt::color::cyan), "|"), coloredLine);
+                       format(fg(cyanColor), "|"), coloredLine);
     }
 
     // then print all the messages
@@ -316,9 +336,9 @@ void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, std::string lineCon
             char c = messageLine[i];
             if (c == '|') {
                 if (primaryLabelIndex && primaryLabelIndex == i) {
-                    coloredLine += format(fg(fmt::color::red), "{}", c);
+                    coloredLine += format(fg(primaryColor), "{}", c);
                 } else {
-                    coloredLine += format(fg(fmt::color::cyan), "{}", c);
+                    coloredLine += format(fg(cyanColor), "{}", c);
                 }
             } else {
                 coloredLine += c;
@@ -326,13 +346,13 @@ void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, std::string lineCon
         }
         std::string labelMessage = currentLabelMsg;
         if (currentIsPrimaryLabel) {
-            coloredLine += format(fg(fmt::color::red), "{}", labelMessage);
+            coloredLine += format(fg(primaryColor), "{}", labelMessage);
         } else {
-            coloredLine += format(fg(fmt::color::cyan), "{}", labelMessage);
+            coloredLine += format(fg(cyanColor), "{}", labelMessage);
         }
 
         fmt::format_to(std::back_inserter(buffer), "{} {} {}\n", std::string(spacesCount, ' '),
-                       format(fg(fmt::color::cyan), "|"), coloredLine);
+                       format(fg(cyanColor), "|"), coloredLine);
     }
 }
 

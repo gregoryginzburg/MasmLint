@@ -52,11 +52,11 @@ std::vector<Token> Tokenizer::tokenize()
     tokens.emplace_back(Token{TokenType::EndOfFile, "", Span(pos, pos, context)});
 
     // TODO: remove testing code
-    // Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_NUMBER_FORMAT);
-    // diag.addPrimaryLabel(Span(0, 3, nullptr), "hey");
-    // diag.addSecondaryLabel(Span(4, 5, nullptr), "hi");
-    // diag.addSecondaryLabel(Span(22, 23, nullptr), "nice");
-    // psess->dcx->addDiagnostic(diag);
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_NUMBER_FORMAT);
+    diag.addPrimaryLabel(Span(0, 3, nullptr), "hey");
+    diag.addSecondaryLabel(Span(4, 5, nullptr), "hi");
+    diag.addSecondaryLabel(Span(22, 23, nullptr), "nice");
+    psess->dcx->addDiagnostic(diag);
 
     return tokens;
 }
