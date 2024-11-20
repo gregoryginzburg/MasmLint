@@ -69,3 +69,11 @@ private:
     const std::string &src;
     std::shared_ptr<ParseSession> psess;
 };
+
+inline std::string stringToUpper(const std::string& str)
+{
+    std::string upperStr = str;
+    std::transform(upperStr.begin(), upperStr.end(), upperStr.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+    return upperStr;
+}

@@ -238,10 +238,7 @@ ASTExpressionPtr Parser::parsePrimaryExpression()
         Token token = currentToken;
         advance();
         // (var var) - can't be
-        std::string curentTokenLexemeUpper = currentToken.lexeme;
-        std::transform(curentTokenLexemeUpper.begin(), curentTokenLexemeUpper.end(), curentTokenLexemeUpper.begin(),
-                       [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
-
+        std::string curentTokenLexemeUpper = stringToUpper(currentToken.lexeme);
         // after leaf when there'are unclosed parenthesis `()` or `[]` must be operator or closing `)` or `]`
         // or there might be `(` or `[` - implicit plus for index operator
         if (existUnclosedBracketsOrSquareBrackets() && currentToken.type != TokenType::CloseSquareBracket &&

@@ -21,65 +21,74 @@ public:
     virtual ~AST() = default;
 };
 
-using ASTPtr = std::shared_ptr<AST>;
+class ASTExpression : public AST {};
 
-class BinaryOperator : public AST {
+using ASTExpressionPtr = std::shared_ptr<ASTExpression>;
+
+class BinaryOperator : public ASTExpression {
 public:
-    BinaryOperator(const Token &op, ASTPtr left, ASTPtr right) : op(op), left(left), right(right) {}
+    BinaryOperator(const Token &op, ASTExpressionPtr left, ASTExpressionPtr right) : op(op), left(left), right(right) {}
 
     Token op;
-    ASTPtr left;
-    ASTPtr right;
+    ASTExpressionPtr left;
+    ASTExpressionPtr right;
 };
 
-class Brackets : public AST {
+class Brackets : public ASTExpression {
 public:
-    Brackets(const Token &leftBracket, const Token &rightBracket, ASTPtr operand)
+    Brackets(const Token &leftBracket, const Token &rightBracket, ASTExpressionPtr operand)
         : leftBracket(leftBracket), rightBracket(rightBracket), operand(operand)
     {
     }
     Token leftBracket;
     Token rightBracket;
-    ASTPtr operand;
+    ASTExpressionPtr operand;
 };
 
-class SquareBrackets : public AST {
+class SquareBrackets : public ASTExpression {
 public:
-    SquareBrackets(const Token &leftBracket, const Token &rightBracket, ASTPtr operand)
+    SquareBrackets(const Token &leftBracket, const Token &rightBracket, ASTExpressionPtr operand)
         : leftBracket(leftBracket), rightBracket(rightBracket), operand(operand)
     {
     }
     Token leftBracket;
     Token rightBracket;
-    ASTPtr operand;
+    ASTExpressionPtr operand;
 };
 
-class ImplicitPlusOperator : public AST {
+class ImplicitPlusOperator : public ASTExpression {
 public:
-    ImplicitPlusOperator(ASTPtr left, ASTPtr right) : left(left), right(right) {}
+    ImplicitPlusOperator(ASTExpressionPtr left, ASTExpressionPtr right) : left(left), right(right) {}
 
-    ASTPtr left;
-    ASTPtr right;
+    ASTExpressionPtr left;
+    ASTExpressionPtr right;
 };
 
-class UnaryOperator : public AST {
+class UnaryOperator : public ASTExpression {
 public:
-    UnaryOperator(const Token &op, ASTPtr operand) : op(op), operand(operand) {}
+    UnaryOperator(const Token &op, ASTExpressionPtr operand) : op(op), operand(operand) {}
 
     Token op;
-    ASTPtr operand;
+    ASTExpressionPtr operand;
 };
 
-class Leaf : public AST {
+class Leaf : public ASTExpression {
 public:
     Leaf(const Token &token) : token(token) {}
 
     Token token;
 };
 
+class InvalidExpression : public ASTExpression {
+public:
+    InvalidExpression(std::shared_ptr<Diagnostic> diag) : diag(diag) {}
+    std::shared_ptr<Diagnostic> diag;
+};
 
-inline void printAST(const ASTPtr& node, int indent) {
-    if (!node) return;
+inline void printAST(const ASTExpressionPtr &node, int indent)
+{
+    if (!node)
+        return;
 
     // Create indentation string
     std::string indentation(indent, ' ');
@@ -90,33 +99,29 @@ inline void printAST(const ASTPtr& node, int indent) {
         printAST(binaryOp->left, indent + 2);
         std::cout << indentation << "Right:\n";
         printAST(binaryOp->right, indent + 2);
-    }
-    else if (auto unaryOp = std::dynamic_pointer_cast<UnaryOperator>(node)) {
+    } else if (auto unaryOp = std::dynamic_pointer_cast<UnaryOperator>(node)) {
         std::cout << indentation << "UnaryOperator (" << unaryOp->op.lexeme << ")\n";
         std::cout << indentation << "Operand:\n";
         printAST(unaryOp->operand, indent + 2);
-    }
-    else if (auto brackets = std::dynamic_pointer_cast<Brackets>(node)) {
+    } else if (auto brackets = std::dynamic_pointer_cast<Brackets>(node)) {
         std::cout << indentation << "Brackets\n";
         std::cout << indentation << "Operand:\n";
         printAST(brackets->operand, indent + 2);
-    }
-    else if (auto squareBrackets = std::dynamic_pointer_cast<SquareBrackets>(node)) {
+    } else if (auto squareBrackets = std::dynamic_pointer_cast<SquareBrackets>(node)) {
         std::cout << indentation << "SquareBrackets\n";
         std::cout << indentation << "Operand:\n";
         printAST(squareBrackets->operand, indent + 2);
-    }
-    else if (auto implicitPlus = std::dynamic_pointer_cast<ImplicitPlusOperator>(node)) {
+    } else if (auto implicitPlus = std::dynamic_pointer_cast<ImplicitPlusOperator>(node)) {
         std::cout << indentation << "ImplicitPlusOperator\n";
         std::cout << indentation << "Left:\n";
         printAST(implicitPlus->left, indent + 2);
         std::cout << indentation << "Right:\n";
         printAST(implicitPlus->right, indent + 2);
-    }
-    else if (auto leaf = std::dynamic_pointer_cast<Leaf>(node)) {
+    } else if (auto leaf = std::dynamic_pointer_cast<Leaf>(node)) {
         std::cout << indentation << "Leaf (" << leaf->token.lexeme << ")\n";
-    }
-    else {
+    } else if (auto invalidExpr = std::dynamic_pointer_cast<InvalidExpression>(node)) {
+        std::cout << indentation << "Invalid Expression (" << invalidExpr->diag->getMessage() << ")\n";
+    } else {
         std::cout << indentation << "Unknown AST Node\n";
     }
 }
@@ -128,7 +133,6 @@ File diagnostic.cpp:
 // template <typename... Args>
 // Diagnostic::Diagnostic(Level level, ErrorCode code, Args&&... args)
 //     : level(level), code(code), message(fmt::format(getErrorMessage(code), std::forward<Args>(args)...)) {}
-
 
 void Diagnostic::addPrimaryLabel(const Span &span, const std::string &labelMessage)
 {
@@ -152,7 +156,11 @@ const std::vector<std::pair<Span, std::string>> &Diagnostic::getSecondaryLabels(
 
 const std::optional<std::string> &Diagnostic::getNoteMessage() const { return noteMessage; }
 
-const std::optional<std::string> &Diagnostic::getHelpMessage() const {return helpMessage; }
+const std::optional<std::string> &Diagnostic::getHelpMessage() const { return helpMessage; }
+
+void Diagnostic::cancel() { cancelled = true; }
+
+bool Diagnostic::isCancelled() { return cancelled; }
 
 const std::string getErrorMessage(ErrorCode code)
 {
@@ -166,6 +174,7 @@ const std::string getErrorMessage(ErrorCode code)
         return "Unknown error.";
     }
 }
+
 File diagnostic.h:
 
 #pragma once
@@ -186,8 +195,11 @@ public:
     enum class Level { Error, Warning, Note };
 
     template <typename... Args>
-    Diagnostic(Level level, ErrorCode code, Args&&... args)
-        : level(level), code(code), message(fmt::format(fmt::runtime(getErrorMessage(code)), std::forward<Args>(args)...)) {}
+    Diagnostic(Level level, ErrorCode code, Args &&...args)
+        : level(level), code(code),
+          message(fmt::format(fmt::runtime(getErrorMessage(code)), std::forward<Args>(args)...))
+    {
+    }
 
     void addPrimaryLabel(const Span &span, const std::string &labelMessage);
     void addSecondaryLabel(const Span &span, const std::string &labelMessage);
@@ -200,6 +212,9 @@ public:
     const std::optional<std::string> &getNoteMessage() const;
     const std::optional<std::string> &getHelpMessage() const;
 
+    void cancel();
+    bool isCancelled();
+
 private:
     Level level;
     ErrorCode code;
@@ -211,21 +226,31 @@ private:
     std::vector<std::pair<Span, std::string>> noteLabels;
 
     std::optional<std::string> helpMessage;
-    std::optional <std::string> stringToDelete;
-    std::optional <std::string> stringToInsert;
+    std::optional<std::string> stringToDelete;
+    std::optional<std::string> stringToInsert;
     std::vector<Span> insertColor;
     std::vector<Span> deleteColor;
-};
 
+    bool cancelled = false;
+};
 
 File diag_ctxt.cpp:
 
 #include "diag_ctxt.h"
 #include "emitter.h"
+#include "log.h"
 
 DiagCtxt::DiagCtxt(std::shared_ptr<Emitter> emitter) : emitter(std::move(emitter)) {}
 
-void DiagCtxt::addDiagnostic(const Diagnostic &diag) { diagnostics.push_back(diag); }
+void DiagCtxt::addDiagnostic(const Diagnostic &diag) { diagnostics.push_back(std::make_shared<Diagnostic>(diag)); }
+
+std::shared_ptr<Diagnostic> DiagCtxt::getLastDiagnostic()
+{
+    if (diagnostics.empty()) {
+        LOG_DETAILED_ERROR("No last diagnostics exists!");
+    }
+    return diagnostics.back();
+}
 
 bool DiagCtxt::hasErrors() const { return !diagnostics.empty(); }
 
@@ -236,10 +261,7 @@ void DiagCtxt::emitDiagnostics()
     }
 }
 
-void DiagCtxt::emitJsonDiagnostics()
-{
-    emitter->emitJSON(diagnostics);
-}
+void DiagCtxt::emitJsonDiagnostics() { emitter->emitJSON(diagnostics); }
 File diag_ctxt.h:
 
 #pragma once
@@ -254,12 +276,13 @@ public:
     DiagCtxt(std::shared_ptr<Emitter> emitter);
 
     void addDiagnostic(const Diagnostic &diag);
+    std::shared_ptr<Diagnostic> getLastDiagnostic();
     bool hasErrors() const;
     void emitDiagnostics();
     void emitJsonDiagnostics();
 
 private:
-    std::vector<Diagnostic> diagnostics;
+    std::vector<std::shared_ptr<Diagnostic>> diagnostics;
     std::shared_ptr<Emitter> emitter;
 };
 File emitter.cpp:
@@ -283,23 +306,26 @@ Emitter::Emitter(std::shared_ptr<SourceMap> sourceMap, std::ostream &outStream, 
 {
 }
 
-void Emitter::emit(const Diagnostic &diag)
+void Emitter::emit(std::shared_ptr<Diagnostic> diag)
 {
+    if (diag->isCancelled()) {
+        return;
+    }
     printHeader(diag);
     printDiagnosticBody(diag);
-    if (diag.getNoteMessage()) {
+    if (diag->getNoteMessage()) {
         printNote(diag);
     }
-    if (diag.getHelpMessage()) {
+    if (diag->getHelpMessage()) {
         printHelp(diag);
     }
 }
 
-void Emitter::printHeader(const Diagnostic &diag)
+void Emitter::printHeader(std::shared_ptr<Diagnostic> diag)
 {
-    auto levelStr = formatLevel(diag.getLevel());
-    auto codeStr = formatErrorCode(diag.getLevel(), diag.getCode());
-    auto message = format(fmt::emphasis::bold | fg(whiteColor), "{}", diag.getMessage());
+    auto levelStr = formatLevel(diag->getLevel());
+    auto codeStr = formatErrorCode(diag->getLevel(), diag->getCode());
+    auto message = format(fmt::emphasis::bold | fg(whiteColor), "{}", diag->getMessage());
     auto colon = format(fmt::emphasis::bold | fg(whiteColor), ":");
 
     std::string result = fmt::format("{}{}: {}\n", levelStr, codeStr, message);
@@ -335,14 +361,14 @@ std::string Emitter::formatErrorCode(Diagnostic::Level level, ErrorCode code)
     return "unknown";
 }
 
-void Emitter::printDiagnosticBody(const Diagnostic &diag)
+void Emitter::printDiagnosticBody(std::shared_ptr<Diagnostic> diag)
 {
     // Collect all labels
     std::map<std::filesystem::path, std::map<size_t, std::vector<LabelType>>> labelsMapping;
 
     size_t maxLineNumber = 0;
     // primary label
-    const auto &[primarySpan, primaryLabelMsg] = diag.getPrimaryLabel();
+    const auto &[primarySpan, primaryLabelMsg] = diag->getPrimaryLabel();
     std::filesystem::path primaryFilePath;
     std::size_t primaryLineNumberZeroBased, primaryColumnNumberZeroBased;
     sourceMap->spanToLocation(primarySpan, primaryFilePath, primaryLineNumberZeroBased, primaryColumnNumberZeroBased);
@@ -351,7 +377,7 @@ void Emitter::printDiagnosticBody(const Diagnostic &diag)
     maxLineNumber = std::max(maxLineNumber, primaryLineNumberZeroBased + 1);
 
     // secondary labels
-    for (const auto &[span, labelMsg] : diag.getSecondaryLabels()) {
+    for (const auto &[span, labelMsg] : diag->getSecondaryLabels()) {
         std::filesystem::path filePath;
         std::size_t lineNumberZeroBased, columnNumberZeroBased;
         sourceMap->spanToLocation(span, filePath, lineNumberZeroBased, columnNumberZeroBased);
@@ -385,7 +411,7 @@ void Emitter::printDiagnosticBody(const Diagnostic &diag)
     std::vector<LabelType> primarySecondaryLabels;
     printLabelsForLine(buffer, primaryLineContent, primaryLineNumberZeroBased, spaceCount,
                        LabelType(primarySpan, primaryLabelMsg),
-                       labelsMapping[primaryFilePath][primaryLineNumberZeroBased], diag.getLevel());
+                       labelsMapping[primaryFilePath][primaryLineNumberZeroBased], diag->getLevel());
 
     // print all other lines in primary file
     for (const auto &[lineNumberZeroBased, labels] : labelsMapping[primaryFilePath]) {
@@ -404,7 +430,7 @@ void Emitter::printDiagnosticBody(const Diagnostic &diag)
         fmt::format_to(std::back_inserter(buffer), "{}{} {} {}\n", std::string(spaceCount - lineNumberWidth, ' '),
                        format(fg(cyanColor), "{}", lineNumberZeroBased + 1), format(fg(cyanColor), "|"), lineContent);
         printLabelsForLine(buffer, lineContent, lineNumberZeroBased, spaceCount, std::nullopt,
-                           labelsMapping[primaryFilePath][lineNumberZeroBased], diag.getLevel());
+                           labelsMapping[primaryFilePath][lineNumberZeroBased], diag->getLevel());
     }
 
     // print all other files and labels
@@ -502,7 +528,6 @@ void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, std::string lineCon
         // Adjust for UTF-8 characters
         size_t startPos = calculateDisplayWidth(lineContent.substr(0, startColumn));
         size_t endPos = calculateDisplayWidth(lineContent.substr(0, endColumn));
-  
 
         char markerChar = '-';
         bool isPrimaryLabel = primaryLabel && primaryLabel.value().first == span;
@@ -634,19 +659,19 @@ void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, std::string lineCon
     }
 }
 
-void Emitter::printNote(const Diagnostic &diag) {}
+void Emitter::printNote(std::shared_ptr<Diagnostic> /*diag*/) {}
 
-void Emitter::printHelp(const Diagnostic &diag) {}
+void Emitter::printHelp(std::shared_ptr<Diagnostic> /*diag*/) {}
 
-void Emitter::emitJSON(const std::vector<Diagnostic> &diagnostics)
+void Emitter::emitJSON(const std::vector<std::shared_ptr<Diagnostic>> &diagnostics)
 {
     json arr = json::array();
     for (const auto &diag : diagnostics) {
         json item;
-        item["message"] = diag.getMessage();
-        item["severity"] = static_cast<int>(diag.getLevel());
+        item["message"] = diag->getMessage();
+        item["severity"] = static_cast<int>(diag->getLevel());
 
-        for (const auto &[span, labelMsg] : diag.getSecondaryLabels()) {
+        for (const auto &[span, labelMsg] : diag->getSecondaryLabels()) {
             int startLine, startChar, endLine, endChar;
             spanToLineChar(span, startLine, startChar, endLine, endChar);
 
@@ -697,15 +722,15 @@ class Emitter {
 public:
     Emitter(std::shared_ptr<SourceMap> sourceMap, std::ostream &outStream = std::cout, bool useColor = true);
 
-    void emit(const Diagnostic &diag);
-    void emitJSON(const std::vector<Diagnostic> &diagnostics);
+    void emit(std::shared_ptr<Diagnostic> diag);
+    void emitJSON(const std::vector<std::shared_ptr<Diagnostic>> &diagnostics);
 
 private:
     std::shared_ptr<SourceMap> sourceMap;
     std::ostream &out;
     bool useColor;
     fmt::rgb whiteColor = fmt::rgb(200, 200, 200);
-    fmt::rgb redColor = fmt::rgb(254,89,89);
+    fmt::rgb redColor = fmt::rgb(254, 89, 89);
     fmt::rgb yellowColor = fmt::rgb(255, 191, 0);
     fmt::rgb cyanColor = fmt::rgb(0, 200, 200);
 
@@ -715,10 +740,10 @@ private:
         return fmt::format(useColor ? ts : fmt::text_style(), fmt_str, std::forward<Args>(args)...);
     }
 
-    void printHeader(const Diagnostic &diag);
-    void printDiagnosticBody(const Diagnostic &diag);
-    void printNote(const Diagnostic &diag);
-    void printHelp(const Diagnostic &diag);
+    void printHeader(std::shared_ptr<Diagnostic> diag);
+    void printDiagnosticBody(std::shared_ptr<Diagnostic> diag);
+    void printNote(std::shared_ptr<Diagnostic> diag);
+    void printHelp(std::shared_ptr<Diagnostic> diag);
     void printLabelsForLine(fmt::memory_buffer &buffer, std::string lineContent, size_t lineNumberZeroBased,
                             int spacesCount, const std::optional<LabelType> &primaryLabel,
                             std::vector<LabelType> &labels, Diagnostic::Level level);
@@ -845,7 +870,7 @@ int main(int argc, char *argv[])
         std::vector<Token> tokens = tokenizer.tokenize();
         tokens = preprocessor.preprocess(tokens);
         Parser parser(parseSess, tokens);
-        ASTPtr root = parser.parse();
+        ASTExpressionPtr root = parser.parse();
         printAST(root, 0);
 
     } else {
@@ -875,6 +900,7 @@ File parser.cpp:
 #include "parser.h"
 #include "symbol_table.h"
 #include "diag_ctxt.h"
+#include "log.h"
 
 #include <ranges>
 
@@ -886,7 +912,7 @@ Parser::Parser(std::shared_ptr<ParseSession> parseSession, const std::vector<Tok
     currentToken = tokens[currentIndex];
 }
 
-ASTPtr Parser::parse()
+ASTExpressionPtr Parser::parse()
 {
     return parseExpression();
     // currentIndex = 0;
@@ -899,17 +925,37 @@ ASTPtr Parser::parse()
     // }
 }
 
-// TODO: refactor this?
-void Parser::advance()
+ASTExpressionPtr Parser::parseLine()
 {
-    if (currentIndex < tokens.size()) {
-        currentToken = tokens[++currentIndex];
-    } else {
-        currentToken = {TokenType::EndOfFile, "", Span(1, 2, nullptr)};
-    }
+    // reset panicLine, delimitersStack, ...
+    return nullptr;
 }
 
-ASTPtr Parser::parseLine() { return nullptr; }
+bool Parser::existUnclosedBracketsOrSquareBrackets() const
+{
+    bool exist = false;
+    auto temp = delimitersStack;
+
+    // Iterate through the stack by popping elements
+    while (!temp.empty()) {
+        Token token = temp.top();
+        if (token.type == TokenType::OpenBracket || token.type == TokenType::OpenSquareBracket) {
+            exist = true;
+        }
+        temp.pop();
+    }
+    return exist;
+}
+
+// Only advance when matched a not EndOfFile
+void Parser::advance()
+{
+    if (currentToken.type == TokenType::EndOfFile) {
+        LOG_DETAILED_ERROR("Trying to advance() after EndOfFile encountered!");
+        return;
+    }
+    currentToken = tokens[++currentIndex];
+}
 
 bool Parser::match(TokenType type) { return currentToken.type == type; }
 
@@ -918,100 +964,95 @@ bool Parser::match(TokenType type, const std::string &value)
     return currentToken.type == type && currentToken.lexeme == value;
 }
 
-Token Parser::consume(TokenType type)
+// Can't consume EndOfFile ?
+std::optional<Token> Parser::consume(TokenType type)
 {
     if (currentToken.type == type) {
         Token token = currentToken;
         advance();
         return token;
     } else {
-        // reportError(currentToken.span, ErrorCode::EXPECTED_TOKEN, "Expected token of type");
-        Token token = currentToken;
-        advance();
-        return token;
+        return std::nullopt;
     }
 }
 
-Token Parser::consume(TokenType type, const std::string &value)
+std::optional<Token> Parser::consume(TokenType type, const std::string &value)
 {
     if (currentToken.type == type && currentToken.lexeme == value) {
         Token token = currentToken;
         advance();
         return token;
     } else {
-        // reportError(currentToken.span, ErrorCode::EXPECTED_TOKEN, "Expected token '" + value + "'");
-        Token token = currentToken;
-        advance();
-        return token;
+        return std::nullopt;
     }
 }
 
-ASTPtr Parser::parseExpression()
+ASTExpressionPtr Parser::parseExpression()
 {
-    ASTPtr term1 = parseMultiplicativeExpression();
+    ASTExpressionPtr term1 = parseMultiplicativeExpression();
     while (match(TokenType::Operator, "+") || match(TokenType::Operator, "-")) {
         Token op = currentToken;
         advance();
-        ASTPtr term2 = parseMultiplicativeExpression();
+        ASTExpressionPtr term2 = parseMultiplicativeExpression();
         term1 = std::make_shared<BinaryOperator>(op, term1, term2);
     }
     return term1;
 }
 
-ASTPtr Parser::parseMultiplicativeExpression()
+ASTExpressionPtr Parser::parseMultiplicativeExpression()
 {
-    ASTPtr term1 = parseUnaryExpression();
+    ASTExpressionPtr term1 = parseUnaryExpression();
     while (match(TokenType::Operator, "*") || match(TokenType::Operator, "/") || match(TokenType::Operator, "MOD") ||
            match(TokenType::Instruction, "SHL") || match(TokenType::Instruction, "SHR")) {
         Token op = currentToken;
         advance();
-        ASTPtr term2 = parseUnaryExpression();
+        ASTExpressionPtr term2 = parseUnaryExpression();
         term1 = std::make_shared<BinaryOperator>(op, term1, term2);
     }
     return term1;
 }
 
-ASTPtr Parser::parseUnaryExpression()
+ASTExpressionPtr Parser::parseUnaryExpression()
 {
     std::vector<Token> operators;
-    while (match(TokenType::Operator, "+") || match(TokenType::Operator, "-") ||
-           match(TokenType::Operator, "OFFSET") || match(TokenType::Operator, "TYPE")) {
+    while (match(TokenType::Operator, "+") || match(TokenType::Operator, "-") || match(TokenType::Operator, "OFFSET") ||
+           match(TokenType::Operator, "TYPE")) {
         Token op = currentToken;
         operators.push_back(op);
         advance();
     }
-    ASTPtr term = parsePostfixExpression();
+    ASTExpressionPtr term = parsePostfixExpression();
     for (Token op : std::ranges::reverse_view(operators)) {
         term = std::make_shared<UnaryOperator>(op, term);
     }
     return term;
 }
 
-ASTPtr Parser::parsePostfixExpression()
+ASTExpressionPtr Parser::parsePostfixExpression()
 {
-    ASTPtr term1 = parseMemberAccessExpression();
+    ASTExpressionPtr term1 = parseMemberAccessExpression();
     while (match(TokenType::Operator, "PTR")) {
         Token op = currentToken;
         advance();
-        ASTPtr term2 = parseMemberAccessExpression();
+        ASTExpressionPtr term2 = parseMemberAccessExpression();
         term1 = std::make_shared<BinaryOperator>(op, term1, term2);
     }
     return term1;
 }
 
-ASTPtr Parser::parseMemberAccessExpression()
+ASTExpressionPtr Parser::parseMemberAccessExpression()
 {
-    ASTPtr term1 = parseHighPrecedenceUnaryExpression();
+    ASTExpressionPtr term1 = parseHighPrecedenceUnaryExpression();
     while (match(TokenType::Operator, ".")) {
         Token op = currentToken;
         advance();
-        ASTPtr term2 = parseHighPrecedenceUnaryExpression();
+        ASTExpressionPtr term2 = parseHighPrecedenceUnaryExpression();
         term1 = std::make_shared<BinaryOperator>(op, term1, term2);
     }
     return term1;
 }
 
-ASTPtr Parser::parseHighPrecedenceUnaryExpression()
+ASTExpressionPtr Parser::parseHighPrecedenceUnaryExpression()
 {
     std::vector<Token> operators;
     while (match(TokenType::Operator, "LENGTH") || match(TokenType::Operator, "LENGTHOF") ||
@@ -1022,86 +1063,107 @@ ASTPtr Parser::parseHighPrecedenceUnaryExpression()
         advance();
     }
 
-    ASTPtr term = parseIndexSequence();
+    ASTExpressionPtr term = parseIndexSequence();
     for (Token op : std::ranges::reverse_view(operators)) {
         term = std::make_shared<UnaryOperator>(op, term);
     }
     return term;
 }
 
-ASTPtr Parser::parseIndexSequence()
+ASTExpressionPtr Parser::parseIndexSequence()
 {
-    ASTPtr term1 = parsePrimaryExpression();
+    ASTExpressionPtr term1 = parsePrimaryExpression();
     while (match(TokenType::OpenSquareBracket) || match(TokenType::OpenBracket)) {
         if (match(TokenType::OpenSquareBracket)) {
             Token leftBracket = currentToken;
+            delimitersStack.push(leftBracket);
             advance();
-            ASTPtr expr = parseExpression();
-            Token rightBracket = consume(TokenType::CloseSquareBracket);
-            ASTPtr term2 = std::make_shared<SquareBrackets>(leftBracket, rightBracket, expr);
+            ASTExpressionPtr expr = parseExpression();
+            std::optional<Token> rightBracket = consume(TokenType::CloseSquareBracket);
+            if (!rightBracket) {
+                std::shared_ptr<Diagnostic> diag = reportUnclosedDelimiterError(currentToken);
+                return std::make_shared<InvalidExpression>(diag);
+            }
+            delimitersStack.pop();
+            ASTExpressionPtr term2 = std::make_shared<SquareBrackets>(leftBracket, rightBracket.value(), expr);
             term1 = std::make_shared<ImplicitPlusOperator>(term1, term2);
         } else if (match(TokenType::OpenBracket)) {
             Token leftBracket = currentToken;
+            delimitersStack.push(leftBracket);
             advance();
-            ASTPtr expr = parseExpression();
-            Token rightBracket = consume(TokenType::CloseBracket);
-            ASTPtr term2 = std::make_shared<Brackets>(leftBracket, rightBracket, expr);
+            ASTExpressionPtr expr = parseExpression();
+            std::optional<Token> rightBracket = consume(TokenType::CloseBracket);
+            if (!rightBracket) {
+                std::shared_ptr<Diagnostic> diag = reportUnclosedDelimiterError(currentToken);
+                return std::make_shared<InvalidExpression>(diag);
+            }
+            delimitersStack.pop();
+            ASTExpressionPtr term2 = std::make_shared<Brackets>(leftBracket, rightBracket.value(), expr);
             term1 = std::make_shared<ImplicitPlusOperator>(term1, term2);
         }
     }
     return term1;
 }
 
-ASTPtr Parser::parsePrimaryExpression()
+ASTExpressionPtr Parser::parsePrimaryExpression()
 {
     if (match(TokenType::OpenBracket)) {
         Token leftBracket = currentToken;
+        delimitersStack.push(leftBracket);
         advance();
-        ASTPtr expr = parseExpression();
-        Token rightBracket = consume(TokenType::CloseBracket);
-        return std::make_shared<Brackets>(leftBracket, rightBracket, expr);
+        ASTExpressionPtr expr = parseExpression();
+        std::optional<Token> rightBracket = consume(TokenType::CloseBracket);
+        if (!rightBracket) {
+            auto diag = reportUnclosedDelimiterError(currentToken);
+            return std::make_shared<InvalidExpression>(diag);
+        }
+        delimitersStack.pop();
+        return std::make_shared<Brackets>(leftBracket, rightBracket.value(), expr);
 
     } else if (match(TokenType::OpenSquareBracket)) {
         Token leftBracket = currentToken;
+        delimitersStack.push(leftBracket);
         advance();
-        ASTPtr expr = parseExpression();
-        Token rightBracket = consume(TokenType::CloseSquareBracket);
-        return std::make_shared<SquareBrackets>(leftBracket, rightBracket, expr);
-    } else if (match(TokenType::Identifier)) {
-        Token idToken = currentToken;
+        ASTExpressionPtr expr = parseExpression();
+        std::optional<Token> rightBracket = consume(TokenType::CloseSquareBracket);
+        if (!rightBracket) {
+            auto diag = reportUnclosedDelimiterError(currentToken);
+            return std::make_shared<InvalidExpression>(diag);
+        }
+        delimitersStack.pop();
+        return std::make_shared<SquareBrackets>(leftBracket, rightBracket.value(), expr);
+    } else if (match(TokenType::Identifier) || match(TokenType::Number) || match(TokenType::StringLiteral) ||
+               match(TokenType::Register) || match(TokenType::QuestionMark, "$") || match(TokenType::Type)) {
+        Token token = currentToken;
         advance();
-        return std::make_shared<Leaf>(idToken);
-    } else if (match(TokenType::Number)) {
-        Token numberToken = currentToken;
-        advance();
-        return std::make_shared<Leaf>(numberToken);
-    } else if (match(TokenType::StringLiteral)) {
-        Token stringToken = currentToken;
-        advance();
-        return std::make_shared<Leaf>(stringToken);
-    } else if (match(TokenType::Register)) {
-        Token registerToken = currentToken;
-        advance();
-        return std::make_shared<Leaf>(registerToken);
-    } else if (match(TokenType::QuestionMark, "$")) {
-        Token dollarToken = currentToken;
-        advance();
-        return std::make_shared<Leaf>(dollarToken);
-    } else if (match(TokenType::Type)) {
-        Token typeToken = currentToken;
-        advance();
-        return std::make_shared<Leaf>(typeToken);
-    } 
-    else {
-        // reportError(currentToken.span, ErrorCode::EXPECTED_PRIMARY_EXPRESSION, "Expected primary expression");
-        advance(); // Attempt to recover
-        return nullptr;
+        // (var var) - can't be
+        std::string curentTokenLexemeUpper = currentToken.lexeme;
+        std::transform(curentTokenLexemeUpper.begin(), curentTokenLexemeUpper.end(), curentTokenLexemeUpper.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+
+        // after leaf when there'are unclosed parenthesis `()` or `[]` must be operator or closing `)` or `]`
+        // or there might be `(` or `[` - implicit plus for index operator
+        if (existUnclosedBracketsOrSquareBrackets() && currentToken.type != TokenType::CloseSquareBracket &&
+            currentToken.type != TokenType::CloseBracket && currentToken.type != TokenType::OpenSquareBracket &&
+            currentToken.type != TokenType::OpenBracket && currentToken.type != TokenType::Operator &&
+            curentTokenLexemeUpper != "SHL" && curentTokenLexemeUpper != "SHR") {
+
+            auto diag = reportExpectedOperatorOrClosingDelimiter(currentToken);
+            return std::make_shared<InvalidExpression>(diag);
+        }
+        // var var - can't be - handled in the upper parsing (only var is parsed as expression)
+        return std::make_shared<Leaf>(token);
+    } else {
+        auto diag = reportExpectedExpression(currentToken);
+        return std::make_shared<InvalidExpression>(diag);
     }
 }
 
 File parser.h:
 
 #pragma once
+
+#include <stack>
 
 #include "tokenize.h"
 #include "symbol_table.h"
@@ -1113,7 +1175,7 @@ File parser.h:
 class Parser {
 public:
     Parser(std::shared_ptr<ParseSession> parseSession, const std::vector<Token> &tokens);
-    ASTPtr parse();
+    ASTExpressionPtr parse();
 
 private:
     std::shared_ptr<ParseSession> parseSess;
@@ -1121,23 +1183,87 @@ private:
     int currentIndex;
     Token currentToken;
     const std::vector<Token> &tokens;
+    bool panicLine = false;
+
+    std::stack<Token> delimitersStack;
+    bool existUnclosedBracketsOrSquareBrackets() const;
 
     void advance();
     bool match(TokenType type);
     bool match(TokenType type, const std::string &value);
-    Token consume(TokenType type);
-    Token consume(TokenType type, const std::string &value);
+    std::optional<Token> consume(TokenType type);
+    std::optional<Token> consume(TokenType type, const std::string &value);
 
-    ASTPtr parseLine();
-    ASTPtr parseExpression();
-    ASTPtr parseMultiplicativeExpression();
-    ASTPtr parseUnaryExpression();
-    ASTPtr parsePostfixExpression();
-    ASTPtr parseMemberAccessExpression();
-    ASTPtr parseHighPrecedenceUnaryExpression();
-    ASTPtr parseIndexSequence();
-    ASTPtr parsePrimaryExpression();
+    ASTExpressionPtr parseLine();
+    ASTExpressionPtr parseExpression();
+    ASTExpressionPtr parseMultiplicativeExpression();
+    ASTExpressionPtr parseUnaryExpression();
+    ASTExpressionPtr parsePostfixExpression();
+    ASTExpressionPtr parseMemberAccessExpression();
+    ASTExpressionPtr parseHighPrecedenceUnaryExpression();
+    ASTExpressionPtr parseIndexSequence();
+    ASTExpressionPtr parsePrimaryExpression();
+
+    std::shared_ptr<Diagnostic> reportUnclosedDelimiterError(const Token &closingDelimiter);
+    std::shared_ptr<Diagnostic> reportExpectedExpression(const Token &token);
+    std::shared_ptr<Diagnostic> reportExpectedOperatorOrClosingDelimiter(const Token &token);
 };
+File parser_errors_reporting.cpp:
+
+#include "parser.h"
+#include "log.h"
+#include "tokenize.h"
+
+std::shared_ptr<Diagnostic> Parser::reportUnclosedDelimiterError(const Token &closingDelimiter)
+{
+    if (panicLine) {
+        return parseSess->dcx->getLastDiagnostic();
+    }
+    panicLine = true;
+    if (delimitersStack.empty()) {
+        LOG_DETAILED_ERROR("Empty demimiters stack!");
+    } else {
+        Diagnostic diag(Diagnostic::Level::Error, ErrorCode::UNCLOSED_DELIMITER);
+        diag.addPrimaryLabel(closingDelimiter.span, "");
+        Token openingDelimiter = delimitersStack.top();
+        diag.addSecondaryLabel(openingDelimiter.span, "unclosed delimiter");
+        parseSess->dcx->addDiagnostic(diag);
+    }
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+std::shared_ptr<Diagnostic> Parser::reportExpectedExpression(const Token &token)
+{
+    if (panicLine) {
+        return parseSess->dcx->getLastDiagnostic();
+    }
+    panicLine = true;
+    if ((token.type == TokenType::CloseSquareBracket || token.type == TokenType::CloseBracket) &&
+        delimitersStack.empty()) {
+        Diagnostic diag(Diagnostic::Level::Error, ErrorCode::UNEXPECTED_CLOSING_DELIMITER, token.lexeme);
+        diag.addPrimaryLabel(token.span, "");
+        parseSess->dcx->addDiagnostic(diag);
+    } else {
+
+        Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_EXPRESSION,
+                        token.type == TokenType::EndOfLine ? "\\n" : token.lexeme);
+        diag.addPrimaryLabel(token.span, "");
+        parseSess->dcx->addDiagnostic(diag);
+    }
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+std::shared_ptr<Diagnostic> Parser::reportExpectedOperatorOrClosingDelimiter(const Token &token)
+{
+    if (panicLine) {
+        return parseSess->dcx->getLastDiagnostic();
+    }
+    panicLine = true;
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXCPECTED_OPERATOR_OR_CLOSING_DELIMITER, token.lexeme);
+    diag.addPrimaryLabel(token.span, "");
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
 File preprocessor.cpp:
 
 #include "preprocessor.h"
@@ -1148,7 +1274,7 @@ File preprocessor.cpp:
 
 std::vector<Token> Preprocessor::preprocess(const std::vector<Token> &tokens)
 {
-    // TODO
+    // TODO: implement preprocessing
     return tokens;
 }
 
@@ -1728,23 +1854,9 @@ static const std::unordered_set<std::string> directives = {"INCLUDE", "EQU",    
 
 static const std::unordered_set<std::string> reservedWords = {"DUP"};
 
-static const std::unordered_set<std::string> operators = {"+",
-                                                          "-",
-                                                          "*",
-                                                          "/",
-                                                          "."
-                                                          "MOD",
-                                                          "SHL",
-                                                          "SHR",
-                                                          "PTR",
-                                                          "TYPE",
-                                                          "SIZE",
-                                                          "SIZEOF",
-                                                          "LENGTH",
-                                                          "LENGTHOF",
-                                                          "WIDTH",
-                                                          "MASK",
-                                                          "OFFSET"};
+static const std::unordered_set<std::string> operators = {"+",      "-",        "*",     "/",    ".",     "MOD",
+                                                          "SHL",    "SHR",      "PTR",   "TYPE", "SIZE",  "SIZEOF",
+                                                          "LENGTH", "LENGTHOF", "WIDTH", "MASK", "OFFSET"};
 
 static const std::unordered_set<std::string> types = {"BYTE", "WORD", "DWORD", "QWORD"};
 
@@ -1784,17 +1896,17 @@ std::vector<Token> Tokenizer::tokenize()
         }
     }
 
-    // because files always ends with a '\n', we can make EndOfFile span equal to the last '\n' 
+    // because files always ends with a '\n', we can make EndOfFile span equal to the last '\n'
     // to be able to underline EndOfFile correctly
     tokens.emplace_back(Token{TokenType::EndOfFile, "", Span(pos - 1, pos, context)});
 
     // TODO: remove testing code
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_NUMBER_FORMAT);
+    // Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_NUMBER_FORMAT);
     // diag.addSecondaryLabel(Span(0, 1, nullptr), "pr");
     // diag.addPrimaryLabel(Span(2, 3, nullptr), "hey");
     // diag.addSecondaryLabel(Span(4, 5, nullptr), "hi");
-    diag.addPrimaryLabel(Span(pos - 1, pos, nullptr), "nice");
-    psess->dcx->addDiagnostic(diag);
+    // diag.addPrimaryLabel(Span(pos - 1, pos, nullptr), "nice");
+    // psess->dcx->addDiagnostic(diag);
 
     return tokens;
 }
@@ -1817,7 +1929,7 @@ Token Tokenizer::getNextToken()
         return getIdentifierOrKeywordToken();
     } else if (currentChar == '.' && isDotName()) {
         return getIdentifierOrKeywordToken();
-    } else if (currentChar == '"' || currentChar == '\'' || currentChar == '<' || currentChar == '{') {
+    } else if (currentChar == '"' || currentChar == '\'') {
         return getStringLiteralToken();
     } else if (currentChar == '\\') {
         // Line continuations are not handled; report an error
@@ -1841,27 +1953,42 @@ bool Tokenizer::isDotName()
 {
     if (pos + 1 >= src.size())
         return false;
-    char nextChar = src[pos + 1];
 
-    if (!isValidIdentifierChar(nextChar))
-        return false;
+    size_t newPos = pos + 1;
+    while (newPos < src.size() && isValidIdentifierChar(src[newPos])) {
+        ++newPos;
+    }
 
-    // Check previous token
-    if (tokens.empty()) {
-        // No previous token, accept the dotted name
+    std::string lexeme = src.substr(pos, newPos - pos);
+    std::string lexemeUpper = lexeme;
+    std::transform(lexemeUpper.begin(), lexemeUpper.end(), lexemeUpper.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+    if (directives.count(lexemeUpper)) {
         return true;
     }
+    return false;
 
-    TokenType prevType = tokens.back().type;
-    std::string prevLexeme = tokens.back().lexeme;
+    // char nextChar = src[pos + 1];
 
-    if (prevType == TokenType::Register || prevType == TokenType::Identifier || prevLexeme == ")" ||
-        prevLexeme == "]") {
-        // Previous token is a register, identifier, or closing bracket; dot is an operator
-        return false;
-    }
+    // if (!isValidIdentifierChar(nextChar))
+    //     return false;
 
-    return true;
+    // // Check previous token
+    // if (tokens.empty()) {
+    //     // No previous token, accept the dotted name
+    //     return true;
+    // }
+
+    // TokenType prevType = tokens.back().type;
+    // std::string prevLexeme = tokens.back().lexeme;
+
+    // if (prevType == TokenType::Register || prevType == TokenType::Identifier || prevLexeme == ")" ||
+    //     prevLexeme == "]") {
+    //     // Previous token is a register, identifier, or closing bracket; dot is an operator
+    //     return false;
+    // }
+
+    // return true;
 }
 
 bool Tokenizer::isValidNumberStart(char c)
@@ -2135,8 +2262,6 @@ struct Token {
     enum TokenType type;
     std::string lexeme;
     Span span;
-
-    // TODO: data about macro expansion
 };
 
 class Tokenizer {

@@ -100,7 +100,7 @@ void Emitter::printDiagnosticBody(std::shared_ptr<Diagnostic> diag)
         maxLineNumber = std::max(maxLineNumber, lineNumberZeroBased + 1);
     }
 
-    int spaceCount = calculateDisplayWidth(std::to_string(maxLineNumber)) + 1;
+    spaceCount = calculateDisplayWidth(std::to_string(maxLineNumber)) + 1;
     fmt::memory_buffer buffer;
     int primaryLineNumberWidth = calculateDisplayWidth(std::to_string(primaryLineNumberZeroBased + 1));
     // Print the location header
@@ -120,8 +120,7 @@ void Emitter::printDiagnosticBody(std::shared_ptr<Diagnostic> diag)
 
     // print labels in primary string
     std::vector<LabelType> primarySecondaryLabels;
-    printLabelsForLine(buffer, primaryLineContent, primaryLineNumberZeroBased, spaceCount,
-                       LabelType(primarySpan, primaryLabelMsg),
+    printLabelsForLine(buffer, primaryLineContent, primaryLineNumberZeroBased, LabelType(primarySpan, primaryLabelMsg),
                        labelsMapping[primaryFilePath][primaryLineNumberZeroBased], diag->getLevel());
 
     // print all other lines in primary file
@@ -140,7 +139,7 @@ void Emitter::printDiagnosticBody(std::shared_ptr<Diagnostic> diag)
         int lineNumberWidth = calculateDisplayWidth(std::to_string(lineNumberZeroBased + 1));
         fmt::format_to(std::back_inserter(buffer), "{}{} {} {}\n", std::string(spaceCount - lineNumberWidth, ' '),
                        format(fg(cyanColor), "{}", lineNumberZeroBased + 1), format(fg(cyanColor), "|"), lineContent);
-        printLabelsForLine(buffer, lineContent, lineNumberZeroBased, spaceCount, std::nullopt,
+        printLabelsForLine(buffer, lineContent, lineNumberZeroBased, std::nullopt,
                            labelsMapping[primaryFilePath][lineNumberZeroBased], diag->getLevel());
     }
 
@@ -199,8 +198,8 @@ int Emitter::calculateCodePoints(const std::string &text)
 }
 
 void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, std::string lineContent, size_t lineNumberZeroBased,
-                                 int spacesCount, const std::optional<LabelType> &primaryLabel,
-                                 std::vector<LabelType> &labels, Diagnostic::Level level)
+                                 const std::optional<LabelType> &primaryLabel, std::vector<LabelType> &labels,
+                                 Diagnostic::Level level)
 {
     fmt::rgb primaryColor;
     switch (level) {
@@ -287,7 +286,7 @@ void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, std::string lineCon
         coloredMarkerLine += format(fg(primaryColor), "{}", labelMessageToAdd);
     }
 
-    fmt::format_to(std::back_inserter(buffer), "{} {} {}\n", std::string(spacesCount, ' '), format(fg(cyanColor), "|"),
+    fmt::format_to(std::back_inserter(buffer), "{} {} {}\n", std::string(spaceCount, ' '), format(fg(cyanColor), "|"),
                    coloredMarkerLine);
 
     if (labelMessagesToPrint.empty()) {
@@ -325,7 +324,7 @@ void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, std::string lineCon
                 coloredLine += c;
             }
         }
-        fmt::format_to(std::back_inserter(buffer), "{} {} {}\n", std::string(spacesCount, ' '),
+        fmt::format_to(std::back_inserter(buffer), "{} {} {}\n", std::string(spaceCount, ' '),
                        format(fg(cyanColor), "|"), coloredLine);
     }
 
@@ -365,12 +364,22 @@ void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, std::string lineCon
             coloredLine += format(fg(cyanColor), "{}", labelMessage);
         }
 
-        fmt::format_to(std::back_inserter(buffer), "{} {} {}\n", std::string(spacesCount, ' '),
+        fmt::format_to(std::back_inserter(buffer), "{} {} {}\n", std::string(spaceCount, ' '),
                        format(fg(cyanColor), "|"), coloredLine);
     }
 }
 
-void Emitter::printNote(std::shared_ptr<Diagnostic> /*diag*/) {}
+void Emitter::printNote(std::shared_ptr<Diagnostic> diag)
+{
+    if (!diag->getNoteMessage()) {
+        return;
+    }
+    std::string result =
+        fmt::format("{} {} {}: {}", std::string(spaceCount, ' '), format(fg(cyanColor), "="),
+                    format(fg(whiteColor) | fmt::emphasis::bold, "note"), diag->getNoteMessage().value());
+
+    out.write(result.data(), result.size());
+}
 
 void Emitter::printHelp(std::shared_ptr<Diagnostic> /*diag*/) {}
 

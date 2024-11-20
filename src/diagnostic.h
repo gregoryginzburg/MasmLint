@@ -25,6 +25,8 @@ public:
     void addPrimaryLabel(const Span &span, const std::string &labelMessage);
     void addSecondaryLabel(const Span &span, const std::string &labelMessage);
 
+    void addNoteMessage(const std::string &msg);
+
     Level getLevel() const;
     ErrorCode getCode() const;
     const std::string &getMessage() const;
@@ -47,7 +49,7 @@ private:
     std::vector<std::pair<Span, std::string>> noteLabels;
 
     std::optional<std::string> helpMessage;
-    std::optional<std::string> stringToDelete;
+    // std::optional<std::string> stringToDelete;
     std::optional<std::string> stringToInsert;
     std::vector<Span> insertColor;
     std::vector<Span> deleteColor;

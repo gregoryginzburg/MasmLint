@@ -25,6 +25,7 @@ private:
     fmt::rgb redColor = fmt::rgb(254, 89, 89);
     fmt::rgb yellowColor = fmt::rgb(255, 191, 0);
     fmt::rgb cyanColor = fmt::rgb(0, 200, 200);
+    int spaceCount = -1;
 
     template <typename... Args>
     std::string format(const fmt::text_style &ts, fmt::format_string<Args...> fmt_str, Args &&...args)
@@ -37,8 +38,8 @@ private:
     void printNote(std::shared_ptr<Diagnostic> diag);
     void printHelp(std::shared_ptr<Diagnostic> diag);
     void printLabelsForLine(fmt::memory_buffer &buffer, std::string lineContent, size_t lineNumberZeroBased,
-                            int spacesCount, const std::optional<LabelType> &primaryLabel,
-                            std::vector<LabelType> &labels, Diagnostic::Level level);
+                            const std::optional<LabelType> &primaryLabel, std::vector<LabelType> &labels,
+                            Diagnostic::Level level);
 
     std::string formatLevel(Diagnostic::Level level);
     std::string formatErrorCode(Diagnostic::Level level, ErrorCode code);

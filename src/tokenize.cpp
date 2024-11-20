@@ -121,9 +121,7 @@ bool Tokenizer::isDotName()
     }
 
     std::string lexeme = src.substr(pos, newPos - pos);
-    std::string lexemeUpper = lexeme;
-    std::transform(lexemeUpper.begin(), lexemeUpper.end(), lexemeUpper.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+    std::string lexemeUpper = stringToUpper(lexeme);
     if (directives.count(lexemeUpper)) {
         return true;
     }
@@ -171,9 +169,8 @@ Token Tokenizer::getIdentifierOrKeywordToken()
     }
 
     std::string lexeme = src.substr(start, pos - start);
-    std::string lexemeUpper = lexeme;
-    std::transform(lexemeUpper.begin(), lexemeUpper.end(), lexemeUpper.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+    std::string lexemeUpper = stringToUpper(lexeme);
+
     Span tokenSpan(start, pos, nullptr);
 
     if (directives.count(lexemeUpper)) {

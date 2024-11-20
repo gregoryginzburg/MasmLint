@@ -15,6 +15,8 @@ void Diagnostic::addSecondaryLabel(const Span &span, const std::string &labelMes
     secondaryLabels.emplace_back(span, labelMessage);
 }
 
+void Diagnostic::addNoteMessage(const std::string &msg) { noteMessage = msg; }
+
 Diagnostic::Level Diagnostic::getLevel() const { return level; }
 
 ErrorCode Diagnostic::getCode() const { return code; }
