@@ -8,12 +8,12 @@ std::shared_ptr<Diagnostic> Parser::reportUnclosedDelimiterError(const Token &cl
         return parseSess->dcx->getLastDiagnostic();
     }
     panicLine = true;
-    if (delimitersStack.empty()) {
+    if (expressionDelimitersStack.empty()) {
         LOG_DETAILED_ERROR("Empty demimiters stack!");
     } else {
         Diagnostic diag(Diagnostic::Level::Error, ErrorCode::UNCLOSED_DELIMITER);
         diag.addPrimaryLabel(closingDelimiter.span, "");
-        Token openingDelimiter = delimitersStack.top();
+        Token openingDelimiter = expressionDelimitersStack.top();
         diag.addSecondaryLabel(openingDelimiter.span, "unclosed delimiter");
         parseSess->dcx->addDiagnostic(diag);
     }
@@ -27,7 +27,7 @@ std::shared_ptr<Diagnostic> Parser::reportExpectedExpression(const Token &token)
     }
     panicLine = true;
     if ((token.type == TokenType::CloseSquareBracket || token.type == TokenType::CloseBracket) &&
-        delimitersStack.empty()) {
+        expressionDelimitersStack.empty()) {
         Diagnostic diag(Diagnostic::Level::Error, ErrorCode::UNEXPECTED_CLOSING_DELIMITER, token.lexeme);
         diag.addPrimaryLabel(token.span, "");
         parseSess->dcx->addDiagnostic(diag);

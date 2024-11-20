@@ -22,8 +22,7 @@ private:
     const std::vector<Token> &tokens;
     bool panicLine = false;
 
-    std::stack<Token> delimitersStack;
-    bool existUnclosedBracketsOrSquareBrackets() const;
+    std::stack<Token> expressionDelimitersStack;
 
     void advance();
     bool match(TokenType type);
@@ -33,6 +32,7 @@ private:
 
     ASTExpressionPtr parseLine();
     ASTExpressionPtr parseExpression();
+    ASTExpressionPtr parseExpressionHelper();
     ASTExpressionPtr parseMultiplicativeExpression();
     ASTExpressionPtr parseUnaryExpression();
     ASTExpressionPtr parsePostfixExpression();

@@ -32,22 +32,6 @@ ASTExpressionPtr Parser::parseLine()
     return nullptr;
 }
 
-bool Parser::existUnclosedBracketsOrSquareBrackets() const
-{
-    bool exist = false;
-    auto temp = delimitersStack;
-
-    // Iterate through the stack by popping elements
-    while (!temp.empty()) {
-        Token token = temp.top();
-        if (token.type == TokenType::OpenBracket || token.type == TokenType::OpenSquareBracket) {
-            exist = true;
-        }
-        temp.pop();
-    }
-    return exist;
-}
-
 // Only advance when matched a not EndOfFile
 void Parser::advance()
 {
@@ -89,6 +73,13 @@ std::optional<Token> Parser::consume(TokenType type, const std::string &value)
 }
 
 ASTExpressionPtr Parser::parseExpression()
+{
+    // need to initialize to {} before every parseExpression()
+    expressionDelimitersStack = {};
+    return parseExpressionHelper();
+}
+
+ASTExpressionPtr Parser::parseExpressionHelper()
 {
     ASTExpressionPtr term1 = parseMultiplicativeExpression();
     while (match(TokenType::Operator, "+") || match(TokenType::Operator, "-")) {
@@ -177,28 +168,28 @@ ASTExpressionPtr Parser::parseIndexSequence()
     while (match(TokenType::OpenSquareBracket) || match(TokenType::OpenBracket)) {
         if (match(TokenType::OpenSquareBracket)) {
             Token leftBracket = currentToken;
-            delimitersStack.push(leftBracket);
+            expressionDelimitersStack.push(leftBracket);
             advance();
-            ASTExpressionPtr expr = parseExpression();
+            ASTExpressionPtr expr = parseExpressionHelper();
             std::optional<Token> rightBracket = consume(TokenType::CloseSquareBracket);
             if (!rightBracket) {
                 std::shared_ptr<Diagnostic> diag = reportUnclosedDelimiterError(currentToken);
                 return std::make_shared<InvalidExpression>(diag);
             }
-            delimitersStack.pop();
+            expressionDelimitersStack.pop();
             ASTExpressionPtr term2 = std::make_shared<SquareBrackets>(leftBracket, rightBracket.value(), expr);
             term1 = std::make_shared<ImplicitPlusOperator>(term1, term2);
         } else if (match(TokenType::OpenBracket)) {
             Token leftBracket = currentToken;
-            delimitersStack.push(leftBracket);
+            expressionDelimitersStack.push(leftBracket);
             advance();
-            ASTExpressionPtr expr = parseExpression();
+            ASTExpressionPtr expr = parseExpressionHelper();
             std::optional<Token> rightBracket = consume(TokenType::CloseBracket);
             if (!rightBracket) {
                 std::shared_ptr<Diagnostic> diag = reportUnclosedDelimiterError(currentToken);
                 return std::make_shared<InvalidExpression>(diag);
             }
-            delimitersStack.pop();
+            expressionDelimitersStack.pop();
             ASTExpressionPtr term2 = std::make_shared<Brackets>(leftBracket, rightBracket.value(), expr);
             term1 = std::make_shared<ImplicitPlusOperator>(term1, term2);
         }
@@ -210,28 +201,28 @@ ASTExpressionPtr Parser::parsePrimaryExpression()
 {
     if (match(TokenType::OpenBracket)) {
         Token leftBracket = currentToken;
-        delimitersStack.push(leftBracket);
+        expressionDelimitersStack.push(leftBracket);
         advance();
-        ASTExpressionPtr expr = parseExpression();
+        ASTExpressionPtr expr = parseExpressionHelper();
         std::optional<Token> rightBracket = consume(TokenType::CloseBracket);
         if (!rightBracket) {
             auto diag = reportUnclosedDelimiterError(currentToken);
             return std::make_shared<InvalidExpression>(diag);
         }
-        delimitersStack.pop();
+        expressionDelimitersStack.pop();
         return std::make_shared<Brackets>(leftBracket, rightBracket.value(), expr);
 
     } else if (match(TokenType::OpenSquareBracket)) {
         Token leftBracket = currentToken;
-        delimitersStack.push(leftBracket);
+        expressionDelimitersStack.push(leftBracket);
         advance();
-        ASTExpressionPtr expr = parseExpression();
+        ASTExpressionPtr expr = parseExpressionHelper();
         std::optional<Token> rightBracket = consume(TokenType::CloseSquareBracket);
         if (!rightBracket) {
             auto diag = reportUnclosedDelimiterError(currentToken);
             return std::make_shared<InvalidExpression>(diag);
         }
-        delimitersStack.pop();
+        expressionDelimitersStack.pop();
         return std::make_shared<SquareBrackets>(leftBracket, rightBracket.value(), expr);
     } else if (match(TokenType::Identifier) || match(TokenType::Number) || match(TokenType::StringLiteral) ||
                match(TokenType::Register) || match(TokenType::QuestionMark, "$") || match(TokenType::Type)) {
@@ -241,7 +232,7 @@ ASTExpressionPtr Parser::parsePrimaryExpression()
         std::string curentTokenLexemeUpper = stringToUpper(currentToken.lexeme);
         // after leaf when there'are unclosed parenthesis `()` or `[]` must be operator or closing `)` or `]`
         // or there might be `(` or `[` - implicit plus for index operator
-        if (existUnclosedBracketsOrSquareBrackets() && currentToken.type != TokenType::CloseSquareBracket &&
+        if (!expressionDelimitersStack.empty() && currentToken.type != TokenType::CloseSquareBracket &&
             currentToken.type != TokenType::CloseBracket && currentToken.type != TokenType::OpenSquareBracket &&
             currentToken.type != TokenType::OpenBracket && currentToken.type != TokenType::Operator &&
             curentTokenLexemeUpper != "SHL" && curentTokenLexemeUpper != "SHR") {
