@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stack>
+
 #include "tokenize.h"
 #include "symbol_table.h"
 #include "diag_ctxt.h"
@@ -10,7 +12,7 @@
 class Parser {
 public:
     Parser(std::shared_ptr<ParseSession> parseSession, const std::vector<Token> &tokens);
-    ASTPtr parse();
+    ASTExpressionPtr parse();
 
 private:
     std::shared_ptr<ParseSession> parseSess;
@@ -18,20 +20,28 @@ private:
     int currentIndex;
     Token currentToken;
     const std::vector<Token> &tokens;
+    bool panicLine = false;
+
+    std::stack<Token> delimitersStack;
+    bool existUnclosedBracketsOrSquareBrackets() const;
 
     void advance();
     bool match(TokenType type);
     bool match(TokenType type, const std::string &value);
-    Token consume(TokenType type);
-    Token consume(TokenType type, const std::string &value);
+    std::optional<Token> consume(TokenType type);
+    std::optional<Token> consume(TokenType type, const std::string &value);
 
-    ASTPtr parseLine();
-    ASTPtr parseExpression();
-    ASTPtr parseMultiplicativeExpression();
-    ASTPtr parseUnaryExpression();
-    ASTPtr parsePostfixExpression();
-    ASTPtr parseMemberAccessExpression();
-    ASTPtr parseHighPrecedenceUnaryExpression();
-    ASTPtr parseIndexSequence();
-    ASTPtr parsePrimaryExpression();
+    ASTExpressionPtr parseLine();
+    ASTExpressionPtr parseExpression();
+    ASTExpressionPtr parseMultiplicativeExpression();
+    ASTExpressionPtr parseUnaryExpression();
+    ASTExpressionPtr parsePostfixExpression();
+    ASTExpressionPtr parseMemberAccessExpression();
+    ASTExpressionPtr parseHighPrecedenceUnaryExpression();
+    ASTExpressionPtr parseIndexSequence();
+    ASTExpressionPtr parsePrimaryExpression();
+
+    std::shared_ptr<Diagnostic> reportUnclosedDelimiterError(const Token &closingDelimiter);
+    std::shared_ptr<Diagnostic> reportExpectedExpression(const Token &token);
+    std::shared_ptr<Diagnostic> reportExpectedOperatorOrClosingDelimiter(const Token &token);
 };

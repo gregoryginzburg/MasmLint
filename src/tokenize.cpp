@@ -15,23 +15,9 @@ static const std::unordered_set<std::string> directives = {"INCLUDE", "EQU",    
 
 static const std::unordered_set<std::string> reservedWords = {"DUP"};
 
-static const std::unordered_set<std::string> operators = {"+",
-                                                          "-",
-                                                          "*",
-                                                          "/",
-                                                          "."
-                                                          "MOD",
-                                                          "SHL",
-                                                          "SHR",
-                                                          "PTR",
-                                                          "TYPE",
-                                                          "SIZE",
-                                                          "SIZEOF",
-                                                          "LENGTH",
-                                                          "LENGTHOF",
-                                                          "WIDTH",
-                                                          "MASK",
-                                                          "OFFSET"};
+static const std::unordered_set<std::string> operators = {"+",      "-",        "*",     "/",    ".",     "MOD",
+                                                          "SHL",    "SHR",      "PTR",   "TYPE", "SIZE",  "SIZEOF",
+                                                          "LENGTH", "LENGTHOF", "WIDTH", "MASK", "OFFSET"};
 
 static const std::unordered_set<std::string> types = {"BYTE", "WORD", "DWORD", "QWORD"};
 
@@ -71,17 +57,17 @@ std::vector<Token> Tokenizer::tokenize()
         }
     }
 
-    // because files always ends with a '\n', we can make EndOfFile span equal to the last '\n' 
+    // because files always ends with a '\n', we can make EndOfFile span equal to the last '\n'
     // to be able to underline EndOfFile correctly
     tokens.emplace_back(Token{TokenType::EndOfFile, "", Span(pos - 1, pos, context)});
 
     // TODO: remove testing code
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_NUMBER_FORMAT);
+    // Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_NUMBER_FORMAT);
     // diag.addSecondaryLabel(Span(0, 1, nullptr), "pr");
     // diag.addPrimaryLabel(Span(2, 3, nullptr), "hey");
     // diag.addSecondaryLabel(Span(4, 5, nullptr), "hi");
-    diag.addPrimaryLabel(Span(pos - 1, pos, nullptr), "nice");
-    psess->dcx->addDiagnostic(diag);
+    // diag.addPrimaryLabel(Span(pos - 1, pos, nullptr), "nice");
+    // psess->dcx->addDiagnostic(diag);
 
     return tokens;
 }
@@ -104,7 +90,7 @@ Token Tokenizer::getNextToken()
         return getIdentifierOrKeywordToken();
     } else if (currentChar == '.' && isDotName()) {
         return getIdentifierOrKeywordToken();
-    } else if (currentChar == '"' || currentChar == '\'' || currentChar == '<' || currentChar == '{') {
+    } else if (currentChar == '"' || currentChar == '\'') {
         return getStringLiteralToken();
     } else if (currentChar == '\\') {
         // Line continuations are not handled; report an error
@@ -128,27 +114,42 @@ bool Tokenizer::isDotName()
 {
     if (pos + 1 >= src.size())
         return false;
-    char nextChar = src[pos + 1];
 
-    if (!isValidIdentifierChar(nextChar))
-        return false;
+    size_t newPos = pos + 1;
+    while (newPos < src.size() && isValidIdentifierChar(src[newPos])) {
+        ++newPos;
+    }
 
-    // Check previous token
-    if (tokens.empty()) {
-        // No previous token, accept the dotted name
+    std::string lexeme = src.substr(pos, newPos - pos);
+    std::string lexemeUpper = lexeme;
+    std::transform(lexemeUpper.begin(), lexemeUpper.end(), lexemeUpper.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+    if (directives.count(lexemeUpper)) {
         return true;
     }
+    return false;
 
-    TokenType prevType = tokens.back().type;
-    std::string prevLexeme = tokens.back().lexeme;
+    // char nextChar = src[pos + 1];
 
-    if (prevType == TokenType::Register || prevType == TokenType::Identifier || prevLexeme == ")" ||
-        prevLexeme == "]") {
-        // Previous token is a register, identifier, or closing bracket; dot is an operator
-        return false;
-    }
+    // if (!isValidIdentifierChar(nextChar))
+    //     return false;
 
-    return true;
+    // // Check previous token
+    // if (tokens.empty()) {
+    //     // No previous token, accept the dotted name
+    //     return true;
+    // }
+
+    // TokenType prevType = tokens.back().type;
+    // std::string prevLexeme = tokens.back().lexeme;
+
+    // if (prevType == TokenType::Register || prevType == TokenType::Identifier || prevLexeme == ")" ||
+    //     prevLexeme == "]") {
+    //     // Previous token is a register, identifier, or closing bracket; dot is an operator
+    //     return false;
+    // }
+
+    // return true;
 }
 
 bool Tokenizer::isValidNumberStart(char c)

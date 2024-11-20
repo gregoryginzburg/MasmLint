@@ -14,15 +14,15 @@ class Emitter {
 public:
     Emitter(std::shared_ptr<SourceMap> sourceMap, std::ostream &outStream = std::cout, bool useColor = true);
 
-    void emit(const Diagnostic &diag);
-    void emitJSON(const std::vector<Diagnostic> &diagnostics);
+    void emit(std::shared_ptr<Diagnostic> diag);
+    void emitJSON(const std::vector<std::shared_ptr<Diagnostic>> &diagnostics);
 
 private:
     std::shared_ptr<SourceMap> sourceMap;
     std::ostream &out;
     bool useColor;
     fmt::rgb whiteColor = fmt::rgb(200, 200, 200);
-    fmt::rgb redColor = fmt::rgb(254,89,89);
+    fmt::rgb redColor = fmt::rgb(254, 89, 89);
     fmt::rgb yellowColor = fmt::rgb(255, 191, 0);
     fmt::rgb cyanColor = fmt::rgb(0, 200, 200);
 
@@ -32,10 +32,10 @@ private:
         return fmt::format(useColor ? ts : fmt::text_style(), fmt_str, std::forward<Args>(args)...);
     }
 
-    void printHeader(const Diagnostic &diag);
-    void printDiagnosticBody(const Diagnostic &diag);
-    void printNote(const Diagnostic &diag);
-    void printHelp(const Diagnostic &diag);
+    void printHeader(std::shared_ptr<Diagnostic> diag);
+    void printDiagnosticBody(std::shared_ptr<Diagnostic> diag);
+    void printNote(std::shared_ptr<Diagnostic> diag);
+    void printHelp(std::shared_ptr<Diagnostic> diag);
     void printLabelsForLine(fmt::memory_buffer &buffer, std::string lineContent, size_t lineNumberZeroBased,
                             int spacesCount, const std::optional<LabelType> &primaryLabel,
                             std::vector<LabelType> &labels, Diagnostic::Level level);

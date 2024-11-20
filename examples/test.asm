@@ -7,3 +7,5 @@
 .CODE
 add eax, ebx
 mov etx, 1
+
+[OFFSET LENGTH (BYTE .code PTR var)].field + SIZE arr * (VALUE - 1)

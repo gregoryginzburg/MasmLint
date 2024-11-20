@@ -10,6 +10,7 @@ set(SOURCES_LIST
     diagnostic.cpp
     emitter.cpp
     diag_ctxt.cpp
+    parser_errors_reporting.cpp
     
 )
 

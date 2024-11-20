@@ -10,11 +10,12 @@ public:
     DiagCtxt(std::shared_ptr<Emitter> emitter);
 
     void addDiagnostic(const Diagnostic &diag);
+    std::shared_ptr<Diagnostic> getLastDiagnostic();
     bool hasErrors() const;
     void emitDiagnostics();
     void emitJsonDiagnostics();
 
 private:
-    std::vector<Diagnostic> diagnostics;
+    std::vector<std::shared_ptr<Diagnostic>> diagnostics;
     std::shared_ptr<Emitter> emitter;
 };

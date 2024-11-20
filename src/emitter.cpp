@@ -17,23 +17,26 @@ Emitter::Emitter(std::shared_ptr<SourceMap> sourceMap, std::ostream &outStream, 
 {
 }
 
-void Emitter::emit(const Diagnostic &diag)
+void Emitter::emit(std::shared_ptr<Diagnostic> diag)
 {
+    if (diag->isCancelled()) {
+        return;
+    }
     printHeader(diag);
     printDiagnosticBody(diag);
-    if (diag.getNoteMessage()) {
+    if (diag->getNoteMessage()) {
         printNote(diag);
     }
-    if (diag.getHelpMessage()) {
+    if (diag->getHelpMessage()) {
         printHelp(diag);
     }
 }
 
-void Emitter::printHeader(const Diagnostic &diag)
+void Emitter::printHeader(std::shared_ptr<Diagnostic> diag)
 {
-    auto levelStr = formatLevel(diag.getLevel());
-    auto codeStr = formatErrorCode(diag.getLevel(), diag.getCode());
-    auto message = format(fmt::emphasis::bold | fg(whiteColor), "{}", diag.getMessage());
+    auto levelStr = formatLevel(diag->getLevel());
+    auto codeStr = formatErrorCode(diag->getLevel(), diag->getCode());
+    auto message = format(fmt::emphasis::bold | fg(whiteColor), "{}", diag->getMessage());
     auto colon = format(fmt::emphasis::bold | fg(whiteColor), ":");
 
     std::string result = fmt::format("{}{}: {}\n", levelStr, codeStr, message);
@@ -69,14 +72,14 @@ std::string Emitter::formatErrorCode(Diagnostic::Level level, ErrorCode code)
     return "unknown";
 }
 
-void Emitter::printDiagnosticBody(const Diagnostic &diag)
+void Emitter::printDiagnosticBody(std::shared_ptr<Diagnostic> diag)
 {
     // Collect all labels
     std::map<std::filesystem::path, std::map<size_t, std::vector<LabelType>>> labelsMapping;
 
     size_t maxLineNumber = 0;
     // primary label
-    const auto &[primarySpan, primaryLabelMsg] = diag.getPrimaryLabel();
+    const auto &[primarySpan, primaryLabelMsg] = diag->getPrimaryLabel();
     std::filesystem::path primaryFilePath;
     std::size_t primaryLineNumberZeroBased, primaryColumnNumberZeroBased;
     sourceMap->spanToLocation(primarySpan, primaryFilePath, primaryLineNumberZeroBased, primaryColumnNumberZeroBased);
@@ -85,7 +88,7 @@ void Emitter::printDiagnosticBody(const Diagnostic &diag)
     maxLineNumber = std::max(maxLineNumber, primaryLineNumberZeroBased + 1);
 
     // secondary labels
-    for (const auto &[span, labelMsg] : diag.getSecondaryLabels()) {
+    for (const auto &[span, labelMsg] : diag->getSecondaryLabels()) {
         std::filesystem::path filePath;
         std::size_t lineNumberZeroBased, columnNumberZeroBased;
         sourceMap->spanToLocation(span, filePath, lineNumberZeroBased, columnNumberZeroBased);
@@ -119,7 +122,7 @@ void Emitter::printDiagnosticBody(const Diagnostic &diag)
     std::vector<LabelType> primarySecondaryLabels;
     printLabelsForLine(buffer, primaryLineContent, primaryLineNumberZeroBased, spaceCount,
                        LabelType(primarySpan, primaryLabelMsg),
-                       labelsMapping[primaryFilePath][primaryLineNumberZeroBased], diag.getLevel());
+                       labelsMapping[primaryFilePath][primaryLineNumberZeroBased], diag->getLevel());
 
     // print all other lines in primary file
     for (const auto &[lineNumberZeroBased, labels] : labelsMapping[primaryFilePath]) {
@@ -138,7 +141,7 @@ void Emitter::printDiagnosticBody(const Diagnostic &diag)
         fmt::format_to(std::back_inserter(buffer), "{}{} {} {}\n", std::string(spaceCount - lineNumberWidth, ' '),
                        format(fg(cyanColor), "{}", lineNumberZeroBased + 1), format(fg(cyanColor), "|"), lineContent);
         printLabelsForLine(buffer, lineContent, lineNumberZeroBased, spaceCount, std::nullopt,
-                           labelsMapping[primaryFilePath][lineNumberZeroBased], diag.getLevel());
+                           labelsMapping[primaryFilePath][lineNumberZeroBased], diag->getLevel());
     }
 
     // print all other files and labels
@@ -236,7 +239,6 @@ void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, std::string lineCon
         // Adjust for UTF-8 characters
         size_t startPos = calculateDisplayWidth(lineContent.substr(0, startColumn));
         size_t endPos = calculateDisplayWidth(lineContent.substr(0, endColumn));
-  
 
         char markerChar = '-';
         bool isPrimaryLabel = primaryLabel && primaryLabel.value().first == span;
@@ -368,19 +370,19 @@ void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, std::string lineCon
     }
 }
 
-void Emitter::printNote(const Diagnostic &diag) {}
+void Emitter::printNote(std::shared_ptr<Diagnostic> /*diag*/) {}
 
-void Emitter::printHelp(const Diagnostic &diag) {}
+void Emitter::printHelp(std::shared_ptr<Diagnostic> /*diag*/) {}
 
-void Emitter::emitJSON(const std::vector<Diagnostic> &diagnostics)
+void Emitter::emitJSON(const std::vector<std::shared_ptr<Diagnostic>> &diagnostics)
 {
     json arr = json::array();
     for (const auto &diag : diagnostics) {
         json item;
-        item["message"] = diag.getMessage();
-        item["severity"] = static_cast<int>(diag.getLevel());
+        item["message"] = diag->getMessage();
+        item["severity"] = static_cast<int>(diag->getLevel());
 
-        for (const auto &[span, labelMsg] : diag.getSecondaryLabels()) {
+        for (const auto &[span, labelMsg] : diag->getSecondaryLabels()) {
             int startLine, startChar, endLine, endChar;
             spanToLineChar(span, startLine, startChar, endLine, endChar);
 

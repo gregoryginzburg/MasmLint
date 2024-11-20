@@ -5,7 +5,6 @@
 // Diagnostic::Diagnostic(Level level, ErrorCode code, Args&&... args)
 //     : level(level), code(code), message(fmt::format(getErrorMessage(code), std::forward<Args>(args)...)) {}
 
-
 void Diagnostic::addPrimaryLabel(const Span &span, const std::string &labelMessage)
 {
     primaryLabel = std::pair<Span, std::string>(span, labelMessage);
@@ -28,7 +27,11 @@ const std::vector<std::pair<Span, std::string>> &Diagnostic::getSecondaryLabels(
 
 const std::optional<std::string> &Diagnostic::getNoteMessage() const { return noteMessage; }
 
-const std::optional<std::string> &Diagnostic::getHelpMessage() const {return helpMessage; }
+const std::optional<std::string> &Diagnostic::getHelpMessage() const { return helpMessage; }
+
+void Diagnostic::cancel() { cancelled = true; }
+
+bool Diagnostic::isCancelled() { return cancelled; }
 
 const std::string getErrorMessage(ErrorCode code)
 {

@@ -53,7 +53,7 @@ int main(int argc, char *argv[])
         std::vector<Token> tokens = tokenizer.tokenize();
         tokens = preprocessor.preprocess(tokens);
         Parser parser(parseSess, tokens);
-        ASTPtr root = parser.parse();
+        ASTExpressionPtr root = parser.parse();
         printAST(root, 0);
 
     } else {
