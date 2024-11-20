@@ -32,9 +32,15 @@ std::shared_ptr<Diagnostic> Parser::reportExpectedExpression(const Token &token)
         diag.addPrimaryLabel(token.span, "");
         parseSess->dcx->addDiagnostic(diag);
     } else {
-
-        Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_EXPRESSION,
-                        token.type == TokenType::EndOfLine ? "\\n" : token.lexeme);
+        std::string lexeme;
+        if (token.type == TokenType::EndOfLine) {
+            lexeme = "\\n";
+        } else if (token.type == TokenType::EndOfFile) {
+            lexeme = "End Of File";
+        } else {
+            lexeme = token.lexeme;
+        }
+        Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_EXPRESSION, lexeme);
         diag.addPrimaryLabel(token.span, "");
 
         // 10 * MOD 3 - causes unexpected MOD

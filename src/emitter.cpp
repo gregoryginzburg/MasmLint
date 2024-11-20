@@ -227,8 +227,8 @@ void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, std::string lineCon
     for (const auto &[span, labelMsg] : labels) {
         std::filesystem::path filePath;
         std::size_t startLine, startColumn, endLine, endColumn;
-        sourceMap->spanToStartLocation(span, filePath, startLine, startColumn);
-        sourceMap->spanToEndLocation(span, filePath, endLine, endColumn);
+        sourceMap->spanToStartPosition(span, filePath, startLine, startColumn);
+        sourceMap->spanToEndPosition(span, filePath, endLine, endColumn);
 
         if (startLine != lineNumberZeroBased || endLine != lineNumberZeroBased) {
             LOG_DETAILED_ERROR("In printLabelsForLine label span isn't the same as specified");
@@ -383,25 +383,56 @@ void Emitter::printNote(std::shared_ptr<Diagnostic> diag)
 
 void Emitter::printHelp(std::shared_ptr<Diagnostic> /*diag*/) {}
 
-void Emitter::emitJSON(const std::vector<std::shared_ptr<Diagnostic>> &diagnostics)
-{
-    json arr = json::array();
+void Emitter::emitJSON(const std::vector<std::shared_ptr<Diagnostic>> &diagnostics) {
+    nlohmann::json output = nlohmann::json::array();
+
     for (const auto &diag : diagnostics) {
-        json item;
-        item["message"] = diag->getMessage();
-        item["severity"] = static_cast<int>(diag->getLevel());
+        nlohmann::json diagJson;
 
-        for (const auto &[span, labelMsg] : diag->getSecondaryLabels()) {
-            int startLine, startChar, endLine, endChar;
-            spanToLineChar(span, startLine, startChar, endLine, endChar);
+        diagJson["message"] = diag->getMessage();
+        diagJson["severity"] = diag->getLevel() == Diagnostic::Level::Error ? "Error" :
+                               diag->getLevel() == Diagnostic::Level::Warning ? "Warning" : "Info";
+        diagJson["code"] = static_cast<int>(diag->getCode());
 
-            item["range"] = {{"start", {{"line", startLine}, {"character", startChar}}},
-                             {"end", {{"line", endLine}, {"character", endChar}}}};
+        // Primary label
+        const auto &primaryLabel = diag->getPrimaryLabel();
+        nlohmann::json primaryLabelJson;
+
+        std::filesystem::path filePath;
+        std::size_t lineStart, characterStart;
+        sourceMap->spanToLocation(primaryLabel.first, filePath, lineStart, characterStart);
+
+        std::size_t lineEnd, characterEnd;
+        sourceMap->spanToEndLocation(primaryLabel.first, filePath, lineEnd, characterEnd);
+
+        primaryLabelJson["span"]["start"]["line"] = lineStart;
+        primaryLabelJson["span"]["start"]["character"] = characterStart;
+        primaryLabelJson["span"]["end"]["line"] = lineEnd;
+        primaryLabelJson["span"]["end"]["character"] = characterEnd;
+        primaryLabelJson["message"] = primaryLabel.second;
+        diagJson["primaryLabel"] = primaryLabelJson;
+
+        // Secondary labels
+        nlohmann::json secondaryLabelsJson = nlohmann::json::array();
+        for (const auto &secondaryLabel : diag->getSecondaryLabels()) {
+            nlohmann::json secondaryLabelJson;
+
+            sourceMap->spanToLocation(secondaryLabel.first, filePath, lineStart, characterStart);
+            sourceMap->spanToEndLocation(secondaryLabel.first, filePath, lineEnd, characterEnd);
+
+            secondaryLabelJson["span"]["start"]["line"] = lineStart;
+            secondaryLabelJson["span"]["start"]["character"] = characterStart;
+            secondaryLabelJson["span"]["end"]["line"] = lineEnd;
+            secondaryLabelJson["span"]["end"]["character"] = characterEnd;
+            secondaryLabelJson["message"] = secondaryLabel.second;
+            secondaryLabelsJson.push_back(secondaryLabelJson);
         }
+        diagJson["secondaryLabels"] = secondaryLabelsJson;
 
-        arr.push_back(item);
+        output.push_back(diagJson);
     }
-    std::string result = arr.dump(4);
+
+    std::string result = output.dump(2);
     out.write(result.data(), result.size());
 }
 
@@ -411,16 +442,21 @@ void Emitter::spanToLineChar(const Span &span, int &startLine, int &startChar, i
     std::size_t lineNumberZeroBased, columnNumberZeroBased;
 
     sourceMap->spanToLocation(span, filePath, lineNumberZeroBased, columnNumberZeroBased);
-    startLine = endLine = static_cast<int>(lineNumberZeroBased);
+    startLine = static_cast<int>(lineNumberZeroBased);
     startChar = static_cast<int>(columnNumberZeroBased);
+    sourceMap->spanToEndLocation(span, filePath, lineNumberZeroBased, columnNumberZeroBased);
+    endLine = static_cast<int>(lineNumberZeroBased);
+    endChar = static_cast<int>(columnNumberZeroBased);
 
-    auto sourceFile = sourceMap->lookupSourceFile(span.lo);
-    if (sourceFile) {
-        std::string lineContent = sourceFile->getLine(lineNumberZeroBased);
-        std::size_t lineStartByte = sourceFile->getLineStart(lineNumberZeroBased);
-        std::size_t byteOffsetInLine = span.lo - lineStartByte;
-        std::size_t byteLength = span.hi - span.lo;
-        std::string underlineText = lineContent.substr(byteOffsetInLine, byteLength);
-        endChar = startChar + calculateCodePoints(underlineText) + 1;
-    }
+    // startChar = static_cast<int>(columnNumberZeroBased);
+
+    // auto sourceFile = sourceMap->lookupSourceFile(span.lo);
+    // if (sourceFile) {
+    //     std::string lineContent = sourceFile->getLine(lineNumberZeroBased);
+    //     std::size_t lineStartByte = sourceFile->getLineStart(lineNumberZeroBased);
+    //     std::size_t byteOffsetInLine = span.lo - lineStartByte;
+    //     std::size_t byteLength = span.hi - span.lo;
+    //     std::string underlineText = lineContent.substr(byteOffsetInLine, byteLength);
+    //     endChar = startChar + calculateCodePoints(underlineText) + 1;
+    // }
 }

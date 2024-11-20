@@ -196,7 +196,22 @@ void SourceMap::spanToLocation(const Span &span, std::filesystem::path &outPath,
     }
 }
 
-void SourceMap::spanToStartLocation(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
+void SourceMap::spanToEndLocation(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
+                       std::size_t &outColumn) const
+{
+    auto file = lookupSourceFile(span.hi - 1);
+    if (file) {
+        outPath = file->getPath();
+        outLine = file->getLineNumber(span.hi - 1);     // Zero-based
+        outColumn = file->getColumnNumber(span.hi - 1) + 1; // Zero-based
+    } else {
+        outPath.clear();
+        outLine = 0;
+        outColumn = 0;
+    }
+}
+
+void SourceMap::spanToStartPosition(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
                                     std::size_t &outColumn) const
 {
     auto file = lookupSourceFile(span.lo);
@@ -211,7 +226,7 @@ void SourceMap::spanToStartLocation(const Span &span, std::filesystem::path &out
     }
 }
 
-void SourceMap::spanToEndLocation(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
+void SourceMap::spanToEndPosition(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
                                   std::size_t &outColumn) const
 {
     auto file = lookupSourceFile(span.hi - 1);

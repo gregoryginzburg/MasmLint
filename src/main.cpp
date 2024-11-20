@@ -14,6 +14,8 @@
 
 #ifdef _WIN32
 #    include <windows.h>
+#    include <io.h>
+#    include <fcntl.h>
 #endif
 
 void setupConsoleForUtf8()
@@ -28,24 +30,38 @@ int main(int argc, char *argv[])
 {
     setupConsoleForUtf8();
 
+    std::filesystem::path filename = "examples/test1.asm";
     bool jsonOutput = false;
+    bool readFromStdin = false;
     for (int i = 1; i < argc; ++i) {
         if (std::string(argv[i]) == "--json") {
             jsonOutput = true;
-            break;
+        } else if (std::string(argv[i]) == "--stdin") {
+            readFromStdin = true;
+        } else {
+            filename = std::string(argv[i]);
         }
     }
     // TODO: Remove in release
     std::filesystem::path new_path = "C:\\Users\\grigo\\Documents\\MasmLint";
     std::filesystem::current_path(new_path);
 
-    std::filesystem::path filename = "examples/test1.asm";
-    if (argc > 2) {
-        filename = argv[2];
-    }
-
     auto parseSess = std::make_shared<ParseSession>();
-    auto sourceFile = parseSess->sourceMap->loadFile(filename);
+    std::shared_ptr<SourceFile> sourceFile;
+    if (readFromStdin) {
+#ifdef _WIN32
+        _setmode(_fileno(stdin), _O_BINARY);
+#endif
+        std::string sourceContent;
+        sourceContent.assign(std::istreambuf_iterator<char>(std::cin), std::istreambuf_iterator<char>());
+        // turn of the hack for json, because vscode can underline EOF
+        if (!jsonOutput) {
+            sourceContent += "\n"; // hack for not having to underline EOF
+        }
+        sourceFile = parseSess->sourceMap->newSourceFile(filename, sourceContent);
+    } else {
+        sourceFile = parseSess->sourceMap->loadFile(filename);
+    }
 
     if (sourceFile) {
         Tokenizer tokenizer(parseSess, sourceFile->getSource());
@@ -60,7 +76,7 @@ int main(int argc, char *argv[])
         SemanticAnalyzer semanticAnalyzer(parseSess, ast);
         semanticAnalyzer.analyze();
 
-        printAST(ast, 0);
+        // printAST(ast, 0);
     } else {
         Diagnostic diag(Diagnostic::Level::Error, ErrorCode::FAILED_TO_OPEN_FILE, filename.string());
         parseSess->dcx->addDiagnostic(diag);

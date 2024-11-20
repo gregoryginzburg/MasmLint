@@ -29,7 +29,7 @@ public:
     static std::size_t countCodePoints(const std::string &str, std::size_t startByte, std::size_t endByte);
 
 private:
-    std::filesystem::path path;          
+    std::filesystem::path path;
     std::string src;                     // Source code content
     std::size_t startPos;                // Starting position in the global source map (including startPos)
     std::size_t endPos;                  // Ending position in the global source map (excluding endPos)
@@ -55,12 +55,15 @@ public:
     void spanToLocation(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
                         std::size_t &outColumn) const;
 
-    // Column doesn't is only position, TODO: refactor
-    void spanToStartLocation(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
-                        std::size_t &outColumn) const;
-
     void spanToEndLocation(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
-                        std::size_t &outColumn) const;
+                           std::size_t &outColumn) const;
+
+    // Column is returned as a byte offset, TODO: refactor?
+    void spanToStartPosition(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
+                             std::size_t &outColumn) const;
+
+    void spanToEndPosition(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
+                           std::size_t &outColumn) const;
 
     // Retrieves the source code snippet corresponding to a span
     std::string spanToSnippet(const Span &span) const;

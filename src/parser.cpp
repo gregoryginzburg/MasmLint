@@ -46,7 +46,7 @@ bool Parser::match(TokenType type) { return currentToken.type == type; }
 
 bool Parser::match(TokenType type, const std::string &value)
 {
-    return currentToken.type == type && currentToken.lexeme == value;
+    return currentToken.type == type && stringToUpper(currentToken.lexeme) == value;
 }
 
 // Can't consume EndOfFile ?
@@ -230,11 +230,14 @@ ASTExpressionPtr Parser::parsePrimaryExpression()
         advance();
         // (var var) - can't be
         std::string curentTokenLexemeUpper = stringToUpper(currentToken.lexeme);
-        // after leaf when there'are unclosed parenthesis `()` or `[]` must be operator or closing `)` or `]`
+        // after leaf when there'are unclosed parenthesis `()` or `[]` must be operator (binary operator)
+        // or closing `)` or `]`
         // or there might be `(` or `[` - implicit plus for index operator
         if (!expressionDelimitersStack.empty() && currentToken.type != TokenType::CloseSquareBracket &&
             currentToken.type != TokenType::CloseBracket && currentToken.type != TokenType::OpenSquareBracket &&
-            currentToken.type != TokenType::OpenBracket && currentToken.type != TokenType::Operator &&
+            currentToken.type != TokenType::OpenBracket && curentTokenLexemeUpper != "+" &&
+            curentTokenLexemeUpper != "-" && curentTokenLexemeUpper != "*" && curentTokenLexemeUpper != "/" &&
+            curentTokenLexemeUpper != "/" && curentTokenLexemeUpper != "PTR" && curentTokenLexemeUpper != "." &&
             curentTokenLexemeUpper != "SHL" && curentTokenLexemeUpper != "SHR") {
 
             auto diag = reportExpectedOperatorOrClosingDelimiter(currentToken);
