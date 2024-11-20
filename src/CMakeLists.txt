@@ -11,6 +11,7 @@ set(SOURCES_LIST
     emitter.cpp
     diag_ctxt.cpp
     parser_errors_reporting.cpp
+    semantic_analyzer.cpp
     
 )
 
@@ -31,6 +32,7 @@ set(HEADERS_LIST
     error_codes.h
     tokenize.h
     ast.h
+    semantic_analyzer.h
 )
 
 add_library(masmlint_lib ${SOURCES_LIST} ${HEADERS_LIST})

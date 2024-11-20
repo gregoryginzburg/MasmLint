@@ -5,6 +5,7 @@
 #include "session.h"
 #include "error_codes.h"
 #include "ast.h"
+#include "semantic_analyzer.h"
 
 #include <iostream>
 #include <memory>
@@ -47,15 +48,19 @@ int main(int argc, char *argv[])
     auto sourceFile = parseSess->sourceMap->loadFile(filename);
 
     if (sourceFile) {
-        auto tokenizer = Tokenizer(parseSess, sourceFile->getSource());
-        auto preprocessor = Preprocessor(parseSess);
-
+        Tokenizer tokenizer(parseSess, sourceFile->getSource());
         std::vector<Token> tokens = tokenizer.tokenize();
-        tokens = preprocessor.preprocess(tokens);
-        Parser parser(parseSess, tokens);
-        ASTExpressionPtr root = parser.parse();
-        printAST(root, 0);
 
+        Preprocessor preprocessor(parseSess, tokens);
+        std::vector<Token> preprocessedTokens = preprocessor.preprocess();
+
+        Parser parser(parseSess, preprocessedTokens);
+        ASTPtr ast = parser.parse();
+
+        SemanticAnalyzer semanticAnalyzer(parseSess, ast);
+        semanticAnalyzer.analyze();
+
+        printAST(ast, 0);
     } else {
         Diagnostic diag(Diagnostic::Level::Error, ErrorCode::FAILED_TO_OPEN_FILE, filename.string());
         parseSess->dcx->addDiagnostic(diag);

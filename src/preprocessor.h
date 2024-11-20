@@ -11,9 +11,10 @@
 
 class Preprocessor {
 public:
-    Preprocessor(std::shared_ptr<ParseSession> parseSess) : parseSess(parseSess) {}
-    std::vector<Token> preprocess(const std::vector<Token> &tokens);
+    Preprocessor(std::shared_ptr<ParseSession> parseSess, const std::vector<Token> &tokens);
+    std::vector<Token> preprocess();
 
 private:
     std::shared_ptr<ParseSession> parseSess;
+    const std::vector<Token> &tokens;
 };

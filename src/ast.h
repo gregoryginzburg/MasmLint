@@ -10,6 +10,7 @@ public:
 
 class ASTExpression : public AST {};
 
+using ASTPtr = std::shared_ptr<AST>;
 using ASTExpressionPtr = std::shared_ptr<ASTExpression>;
 
 class BinaryOperator : public ASTExpression {
@@ -72,7 +73,7 @@ public:
     std::shared_ptr<Diagnostic> diag;
 };
 
-inline void printAST(const ASTExpressionPtr &node, int indent)
+inline void printAST(ASTPtr node, int indent)
 {
     if (!node)
         return;

@@ -4,7 +4,9 @@
 #include <algorithm>
 #include <stdexcept>
 
-std::vector<Token> Preprocessor::preprocess(const std::vector<Token> &tokens)
+Preprocessor::Preprocessor(std::shared_ptr<ParseSession> parseSess, const std::vector<Token> &tokens) : parseSess(parseSess), tokens(tokens) {}
+
+std::vector<Token> Preprocessor::preprocess()
 {
     // TODO: implement preprocessing
     return tokens;
