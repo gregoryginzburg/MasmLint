@@ -15,21 +15,32 @@ Parser::Parser(std::shared_ptr<ParseSession> parseSession, const std::vector<Tok
 
 ASTExpressionPtr Parser::parse()
 {
-    return parseExpression();
-    // currentIndex = 0;
-    // while (currentIndex < tokens.size()) {
-    //     advance();
-    //     if (currentToken.type == TokenType::EndOfFile) {
-    //         return; // End parsing when EOF is reached
-    //     }
-    //     parseLine();
-    // }
+    ASTExpressionPtr ast;
+    currentIndex = 0;
+    while (true) {
+        ast = parseLine();
+        if (currentToken.type == TokenType::EndOfFile) {
+            return ast; // End parsing when EOF is reached
+        }
+    }
+    return ast;
 }
 
 ASTExpressionPtr Parser::parseLine()
 {
-    // reset panicLine, delimitersStack, ...
-    return nullptr;
+    // reset panicLine
+    panicLine = false;
+    ASTExpressionPtr expr = parseExpression();
+
+    while (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
+        advance();
+    }
+    if (currentToken.type == TokenType::EndOfFile) {
+        return expr;
+    }
+    consume(TokenType::EndOfLine);
+
+    return expr;
 }
 
 // Only advance when matched a not EndOfFile

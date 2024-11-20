@@ -76,7 +76,9 @@ int main(int argc, char *argv[])
         SemanticAnalyzer semanticAnalyzer(parseSess, ast);
         semanticAnalyzer.analyze();
 
-        // printAST(ast, 0);
+        if (!jsonOutput) {
+            printAST(ast, 0);
+        }
     } else {
         Diagnostic diag(Diagnostic::Level::Error, ErrorCode::FAILED_TO_OPEN_FILE, filename.string());
         parseSess->dcx->addDiagnostic(diag);

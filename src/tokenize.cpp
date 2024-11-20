@@ -44,17 +44,18 @@ std::vector<Token> Tokenizer::tokenize()
         if (pos >= length)
             break;
 
+        if (src[pos] == '\n') {
+            tokens.emplace_back(Token{TokenType::EndOfLine, "", Span(pos, pos + 1, context)});
+            ++pos;
+            continue; // Skip calling getNextToken() after processing '\n'
+        }
+
         Token token = getNextToken();
         // if (token.type == TokenType::Invalid) {
         //     // Stop tokenizing on error
         //     break;
         // }
         tokens.push_back(token);
-
-        if (pos < length && (src[pos] == '\n' || src[pos] == '\r')) {
-            tokens.emplace_back(Token{TokenType::EndOfLine, "", Span(pos, pos + 1, context)});
-            ++pos;
-        }
     }
 
     // because files always ends with a '\n', we can make EndOfFile span equal to the last '\n'
@@ -74,8 +75,7 @@ std::vector<Token> Tokenizer::tokenize()
 
 void Tokenizer::skipWhitespace()
 {
-    // TODO fix isspace to handle utf8
-    while (pos < src.size() && isspace(src[pos])) {
+    while (pos < src.size() && std::isspace(static_cast<unsigned char>(src[pos])) && src[pos] != '\n') {
         ++pos;
     }
 }
