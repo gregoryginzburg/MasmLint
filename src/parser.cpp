@@ -13,17 +13,18 @@ Parser::Parser(std::shared_ptr<ParseSession> parseSession, const std::vector<Tok
     currentToken = tokens[currentIndex];
 }
 
-ASTExpressionPtr Parser::parse()
+ASTPtr Parser::parse()
 {
-    ASTExpressionPtr ast;
+    std::vector<ASTExpressionPtr> expressions;
     currentIndex = 0;
     while (true) {
-        ast = parseLine();
+        ASTExpressionPtr expr = parseLine();
+        expressions.push_back(expr);
         if (currentToken.type == TokenType::EndOfFile) {
-            return ast; // End parsing when EOF is reached
+            return std::make_shared<Program>(expressions);
         }
     }
-    return ast;
+    return std::make_shared<Program>(expressions);
 }
 
 ASTExpressionPtr Parser::parseLine()
@@ -258,9 +259,10 @@ ASTExpressionPtr Parser::parsePrimaryExpression()
             curentTokenLexemeUpper != "/" && curentTokenLexemeUpper != "PTR" && curentTokenLexemeUpper != "." &&
             curentTokenLexemeUpper != "SHL" && curentTokenLexemeUpper != "SHR") {
 
-            // try to distinct between `(var var` and `(1 + 2`
+            // try to distinct between `(var var` and `(1 + 2` or `(1 + 2,
             // when after var there aren't any vars and only possible closing things and then endofline -
-            if (currentToken.type == TokenType::EndOfLine || currentToken.type == TokenType::EndOfFile) {
+            if (currentToken.type == TokenType::EndOfLine || currentToken.type == TokenType::EndOfFile ||
+                currentToken.type == TokenType::Comma || currentToken.type == TokenType::OpenAngleBracket) {
                 auto diag = reportUnclosedDelimiterError(currentToken);
                 return std::make_shared<InvalidExpression>(diag);
             }

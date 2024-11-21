@@ -11,6 +11,15 @@ void SemanticAnalyzer::analyze() { visit(ast); }
 
 void SemanticAnalyzer::visit(ASTPtr node)
 {
+    if (auto program = std::dynamic_pointer_cast<Program>(node)) {
+        for (auto expr : program->expressions) {
+            visitExpression(expr);
+        }
+    }
+}
+
+void SemanticAnalyzer::visitExpression(ASTExpressionPtr node)
+{
     if (auto binaryOp = std::dynamic_pointer_cast<BinaryOperator>(node)) {
         visitBinaryOperator(binaryOp);
     } else if (auto unaryOp = std::dynamic_pointer_cast<UnaryOperator>(node)) {
@@ -42,15 +51,7 @@ void SemanticAnalyzer::visitLeaf(std::shared_ptr<Leaf> node)
 {
     // Check if the identifier exists in the symbol table
     if (node->token.type == TokenType::Identifier) {
-        // Symbol *symbol = symbolTable->findSymbol(node->token.lexeme);
-        // if (!symbol) {
-        //     // Report an undefined symbol error
-        //     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::UNDEFINED_SYMBOL, node->token.lexeme);
-        //     diag.addPrimaryLabel(node->token.span, "Symbol not defined");
-        //     diagCtxt->addDiagnostic(diag);
-        // } else {
-        //     // You can perform additional checks, such as type validation
-        // }
-    }
+        // TODO: check if symbol is defined
+        }
     // Handle other leaf types if needed
 }

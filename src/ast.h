@@ -13,6 +13,12 @@ class ASTExpression : public AST {};
 using ASTPtr = std::shared_ptr<AST>;
 using ASTExpressionPtr = std::shared_ptr<ASTExpression>;
 
+class Program : public AST {
+public:
+    Program(std::vector<ASTExpressionPtr> expressions) : expressions(expressions) {}
+    std::vector<ASTExpressionPtr> expressions;
+};
+
 class BinaryOperator : public ASTExpression {
 public:
     BinaryOperator(const Token &op, ASTExpressionPtr left, ASTExpressionPtr right) : op(op), left(left), right(right) {}
@@ -80,8 +86,12 @@ inline void printAST(ASTPtr node, int indent)
 
     // Create indentation string
     std::string indentation(indent, ' ');
-
-    if (auto binaryOp = std::dynamic_pointer_cast<BinaryOperator>(node)) {
+    if (auto program = std::dynamic_pointer_cast<Program>(node)) {
+        for (auto expr : program->expressions) {
+            std::cout << "Expr:\n";
+            printAST(expr, indent + 2);
+        }
+    } else if (auto binaryOp = std::dynamic_pointer_cast<BinaryOperator>(node)) {
         std::cout << indentation << "BinaryOperator (" << binaryOp->op.lexeme << ")\n";
         std::cout << indentation << "Left:\n";
         printAST(binaryOp->left, indent + 2);

@@ -12,6 +12,7 @@ public:
 
 private:
     void visit(ASTPtr node);
+    void visitExpression(ASTExpressionPtr node);
     void visitBinaryOperator(std::shared_ptr<BinaryOperator> node);
     void visitUnaryOperator(std::shared_ptr<UnaryOperator> node);
     void visitLeaf(std::shared_ptr<Leaf> node);

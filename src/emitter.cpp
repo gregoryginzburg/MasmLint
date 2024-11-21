@@ -375,7 +375,7 @@ void Emitter::printNote(std::shared_ptr<Diagnostic> diag)
         return;
     }
     std::string result =
-        fmt::format("{} {} {}: {}", std::string(spaceCount, ' '), format(fg(cyanColor), "="),
+        fmt::format("{} {} {}: {}\n", std::string(spaceCount, ' '), format(fg(cyanColor), "="),
                     format(fg(whiteColor) | fmt::emphasis::bold, "note"), diag->getNoteMessage().value());
 
     out.write(result.data(), result.size());

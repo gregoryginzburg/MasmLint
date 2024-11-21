@@ -12,7 +12,7 @@
 class Parser {
 public:
     Parser(std::shared_ptr<ParseSession> parseSession, const std::vector<Token> &tokens);
-    ASTExpressionPtr parse();
+    ASTPtr parse();
 
 private:
     std::shared_ptr<ParseSession> parseSess;
