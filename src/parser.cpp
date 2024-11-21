@@ -32,6 +32,13 @@ ASTExpressionPtr Parser::parseLine()
     panicLine = false;
     ASTExpressionPtr expr = parseExpression();
 
+    if (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
+        if (!panicLine) {
+            Diagnostic diag(Diagnostic::Level::Error, ErrorCode::UNEXPECTED_TOKEN, currentToken.lexeme);
+            diag.addPrimaryLabel(currentToken.span, "");
+            parseSess->dcx->addDiagnostic(diag);
+        }
+    }
     while (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
         advance();
     }
@@ -251,6 +258,12 @@ ASTExpressionPtr Parser::parsePrimaryExpression()
             curentTokenLexemeUpper != "/" && curentTokenLexemeUpper != "PTR" && curentTokenLexemeUpper != "." &&
             curentTokenLexemeUpper != "SHL" && curentTokenLexemeUpper != "SHR") {
 
+            // try to distinct between `(var var` and `(1 + 2`
+            // when after var there aren't any vars and only possible closing things and then endofline -
+            if (currentToken.type == TokenType::EndOfLine || currentToken.type == TokenType::EndOfFile) {
+                auto diag = reportUnclosedDelimiterError(currentToken);
+                return std::make_shared<InvalidExpression>(diag);
+            }
             auto diag = reportExpectedOperatorOrClosingDelimiter(currentToken);
             return std::make_shared<InvalidExpression>(diag);
         }

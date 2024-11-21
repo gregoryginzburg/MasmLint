@@ -2,12 +2,13 @@
     #define DEFINE_ERROR(code, msg)
 #endif
 
+DEFINE_ERROR(UNEXPECTED_TOKEN, "Unexpected token '{}'.") // TODO: delete
+
 // Fatal errors
 DEFINE_ERROR(FAILED_TO_OPEN_FILE, "Failed to open file '{}'.")
 
 
 // Tokenization error
-DEFINE_ERROR(UNEXPECTED_TOKEN, "Unexpected token '{}'.")
 DEFINE_ERROR(UNRECOGNIZED_SYMBOL, "Unrecognized symbol")
 DEFINE_ERROR(LINE_CONTINUATION_NOT_SUPPORTED, "Line continuations are not supported")
 DEFINE_ERROR(INVALID_NUMBER_FORMAT, "Invalid number format")
