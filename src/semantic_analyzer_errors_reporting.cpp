@@ -337,7 +337,7 @@ void SemanticAnalyzer::reportInvalidAddressExpression(ASTExpressionPtr node)
                                  "can't have registers in expressions outside of []"); // TODO: change label string
 
         } else if (auto implicitPlus = std::dynamic_pointer_cast<ImplicitPlusOperator>(errorNode)) {
-            diag.addPrimaryLabel(getExpressionSpan(implicitPlus), "can't add registers outside of []");
+            diag.addPrimaryLabel(getExpressionSpan(implicitPlus), "can't implicitly add registers outside of []");
         }
     }
 
@@ -506,10 +506,11 @@ void SemanticAnalyzer::reportBinaryMinusOperatorIncorrectArgument(std::shared_pt
 
 void SemanticAnalyzer::warnTypeReturnsZero(std::shared_ptr<UnaryOperator> node)
 {
-    if (panicLine) {
-        return;
-    }
-    panicLine = true;
+    // TODO: why underlines every line without this
+    // if (panicLine) {
+    //     return;
+    // }
+    // panicLine = true;
     // when reprting warnings don't need to set panicLine to true
     Diagnostic diag(Diagnostic::Level::Warning, ErrorCode::TYPE_RETURNS_ZERO);
     diag.addPrimaryLabel(node->op.span, "");

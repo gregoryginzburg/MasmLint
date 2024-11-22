@@ -255,7 +255,7 @@ ASTExpressionPtr Parser::parsePrimaryExpression()
             currentToken.type != TokenType::CloseBracket && currentToken.type != TokenType::OpenSquareBracket &&
             currentToken.type != TokenType::OpenBracket && curentTokenLexemeUpper != "+" &&
             curentTokenLexemeUpper != "-" && curentTokenLexemeUpper != "*" && curentTokenLexemeUpper != "/" &&
-            curentTokenLexemeUpper != "/" && curentTokenLexemeUpper != "PTR" && curentTokenLexemeUpper != "." &&
+            curentTokenLexemeUpper != "PTR" && curentTokenLexemeUpper != "." && curentTokenLexemeUpper != "MOD" &&
             curentTokenLexemeUpper != "SHL" && curentTokenLexemeUpper != "SHR") {
 
             // try to distinct between `(var var` and `(1 + 2` or `(1 + 2,

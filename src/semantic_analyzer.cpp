@@ -190,8 +190,18 @@ void SemanticAnalyzer::visitBinaryOperator(std::shared_ptr<BinaryOperator> node,
                 node->constantValue = right->constantValue;
                 node->isRelocatable = right->isRelocatable;
                 node->type = right->type;
-                node->size = OperandSize(leaf->token.lexeme, 4); // TODO: get size from right id symbol table
-                node->registers = left->registers;
+                // TODO: get size from right id symbol table
+                std::string typeOperand = stringToUpper(leaf->token.lexeme);
+                if (typeOperand == "BYTE") {
+                    node->size = OperandSize("BYTE", 1);
+                } else if (typeOperand == "WORD") {
+                    node->size = OperandSize("WORD", 2);
+                } else if (typeOperand == "DWORD") {
+                    node->size = OperandSize("DWORD", 4);
+                } else if (typeOperand == "QWORD") {
+                    node->size = OperandSize("QWORD", 8);
+                }
+                node->registers = right->registers;
                 return;
             }
         }
@@ -370,7 +380,12 @@ void SemanticAnalyzer::visitBinaryOperator(std::shared_ptr<BinaryOperator> node,
         // left is not an adress expression, right must be constant
         if (right->constantValue) {
             // everything fine
-            node->constantValue = left->constantValue;
+            if (left->constantValue) {
+                node->constantValue = left->constantValue.value() - right->constantValue.value();
+
+            } else {
+                node->constantValue = left->constantValue;
+            }
             node->isRelocatable = left->isRelocatable;
             if (left->type == OperandType::RegisterOperand) {
                 node->type = OperandType::UnfinishedMemoryOperand;
