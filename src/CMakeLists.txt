@@ -12,6 +12,7 @@ set(SOURCES_LIST
     diag_ctxt.cpp
     parser_errors_reporting.cpp
     semantic_analyzer.cpp
+    semantic_analyzer_errors_reporting.cpp
     
 )
 

@@ -1,5 +1,8 @@
 #ifndef DEFINE_ERROR
-    #define DEFINE_ERROR(code, msg)
+#    define DEFINE_ERROR(code, msg)
+#endif
+#ifndef DEFINE_WARNING
+#    define DEFINE_WARNING(code, msg)
 #endif
 
 DEFINE_ERROR(UNEXPECTED_TOKEN, "Unexpected token '{}'.") // TODO: delete
@@ -7,18 +10,34 @@ DEFINE_ERROR(UNEXPECTED_TOKEN, "Unexpected token '{}'.") // TODO: delete
 // Fatal errors
 DEFINE_ERROR(FAILED_TO_OPEN_FILE, "Failed to open file '{}'.")
 
-
 // Tokenization error
 DEFINE_ERROR(UNRECOGNIZED_SYMBOL, "Unrecognized symbol")
 DEFINE_ERROR(LINE_CONTINUATION_NOT_SUPPORTED, "Line continuations are not supported")
 DEFINE_ERROR(INVALID_NUMBER_FORMAT, "Invalid number format")
 DEFINE_ERROR(UNTERMINATED_STRING_LITERAL, "Unterminated string literal")
 
-
 // Syntax errors
 // Expression errors
 DEFINE_ERROR(UNCLOSED_DELIMITER, "This line contains an unclosed delimiter")
 DEFINE_ERROR(EXPECTED_EXPRESSION, "Expected expression, found `{}`")
-DEFINE_ERROR(UNEXPECTED_CLOSING_DELIMITER, "Unexpected closing delimiter: {}")
+DEFINE_ERROR(UNEXPECTED_CLOSING_DELIMITER, "Unexpected closing delimiter: `{}`")
 DEFINE_ERROR(EXCPECTED_OPERATOR_OR_CLOSING_DELIMITER, "Expected operator or closing delimiter")
+
 // Semantic errors
+// Expression errors
+DEFINE_ERROR(CONSTANT_TOO_LARGE, "Constant too large")
+DEFINE_ERROR(UNARY_OPERATOR_INCORRECT_ARGUMENT, "Incorrect argument in the unary operator `{}`")
+DEFINE_ERROR(DOT_OPERATOR_INCORRECT_ARGUMENT, "Incorrect argument in the binary operator `.`")
+DEFINE_ERROR(PTR_OPERATOR_INCORRECT_ARGUMENT, "Incorrect argument in the binary operator `PTR`")
+DEFINE_ERROR(DIVISION_BY_ZERO_IN_EXPRESSION, "Division by `0` in the expression")
+DEFINE_ERROR(INVALID_SCALE_VALUE, "Invalid scale value")
+DEFINE_ERROR(INCORRECT_INDEX_REGISTER, "Index register can't be `ESP`")
+DEFINE_ERROR(OTHER_BINARY_OPERATOR_INCORRECT_ARGUMENT, "Incorrect argument in the binary operator `{}`")
+DEFINE_ERROR(CANT_ADD_VARIABLES, "Can't {} add 2 variables")
+DEFINE_ERROR(INVALID_ADDRESS_EXPRESSION, "Invalid address expression")
+DEFINE_ERROR(MORE_THAN_TWO_REGISTERS, "Can't have more than 2 registers in an address expression with modificators")
+DEFINE_ERROR(MORE_THAN_ONE_SCALE, "Can't have more than 1 register with a scale in an address expression with modificators")
+DEFINE_ERROR(BINARY_MINUS_OPERATOR_INCORRECT_ARGUMENT, "Incorrect argument in the binary operator `-`")
+// Warnings
+// Expression warnings
+DEFINE_WARNING(TYPE_RETURNS_ZERO, "`TYPE` operator returns `0`")

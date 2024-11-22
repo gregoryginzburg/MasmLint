@@ -383,16 +383,23 @@ void Emitter::printNote(std::shared_ptr<Diagnostic> diag)
 
 void Emitter::printHelp(std::shared_ptr<Diagnostic> /*diag*/) {}
 
-void Emitter::emitJSON(const std::vector<std::shared_ptr<Diagnostic>> &diagnostics) {
+void Emitter::emitJSON(const std::vector<std::shared_ptr<Diagnostic>> &diagnostics)
+{
     nlohmann::json output = nlohmann::json::array();
 
     for (const auto &diag : diagnostics) {
         nlohmann::json diagJson;
 
         diagJson["message"] = diag->getMessage();
-        diagJson["severity"] = diag->getLevel() == Diagnostic::Level::Error ? "Error" :
-                               diag->getLevel() == Diagnostic::Level::Warning ? "Warning" : "Info";
+        diagJson["severity"] = diag->getLevel() == Diagnostic::Level::Error     ? "Error"
+                               : diag->getLevel() == Diagnostic::Level::Warning ? "Warning"
+                                                                                : "Info";
         diagJson["code"] = static_cast<int>(diag->getCode());
+        if (diag->getNoteMessage()) {
+            diagJson["note_message"] = diag->getNoteMessage().value();
+        } else {
+            diagJson["note_message"] = "";
+        }
 
         // Primary label
         const auto &primaryLabel = diag->getPrimaryLabel();

@@ -55,7 +55,9 @@ std::vector<Token> Tokenizer::tokenize()
         //     // Stop tokenizing on error
         //     break;
         // }
-        tokens.push_back(token);
+        if (token.type != TokenType::Comment) {
+            tokens.push_back(token);
+        }
     }
 
     // because files always ends with a '\n', we can make EndOfFile span equal to the last '\n'

@@ -41,6 +41,9 @@ const std::string getErrorMessage(ErrorCode code)
 #define DEFINE_ERROR(code, message)                                                                                    \
     case ErrorCode::code:                                                                                              \
         return message;
+#define DEFINE_WARNING(code, message)                                                                                  \
+    case ErrorCode::code:                                                                                              \
+        return message;
 #include "diagnostic_messages.def"
 #undef DEFINE_ERROR
     default:

@@ -36,6 +36,13 @@ struct Token {
     enum TokenType type;
     std::string lexeme;
     Span span;
+    bool operator<(const Token &other) const
+    {
+        if (span.lo != other.span.lo) {
+            return span.lo < other.span.lo;
+        }
+        return span.hi < other.span.hi;
+    }
 };
 
 class Tokenizer {
@@ -70,10 +77,10 @@ private:
     std::shared_ptr<ParseSession> psess;
 };
 
-inline std::string stringToUpper(const std::string& str)
+inline std::string stringToUpper(const std::string &str)
 {
     std::string upperStr = str;
     std::transform(upperStr.begin(), upperStr.end(), upperStr.begin(),
-                       [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+                   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
     return upperStr;
 }

@@ -63,6 +63,8 @@ void Parser::advance()
 
 bool Parser::match(TokenType type) { return currentToken.type == type; }
 
+bool Parser::match(const std::string &value) { return stringToUpper(currentToken.lexeme) == value; }
+
 bool Parser::match(TokenType type, const std::string &value)
 {
     return currentToken.type == type && stringToUpper(currentToken.lexeme) == value;
@@ -101,7 +103,7 @@ ASTExpressionPtr Parser::parseExpression()
 ASTExpressionPtr Parser::parseExpressionHelper()
 {
     ASTExpressionPtr term1 = parseMultiplicativeExpression();
-    while (match(TokenType::Operator, "+") || match(TokenType::Operator, "-")) {
+    while (match("+") || match("-")) {
         Token op = currentToken;
         advance();
         ASTExpressionPtr term2 = parseMultiplicativeExpression();
@@ -113,8 +115,7 @@ ASTExpressionPtr Parser::parseExpressionHelper()
 ASTExpressionPtr Parser::parseMultiplicativeExpression()
 {
     ASTExpressionPtr term1 = parseUnaryExpression();
-    while (match(TokenType::Operator, "*") || match(TokenType::Operator, "/") || match(TokenType::Operator, "MOD") ||
-           match(TokenType::Instruction, "SHL") || match(TokenType::Instruction, "SHR")) {
+    while (match("*") || match("/") || match("MOD") || match("SHL") || match("SHR")) {
         Token op = currentToken;
         advance();
         ASTExpressionPtr term2 = parseUnaryExpression();
@@ -126,8 +127,7 @@ ASTExpressionPtr Parser::parseMultiplicativeExpression()
 ASTExpressionPtr Parser::parseUnaryExpression()
 {
     std::vector<Token> operators;
-    while (match(TokenType::Operator, "+") || match(TokenType::Operator, "-") || match(TokenType::Operator, "OFFSET") ||
-           match(TokenType::Operator, "TYPE")) {
+    while (match("+") || match("-") || match("OFFSET") || match("TYPE")) {
         Token op = currentToken;
         operators.push_back(op);
         advance();
@@ -142,7 +142,7 @@ ASTExpressionPtr Parser::parseUnaryExpression()
 ASTExpressionPtr Parser::parsePostfixExpression()
 {
     ASTExpressionPtr term1 = parseMemberAccessExpression();
-    while (match(TokenType::Operator, "PTR")) {
+    while (match("PTR")) {
         Token op = currentToken;
         advance();
         ASTExpressionPtr term2 = parseMemberAccessExpression();
@@ -154,7 +154,7 @@ ASTExpressionPtr Parser::parsePostfixExpression()
 ASTExpressionPtr Parser::parseMemberAccessExpression()
 {
     ASTExpressionPtr term1 = parseHighPrecedenceUnaryExpression();
-    while (match(TokenType::Operator, ".")) {
+    while (match(".")) {
         Token op = currentToken;
         advance();
         ASTExpressionPtr term2 = parseHighPrecedenceUnaryExpression();
@@ -166,9 +166,8 @@ ASTExpressionPtr Parser::parseMemberAccessExpression()
 ASTExpressionPtr Parser::parseHighPrecedenceUnaryExpression()
 {
     std::vector<Token> operators;
-    while (match(TokenType::Operator, "LENGTH") || match(TokenType::Operator, "LENGTHOF") ||
-           match(TokenType::Operator, "SIZE") || match(TokenType::Operator, "SIZEOF") ||
-           match(TokenType::Operator, "WIDTH") || match(TokenType::Operator, "MASK")) {
+    while (match("LENGTH") || match("LENGTHOF") || match("SIZE") || match("SIZEOF") || match("WIDTH") ||
+           match("MASK")) {
         Token op = currentToken;
         operators.push_back(op);
         advance();
@@ -244,7 +243,7 @@ ASTExpressionPtr Parser::parsePrimaryExpression()
         expressionDelimitersStack.pop();
         return std::make_shared<SquareBrackets>(leftBracket, rightBracket.value(), expr);
     } else if (match(TokenType::Identifier) || match(TokenType::Number) || match(TokenType::StringLiteral) ||
-               match(TokenType::Register) || match(TokenType::QuestionMark, "$") || match(TokenType::Type)) {
+               match(TokenType::Register) || match(TokenType::Type) || match(TokenType::Dollar)) {
         Token token = currentToken;
         advance();
         // (var var) - can't be

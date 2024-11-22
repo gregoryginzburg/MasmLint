@@ -26,6 +26,7 @@ private:
 
     void advance();
     bool match(TokenType type);
+    bool match(const std::string &value);
     bool match(TokenType type, const std::string &value);
     std::optional<Token> consume(TokenType type);
     std::optional<Token> consume(TokenType type, const std::string &value);
