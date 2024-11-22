@@ -1,6 +1,14 @@
 // File: semantic_analyzer.cpp
 #include "semantic_analyzer.h"
 #include "log.h"
+#include <set>
+
+std::map<std::string, int> SemanticAnalyzer::registerSizes = {
+    {"AL", 1}, {"AX", 2},  {"EAX", 4}, {"BL", 1},  {"BX", 2},  {"EBX", 4}, {"CL", 1},
+    {"CX", 2}, {"ECX", 4}, {"DL", 1},  {"DX", 2},  {"EDX", 4}, {"SI", 2},  {"ESI", 4},
+    {"DI", 2}, {"EDI", 4}, {"BP", 2},  {"EBP", 4}, {"SP", 2},  {"ESP", 4}};
+
+std::map<int, std::string> SemanticAnalyzer::sizeValueToStr = {{1, "BYTE"}, {2, "WORD"}, {4, "DWORD"}};
 
 SemanticAnalyzer::SemanticAnalyzer(std::shared_ptr<ParseSession> parseSession, ASTPtr ast)
     : parseSess(parseSession), ast(ast)
@@ -66,13 +74,52 @@ void SemanticAnalyzer::visitSquareBrackets(std::shared_ptr<SquareBrackets> node,
     node->constantValue = operand->constantValue;
     node->isRelocatable = operand->isRelocatable;
     if (operand->type == OperandType::UnfinishedMemoryOperand) {
+        // check we only have 32 bit regsiters, and dont have 2 esp
+        // delay checking for this, because for (esp + esp) we want to report can have registers in expressions
+        // dont want to call this (reportInvalidAddressExpression())
+        bool implicit = false;
+        ASTExpressionPtr expr;
+        std::shared_ptr<ImplicitPlusOperator> implicitPlus;
+        if (expr = std::dynamic_pointer_cast<BinaryOperator>(operand)) {
+            implicit = false;
+        } else if (expr = std::dynamic_pointer_cast<ImplicitPlusOperator>(operand)) {
+            implicit = true;
+        } else {
+            LOG_DETAILED_ERROR("Unexpected operand type!\n");
+        }
+        bool non32bitRegister = false;
+        int espCount = 0;
+        for (const auto &[regToken, scale] : operand->registers) {
+            if (registerSizes[stringToUpper(regToken.lexeme)] != 4) {
+                non32bitRegister = true;
+            }
+            if (stringToUpper(regToken.lexeme) == "ESP") {
+                espCount += 1;
+            }
+        }
+
+        if (non32bitRegister) {
+            node->type = OperandType::InvalidOperand;
+            reportNon32bitRegister(expr, implicit);
+            return;
+        }
+        if (espCount == 2) {
+            node->type = OperandType::InvalidOperand;
+            reportTwoEsp(expr, implicit);
+            return;
+        }
         node->type = OperandType::MemoryOperand;
     } else if (operand->type == OperandType::RegisterOperand) {
         node->type = OperandType::MemoryOperand;
     } else {
         node->type = operand->type;
     }
-    node->size = std::nullopt;
+    if (operand->registers.empty()) {
+        node->size = operand->size;
+    } else {
+        // modifiactors reset known size
+        node->size = std::nullopt;
+    }
     node->registers = operand->registers;
 }
 
@@ -84,68 +131,66 @@ void SemanticAnalyzer::visitImplicitPlusOperator(std::shared_ptr<ImplicitPlusOpe
     auto left = node->left;
     auto right = node->right;
 
-    if (!(left->isRelocatable && right->isRelocatable)) {
-        // check that we have not more then 2 registers, and only one has scale (eax * 1) is counted as having scale
-        if (left->registers.size() + right->registers.size() <= 2) {
-            auto newRegisters = left->registers;
-            for (const auto &[regToken, scale] : right->registers) {
-                newRegisters[regToken] = scale;
-            }
-            // ensure only one has scale
-            int scaleCount = 0;
-            for (const auto &[regToken, scale] : newRegisters) {
-                if (newRegisters[regToken].has_value()) {
-                    scaleCount += 1;
-                }
-            }
-            if (scaleCount < 2) {
-                // everything now is correct
-                if (left->constantValue && right->constantValue) {
-                    node->constantValue = left->constantValue.value() + right->constantValue.value();
-                } else {
-                    node->constantValue = std::nullopt;
-                }
-                node->isRelocatable = left->isRelocatable || right->isRelocatable;
-
-                if (left->type == OperandType::ImmediateOperand && right->type == OperandType::ImmediateOperand) {
-                    node->type = OperandType::ImmediateOperand;
-                } else if (left->type == OperandType::RegisterOperand || right->type == OperandType::RegisterOperand) {
-                    node->type = OperandType::UnfinishedMemoryOperand;
-                } else if (left->type == OperandType::UnfinishedMemoryOperand ||
-                           right->type == OperandType::UnfinishedMemoryOperand) {
-                    node->type = OperandType::UnfinishedMemoryOperand;
-                } else if (left->type == OperandType::MemoryOperand || right->type == OperandType::MemoryOperand) {
-                    node->type = OperandType::MemoryOperand;
-                } else {
-                    // shouldn't happen (except in OperandType::InvalidOperand)
-                }
-
-                if (!left->size || !right->size) {
-                    node->size = std::nullopt;
-                } else {
-                    // TODO: report that operands have different sizes
-                    node->size = left->size;
-                }
-                node->registers = newRegisters;
-                return;
-            }
-            node->type = OperandType::InvalidOperand;
-            reportMoreThanOneScaleAfterAdd(node, true);
-            return;
-        }
+    if (left->isRelocatable && right->isRelocatable) {
+        node->type = OperandType::InvalidOperand;
+        reportCantAddVariables(node, true);
+        return;
+    }
+    // check that we have not more then 2 registers, and only one has scale (eax * 1) is counted as having scale
+    if (left->registers.size() + right->registers.size() > 2) {
         node->type = OperandType::InvalidOperand;
         reportMoreThanTwoRegistersAfterAdd(node, true);
         return;
     }
-    node->type = OperandType::InvalidOperand;
-    if (left->type == OperandType::UnfinishedMemoryOperand) {
-        reportInvalidAddressExpression(left);
-        return;
-    } else if (right->type == OperandType::UnfinishedMemoryOperand) {
-        reportInvalidAddressExpression(right);
+
+    auto newRegisters = left->registers;
+    for (const auto &[regToken, scale] : right->registers) {
+        newRegisters[regToken] = scale;
+    }
+    // ensure only one has scale
+    int scaleCount = 0;
+    for (const auto &[regToken, scale] : newRegisters) {
+        if (newRegisters[regToken].has_value()) {
+            scaleCount += 1;
+        }
+    }
+    if (scaleCount > 1) {
+        node->type = OperandType::InvalidOperand;
+        reportMoreThanOneScaleAfterAdd(node, true);
         return;
     }
-    reportCantAddVariables(node, true);
+
+    // check we only have 32 bit regsiters, and dont have 2 esp
+    // checking for this is delayed until operator []
+
+    if (left->constantValue && right->constantValue) {
+        node->constantValue = left->constantValue.value() + right->constantValue.value();
+    } else {
+        node->constantValue = std::nullopt;
+    }
+    node->isRelocatable = left->isRelocatable || right->isRelocatable;
+
+    if (left->type == OperandType::ImmediateOperand && right->type == OperandType::ImmediateOperand) {
+        node->type = OperandType::ImmediateOperand;
+    } else if (left->type == OperandType::RegisterOperand || right->type == OperandType::RegisterOperand) {
+        node->type = OperandType::UnfinishedMemoryOperand;
+    } else if (left->type == OperandType::UnfinishedMemoryOperand ||
+               right->type == OperandType::UnfinishedMemoryOperand) {
+        node->type = OperandType::UnfinishedMemoryOperand;
+    } else if (left->type == OperandType::MemoryOperand || right->type == OperandType::MemoryOperand) {
+        node->type = OperandType::MemoryOperand;
+    } else {
+        // shouldn't happen (except in OperandType::InvalidOperand)
+    }
+
+    if (!left->size || !right->size) {
+        node->size = std::nullopt;
+    } else {
+        // TODO: report that operands have different sizes
+        node->size = left->size;
+    }
+    node->registers = newRegisters;
+    return;
 }
 
 void SemanticAnalyzer::visitBinaryOperator(std::shared_ptr<BinaryOperator> node, ExpressionContext context)
@@ -158,8 +203,16 @@ void SemanticAnalyzer::visitBinaryOperator(std::shared_ptr<BinaryOperator> node,
     auto right = node->right;
 
     if (op == ".") {
-        if (!left->constantValue && left->type != OperandType::RegisterOperand &&
-            left->type != OperandType::UnfinishedMemoryOperand) {
+        if (left->type == OperandType::UnfinishedMemoryOperand) {
+            node->type = OperandType::InvalidOperand;
+            reportInvalidAddressExpression(left);
+            return;
+        } else if (right->type == OperandType::UnfinishedMemoryOperand) {
+            node->type = OperandType::InvalidOperand;
+            reportInvalidAddressExpression(right);
+            return;
+        }
+        if (left->type == OperandType::MemoryOperand) {
             std::shared_ptr<Leaf> leaf;
             if ((leaf = std::dynamic_pointer_cast<Leaf>(right)) && leaf->token.type == TokenType::Identifier) {
                 // TODO: check that left type has field and that field is valid
@@ -171,22 +224,22 @@ void SemanticAnalyzer::visitBinaryOperator(std::shared_ptr<BinaryOperator> node,
                 return;
             }
         }
-        node->type = OperandType::InvalidOperand;
+        reportDotOperatorIncorrectArgument(node);
+    } else if (op == "PTR") {
         if (left->type == OperandType::UnfinishedMemoryOperand) {
+            node->type = OperandType::InvalidOperand;
             reportInvalidAddressExpression(left);
             return;
         } else if (right->type == OperandType::UnfinishedMemoryOperand) {
+            node->type = OperandType::InvalidOperand;
             reportInvalidAddressExpression(right);
             return;
         }
-        reportDotOperatorIncorrectArgument(node);
-
-    } else if (op == "PTR") {
         std::shared_ptr<Leaf> leaf;
         // CRITICAL TODO: left can also be identifier, if it's a type symbol
         if ((leaf = std::dynamic_pointer_cast<Leaf>(left)) &&
             leaf->token.type == TokenType::Type /* !=TokenType::Identifier */) {
-            if (right->type != OperandType::UnfinishedMemoryOperand && right->type != OperandType::RegisterOperand) {
+            if (right->type != OperandType::RegisterOperand) {
                 node->constantValue = right->constantValue;
                 node->isRelocatable = right->isRelocatable;
                 node->type = right->type;
@@ -205,16 +258,18 @@ void SemanticAnalyzer::visitBinaryOperator(std::shared_ptr<BinaryOperator> node,
                 return;
             }
         }
-        node->type = OperandType::InvalidOperand;
+        reportPtrOperatorIncorrectArgument(node);
+    } else if (op == "*" || op == "/" || op == "MOD" || op == "SHL" || op == "SHR") {
+        // can check this immediately cause eax * 4, eax is RegisterOperand
         if (left->type == OperandType::UnfinishedMemoryOperand) {
+            node->type = OperandType::InvalidOperand;
             reportInvalidAddressExpression(left);
             return;
         } else if (right->type == OperandType::UnfinishedMemoryOperand) {
+            node->type = OperandType::InvalidOperand;
             reportInvalidAddressExpression(right);
             return;
         }
-        reportPtrOperatorIncorrectArgument(node);
-    } else if (op == "*" || op == "/" || op == "MOD" || op == "SHL" || op == "SHR") {
         // handle eax * 4
         if (op == "*") {
             if (left->constantValue && right->type == OperandType::RegisterOperand ||
@@ -285,80 +340,85 @@ void SemanticAnalyzer::visitBinaryOperator(std::shared_ptr<BinaryOperator> node,
             node->registers = left->registers;
             return;
         }
-        node->type = OperandType::InvalidOperand;
-        if (left->type == OperandType::UnfinishedMemoryOperand) {
-            reportInvalidAddressExpression(left);
-            return;
-        } else if (right->type == OperandType::UnfinishedMemoryOperand) {
-            reportInvalidAddressExpression(right);
-            return;
-        }
+
         reportOtherBinaryOperatorIncorrectArgument(node);
     } else if (op == "+") {
-        if (!(left->isRelocatable && right->isRelocatable)) {
-            // check that we have not more then 2 registers, and only one has scale (eax * 1) is counted as having scale
-            if (left->registers.size() + right->registers.size() <= 2) {
-                auto newRegisters = left->registers;
-                for (const auto &[regToken, scale] : right->registers) {
-                    newRegisters[regToken] = scale;
-                }
-                // ensure only one has scale
-                int scaleCount = 0;
-                for (const auto &[regToken, scale] : newRegisters) {
-                    if (newRegisters[regToken].has_value()) {
-                        scaleCount += 1;
-                    }
-                }
-                if (scaleCount < 2) {
-                    // everything now is correct
-                    if (left->constantValue && right->constantValue) {
-                        node->constantValue = left->constantValue.value() + right->constantValue.value();
-                    } else {
-                        node->constantValue = std::nullopt;
-                    }
-                    node->isRelocatable = left->isRelocatable || right->isRelocatable;
-
-                    if (left->type == OperandType::ImmediateOperand && right->type == OperandType::ImmediateOperand) {
-                        node->type = OperandType::ImmediateOperand;
-                    } else if (left->type == OperandType::RegisterOperand ||
-                               right->type == OperandType::RegisterOperand) {
-                        node->type = OperandType::UnfinishedMemoryOperand;
-                    } else if (left->type == OperandType::UnfinishedMemoryOperand ||
-                               right->type == OperandType::UnfinishedMemoryOperand) {
-                        node->type = OperandType::UnfinishedMemoryOperand;
-                    } else if (left->type == OperandType::MemoryOperand || right->type == OperandType::MemoryOperand) {
-                        node->type = OperandType::MemoryOperand;
-                    } else {
-                        // shouldn't happen (except in OperandType::InvalidOperand)
-                    }
-
-                    if (!left->size || !right->size) {
-                        node->size = std::nullopt;
-                    } else {
-                        // TODO: report that operands have different sizes
-                        node->size = left->size;
-                    }
-                    node->registers = newRegisters;
-                    return;
-                }
-                node->type = OperandType::InvalidOperand;
-                reportMoreThanOneScaleAfterAdd(node, false);
-                return;
-            }
+        if (left->isRelocatable && right->isRelocatable) {
+            node->type = OperandType::InvalidOperand;
+            reportCantAddVariables(node, false);
+            return;
+        }
+        // check that we have not more then 2 registers, and only one has scale (eax * 1) is counted as having scale
+        if (left->registers.size() + right->registers.size() > 2) {
             node->type = OperandType::InvalidOperand;
             reportMoreThanTwoRegistersAfterAdd(node, false);
             return;
         }
-        node->type = OperandType::InvalidOperand;
-        if (left->type == OperandType::UnfinishedMemoryOperand) {
-            reportInvalidAddressExpression(left);
-            return;
-        } else if (right->type == OperandType::UnfinishedMemoryOperand) {
-            reportInvalidAddressExpression(right);
+
+        auto newRegisters = left->registers;
+        for (const auto &[regToken, scale] : right->registers) {
+            newRegisters[regToken] = scale;
+        }
+        // ensure only one has scale
+        int scaleCount = 0;
+        for (const auto &[regToken, scale] : newRegisters) {
+            if (newRegisters[regToken].has_value()) {
+                scaleCount += 1;
+            }
+        }
+        if (scaleCount > 1) {
+            node->type = OperandType::InvalidOperand;
+            reportMoreThanOneScaleAfterAdd(node, false);
             return;
         }
-        reportCantAddVariables(node, false);
+        // check we only have 32 bit regsiters, and dont have 2 esp
+        // checking for this is delayed until operator []
+        if (left->constantValue && right->constantValue) {
+            node->constantValue = left->constantValue.value() + right->constantValue.value();
+        } else {
+            node->constantValue = std::nullopt;
+        }
+        node->isRelocatable = left->isRelocatable || right->isRelocatable;
+
+        if (left->type == OperandType::ImmediateOperand && right->type == OperandType::ImmediateOperand) {
+            node->type = OperandType::ImmediateOperand;
+        } else if (left->type == OperandType::RegisterOperand || right->type == OperandType::RegisterOperand) {
+            node->type = OperandType::UnfinishedMemoryOperand;
+        } else if (left->type == OperandType::UnfinishedMemoryOperand ||
+                   right->type == OperandType::UnfinishedMemoryOperand) {
+            node->type = OperandType::UnfinishedMemoryOperand;
+        } else if (left->type == OperandType::MemoryOperand || right->type == OperandType::MemoryOperand) {
+            node->type = OperandType::MemoryOperand;
+        } else {
+            // shouldn't happen (except in OperandType::InvalidOperand)
+        }
+
+        if (!left->size || !right->size) {
+            node->size = std::nullopt;
+        } else {
+            // TODO: report that operands have different sizes
+            node->size = left->size;
+        }
+        node->registers = newRegisters;
+        return;
+
     } else if (op == "-") {
+        if (!(left->registers.empty() && left->isRelocatable) && !right->constantValue) {
+            node->type = OperandType::InvalidOperand;
+
+            // need to check this after, cause after `-` can still be UnsinishedMemoryOperand
+            if (left->type == OperandType::UnfinishedMemoryOperand) {
+                reportInvalidAddressExpression(left);
+                return;
+            } else if (right->type == OperandType::UnfinishedMemoryOperand) {
+                reportInvalidAddressExpression(right);
+                return;
+            }
+            node->type = OperandType::InvalidOperand;
+            reportBinaryMinusOperatorIncorrectArgument(node);
+            return;
+        }
+
         if (left->registers.empty() && left->isRelocatable) {
             // left is an adress expression, right can be an address expression or constant
             if (right->constantValue) {
@@ -378,8 +438,7 @@ void SemanticAnalyzer::visitBinaryOperator(std::shared_ptr<BinaryOperator> node,
             }
         }
         // left is not an adress expression, right must be constant
-        if (right->constantValue) {
-            // everything fine
+        else if (right->constantValue) {
             if (left->constantValue) {
                 node->constantValue = left->constantValue.value() - right->constantValue.value();
 
@@ -396,15 +455,7 @@ void SemanticAnalyzer::visitBinaryOperator(std::shared_ptr<BinaryOperator> node,
             node->registers = left->registers;
             return;
         }
-        node->type = OperandType::InvalidOperand;
-        if (left->type == OperandType::UnfinishedMemoryOperand) {
-            reportInvalidAddressExpression(left);
-            return;
-        } else if (right->type == OperandType::UnfinishedMemoryOperand) {
-            reportInvalidAddressExpression(right);
-            return;
-        }
-        reportBinaryMinusOperatorIncorrectArgument(node);
+
     } else {
         LOG_DETAILED_ERROR("Unknown binary operator!");
     }
@@ -418,111 +469,122 @@ void SemanticAnalyzer::visitUnaryOperator(std::shared_ptr<UnaryOperator> node, E
     auto operand = node->operand;
 
     if (op == "LENGTH" || op == "LENGTHOF") {
-        std::shared_ptr<Leaf> leaf;
-        if ((leaf = std::dynamic_pointer_cast<Leaf>(operand)) && leaf->token.type == TokenType::Identifier) {
-            // TODO: calculate actual size
-            node->constantValue = 1;
-            node->isRelocatable = false;
-            node->type = OperandType::ImmediateOperand;
-            node->size = OperandSize("DWORD", 4);
-            node->registers = {};
-            return;
-        }
-        node->type = OperandType::InvalidOperand;
         if (operand->type == OperandType::UnfinishedMemoryOperand) {
+            node->type = OperandType::InvalidOperand;
             reportInvalidAddressExpression(operand);
             return;
         }
-        reportUnaryOperatorIncorrectArgument(node);
+        std::shared_ptr<Leaf> leaf;
+        // operand must be identifier
+        if (!(leaf = std::dynamic_pointer_cast<Leaf>(operand)) || leaf->token.type != TokenType::Identifier) {
+            node->type = OperandType::InvalidOperand;
+            reportUnaryOperatorIncorrectArgument(node);
+            return;
+        }
+        // TODO: calculate actual size
+        node->constantValue = 1;
+        node->isRelocatable = false;
+        node->type = OperandType::ImmediateOperand;
+        node->size = OperandSize("DWORD", 4);
+        node->registers = {};
     } else if (op == "SIZE" || op == "SIZEOF") {
-        std::shared_ptr<Leaf> leaf;
-        if ((leaf = std::dynamic_pointer_cast<Leaf>(operand)) && leaf->token.type == TokenType::Identifier) {
-            // TODO: calculate actual size
-            node->constantValue = 1;
-            node->isRelocatable = false;
-            node->type = OperandType::ImmediateOperand;
-            node->size = OperandSize("DWORD", 4);
-            node->registers = {};
-            return;
-        }
-        node->type = OperandType::InvalidOperand;
         if (operand->type == OperandType::UnfinishedMemoryOperand) {
+            node->type = OperandType::InvalidOperand;
             reportInvalidAddressExpression(operand);
             return;
         }
-        reportUnaryOperatorIncorrectArgument(node);
+        std::shared_ptr<Leaf> leaf;
+        // operand must be identifier
+        if (!(leaf = std::dynamic_pointer_cast<Leaf>(operand)) || leaf->token.type != TokenType::Identifier) {
+            node->type = OperandType::InvalidOperand;
+            reportUnaryOperatorIncorrectArgument(node);
+            return;
+        }
+        // TODO: calculate actual size
+        node->constantValue = 1;
+        node->isRelocatable = false;
+        node->type = OperandType::ImmediateOperand;
+        node->size = OperandSize("DWORD", 4);
+        node->registers = {};
+
     } else if (op == "WIDTH" || op == "MASK") {
+        if (operand->type == OperandType::UnfinishedMemoryOperand) {
+            node->type = OperandType::InvalidOperand;
+            reportInvalidAddressExpression(operand);
+            return;
+        }
         std::shared_ptr<Leaf> leaf;
-        if ((leaf = std::dynamic_pointer_cast<Leaf>(operand)) && leaf->token.type == TokenType::Identifier) {
-            // TODO: check that leaf->token id is a record type (or field of record)
-            // TODO: calculate actual size
-            node->constantValue = 1;
-            node->isRelocatable = false;
-            node->type = OperandType::ImmediateOperand;
-            node->size = OperandSize("DWORD", 4);
-            node->registers = {};
+        // operand must be identifier
+        if (!(leaf = std::dynamic_pointer_cast<Leaf>(operand)) || leaf->token.type != TokenType::Identifier) {
+            node->type = OperandType::InvalidOperand;
+            reportUnaryOperatorIncorrectArgument(node);
             return;
         }
-        node->type = OperandType::InvalidOperand;
-        if (operand->type == OperandType::UnfinishedMemoryOperand) {
-            reportInvalidAddressExpression(operand);
-            return;
-        }
-        reportUnaryOperatorIncorrectArgument(node);
+        // TODO: check that leaf->token id is a record type (or field of record)
+        // TODO: calculate actual size
+        node->constantValue = 1;
+        node->isRelocatable = false;
+        node->type = OperandType::ImmediateOperand;
+        node->size = OperandSize("DWORD", 4);
+        node->registers = {};
+
     } else if (op == "OFFSET") {
-        if (operand->constantValue || operand->registers.empty()) {
-            node->constantValue = operand->constantValue;
-            node->isRelocatable = operand->isRelocatable;
-            node->type = OperandType::ImmediateOperand;
-            node->size = operand->size;
-            node->registers = operand->registers;
-            return;
-        }
-        node->type = OperandType::InvalidOperand;
         if (operand->type == OperandType::UnfinishedMemoryOperand) {
+            node->type = OperandType::InvalidOperand;
             reportInvalidAddressExpression(operand);
             return;
         }
-        reportUnaryOperatorIncorrectArgument(node);
+        // operand must be adress expression
+        if (operand->constantValue || !operand->registers.empty()) {
+            node->type = OperandType::InvalidOperand;
+            reportUnaryOperatorIncorrectArgument(node);
+            return;
+        }
+        node->constantValue = operand->constantValue;
+        node->isRelocatable = operand->isRelocatable;
+        node->type = OperandType::ImmediateOperand;
+        node->size = operand->size;
+        node->registers = operand->registers;
+
     } else if (op == "TYPE") {
-        if (operand->type != OperandType::UnfinishedMemoryOperand) {
-            if (!operand->size) {
-                node->constantValue = 0;
-                warnTypeReturnsZero(node);
-            } else {
-                node->constantValue = operand->size.value().value;
-            }
-            node->isRelocatable = false;
-            node->type = OperandType::ImmediateOperand;
-            node->size = OperandSize("DWORD", 4);
-            node->registers = {};
-            return;
-        }
-        node->type = OperandType::InvalidOperand;
         if (operand->type == OperandType::UnfinishedMemoryOperand) {
+            node->type = OperandType::InvalidOperand;
             reportInvalidAddressExpression(operand);
             return;
         }
-        reportUnaryOperatorIncorrectArgument(node);
+
+        if (!operand->size) {
+            node->constantValue = 0;
+            warnTypeReturnsZero(node);
+        } else {
+            node->constantValue = operand->size.value().value;
+        }
+        node->isRelocatable = false;
+        node->type = OperandType::ImmediateOperand;
+        node->size = OperandSize("DWORD", 4);
+        node->registers = {};
+        return;
     } else if (op == "+" || op == "-") {
-        if (operand->constantValue) {
-            if (op == "-") {
-                node->constantValue = -operand->constantValue.value();
-            } else if (op == "+") {
-                node->constantValue = operand->constantValue.value();
-            }
-            node->isRelocatable = false;
-            node->type = OperandType::ImmediateOperand;
-            node->size = OperandSize("DWORD", 4);
-            node->registers = {};
-            return;
-        }
-        node->type = OperandType::InvalidOperand;
         if (operand->type == OperandType::UnfinishedMemoryOperand) {
+            node->type = OperandType::InvalidOperand;
             reportInvalidAddressExpression(operand);
             return;
         }
-        reportUnaryOperatorIncorrectArgument(node);
+        // operand must be constant value
+        if (!operand->constantValue) {
+            node->type = OperandType::InvalidOperand;
+            reportUnaryOperatorIncorrectArgument(node);
+            return;
+        }
+        if (op == "-") {
+            node->constantValue = -operand->constantValue.value();
+        } else if (op == "+") {
+            node->constantValue = operand->constantValue.value();
+        }
+        node->isRelocatable = false;
+        node->type = OperandType::ImmediateOperand;
+        node->size = OperandSize("DWORD", 4);
+        node->registers = {};
     } else {
         LOG_DETAILED_ERROR("Unknown unary operator!");
     }
@@ -570,12 +632,6 @@ void SemanticAnalyzer::visitLeaf(std::shared_ptr<Leaf> node, ExpressionContext c
         // TODO if context == DataDefinition - report error
         node->constantValue = std::nullopt;
         node->isRelocatable = false;
-        std::map<std::string, int> registerSizes = {{"AL", 1},  {"AX", 2},  {"EAX", 4}, {"BL", 1},  {"BX", 2},
-                                                    {"EBX", 4}, {"CL", 1},  {"CX", 2},  {"ECX", 4}, {"DL", 1},
-                                                    {"DX", 2},  {"EDX", 4}, {"SI", 2},  {"ESI", 4}, {"DI", 2},
-                                                    {"EDI", 4}, {"BP", 2},  {"EBP", 4}, {"SP", 2},  {"ESP", 4}};
-
-        std::map<int, std::string> sizeValueToStr = {{1, "BYTE"}, {2, "WORD"}, {4, "DWORD"}};
         int value = registerSizes[stringToUpper(token.lexeme)];
         node->size = OperandSize(sizeValueToStr[value], value);
         node->type = OperandType::RegisterOperand;

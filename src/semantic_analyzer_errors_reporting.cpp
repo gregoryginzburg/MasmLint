@@ -29,8 +29,8 @@ std::string getOperandType(ASTExpressionPtr node)
         return "immediate operand"; // = relocatable constant expression
     }
     if (node->type == OperandType::UnfinishedMemoryOperand) {
-        // return "invalid expression";
-        return "address expression without []";
+        return "invalid expression"; // shouldn't have to display this to user, should catch it earlier!
+        // return "address expression without []";
     }
     if (node->registers.empty()) {
         return "address expression";
@@ -51,6 +51,7 @@ void SemanticAnalyzer::reportNumberTooLarge(const Token &number)
     diag.addNoteMessage("maximum allowed size is 32 bits");
     parseSess->dcx->addDiagnostic(diag);
 }
+
 void SemanticAnalyzer::reportStringTooLarge(const Token &string)
 {
     if (panicLine) {
@@ -82,7 +83,7 @@ void SemanticAnalyzer::reportUnaryOperatorIncorrectArgument(std::shared_ptr<Unar
         // TODO: change expected type?
         expectedStr = "expected `identifier`";
     } else if (op == "OFFSET") {
-        expectedStr = "expected `constant expression` or `address expression`";
+        expectedStr = "expected `address expression`";
     } else if (op == "TYPE") {
         expectedStr = "expected valid expression";
     } else if (op == "+" || op == "-") {
@@ -232,13 +233,86 @@ void SemanticAnalyzer::reportOtherBinaryOperatorIncorrectArgument(std::shared_pt
         diag.addSecondaryLabel(getExpressionSpan(left),
                                fmt::format("expected `constant expression`, found `{}`", getOperandType(left)));
     } else {
-        diag.addPrimaryLabel(node->op.span, "can only multiply constant expressions or a register by the scale");
+        if (node->op.lexeme == "*") {
+            diag.addPrimaryLabel(node->op.span, "can only multiply constant expressions or a register by the scale");
+        } else {
+            diag.addPrimaryLabel(node->op.span,
+                                 fmt::format("operator `{}` supports only constant expressions", node->op.lexeme));
+        }
+
         diag.addSecondaryLabel(getExpressionSpan(left), fmt::format("help: this has type `{}`", getOperandType(left)));
         diag.addSecondaryLabel(getExpressionSpan(right),
                                fmt::format("help: this has type `{}`", getOperandType(right)));
     }
 
     parseSess->dcx->addDiagnostic(diag);
+}
+
+void SemanticAnalyzer::reportInvalidAddressExpression(ASTExpressionPtr node)
+{
+    if (panicLine) {
+        return;
+    }
+    panicLine = true;
+
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_ADDRESS_EXPRESSION);
+
+    // find first thing that lead to UnfinishedMemoryOperand and print it
+    ASTExpressionPtr errorNode;
+    findInvalidExpressionCause(node, errorNode);
+
+    if (!errorNode) {
+        diag.addPrimaryLabel(getExpressionSpan(node), "need to add [] to create a valid address expression");
+    } else {
+        if (auto binaryOp = std::dynamic_pointer_cast<BinaryOperator>(errorNode)) {
+            diag.addPrimaryLabel(getExpressionSpan(binaryOp),
+                                 "can't have registers inside expressions"); // TODO: change label string
+
+        } else if (auto implicitPlus = std::dynamic_pointer_cast<ImplicitPlusOperator>(errorNode)) {
+            diag.addPrimaryLabel(getExpressionSpan(implicitPlus), "can't implicitly add registers");
+        }
+    }
+
+    parseSess->dcx->addDiagnostic(diag);
+}
+
+void SemanticAnalyzer::findInvalidExpressionCause(ASTExpressionPtr node, ASTExpressionPtr &errorNode)
+{
+    if (node->type == OperandType::UnfinishedMemoryOperand) {
+        errorNode = node;
+    }
+    if (auto binaryOp = std::dynamic_pointer_cast<BinaryOperator>(node)) {
+        if (binaryOp->left->type == OperandType::UnfinishedMemoryOperand) {
+            errorNode = binaryOp;
+            findInvalidExpressionCause(binaryOp->left, errorNode);
+        }
+        if (binaryOp->right->type == OperandType::UnfinishedMemoryOperand) {
+            errorNode = binaryOp;
+            findInvalidExpressionCause(binaryOp->right, errorNode);
+        }
+    } else if (auto unaryOp = std::dynamic_pointer_cast<UnaryOperator>(node)) {
+        findInvalidExpressionCause(unaryOp->operand, errorNode);
+    } else if (auto brackets = std::dynamic_pointer_cast<Brackets>(node)) {
+        findInvalidExpressionCause(brackets->operand, errorNode);
+    } else if (auto squareBrackets = std::dynamic_pointer_cast<SquareBrackets>(node)) {
+        findInvalidExpressionCause(squareBrackets->operand, errorNode);
+    } else if (auto implicitPlus = std::dynamic_pointer_cast<ImplicitPlusOperator>(node)) {
+        if (implicitPlus->left->type == OperandType::UnfinishedMemoryOperand) {
+            errorNode = implicitPlus;
+            findInvalidExpressionCause(implicitPlus->left, errorNode);
+        }
+        if (implicitPlus->right->type == OperandType::UnfinishedMemoryOperand) {
+            errorNode = implicitPlus;
+            findInvalidExpressionCause(implicitPlus->right, errorNode);
+        }
+    } else if (auto leaf = std::dynamic_pointer_cast<Leaf>(node)) {
+        return;
+    } else if (auto invalidExpr = std::dynamic_pointer_cast<InvalidExpression>(node)) {
+        return;
+    } else {
+        LOG_DETAILED_ERROR("Unknown ASTExpression Node!\n");
+        return;
+    }
 }
 
 void SemanticAnalyzer::reportCantAddVariables(ASTExpressionPtr node, bool implicit)
@@ -316,73 +390,6 @@ void SemanticAnalyzer::findRelocatableVariables(ASTExpressionPtr node, std::opti
     }
 }
 
-void SemanticAnalyzer::reportInvalidAddressExpression(ASTExpressionPtr node)
-{
-    if (panicLine) {
-        return;
-    }
-    panicLine = true;
-
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_ADDRESS_EXPRESSION);
-
-    // find first thing that lead to UnfinishedMemoryOperand and print it
-    ASTExpressionPtr errorNode;
-    findInvalidExpressionCause(node, errorNode);
-
-    if (!errorNode) {
-        diag.addPrimaryLabel(getExpressionSpan(node), "need to add [] to create a valid address expression");
-    } else {
-        if (auto binaryOp = std::dynamic_pointer_cast<BinaryOperator>(errorNode)) {
-            diag.addPrimaryLabel(getExpressionSpan(binaryOp),
-                                 "can't have registers in expressions outside of []"); // TODO: change label string
-
-        } else if (auto implicitPlus = std::dynamic_pointer_cast<ImplicitPlusOperator>(errorNode)) {
-            diag.addPrimaryLabel(getExpressionSpan(implicitPlus), "can't implicitly add registers outside of []");
-        }
-    }
-
-    parseSess->dcx->addDiagnostic(diag);
-}
-
-void SemanticAnalyzer::findInvalidExpressionCause(ASTExpressionPtr node, ASTExpressionPtr &errorNode)
-{
-    if (node->type == OperandType::UnfinishedMemoryOperand) {
-        errorNode = node;
-    }
-    if (auto binaryOp = std::dynamic_pointer_cast<BinaryOperator>(node)) {
-        if (binaryOp->left->type == OperandType::UnfinishedMemoryOperand) {
-            errorNode = binaryOp;
-            findInvalidExpressionCause(binaryOp->left, errorNode);
-        }
-        if (binaryOp->right->type == OperandType::UnfinishedMemoryOperand) {
-            errorNode = binaryOp;
-            findInvalidExpressionCause(binaryOp->right, errorNode);
-        }
-    } else if (auto unaryOp = std::dynamic_pointer_cast<UnaryOperator>(node)) {
-        findInvalidExpressionCause(unaryOp->operand, errorNode);
-    } else if (auto brackets = std::dynamic_pointer_cast<Brackets>(node)) {
-        findInvalidExpressionCause(brackets->operand, errorNode);
-    } else if (auto squareBrackets = std::dynamic_pointer_cast<SquareBrackets>(node)) {
-        findInvalidExpressionCause(squareBrackets->operand, errorNode);
-    } else if (auto implicitPlus = std::dynamic_pointer_cast<ImplicitPlusOperator>(node)) {
-        if (implicitPlus->left->type == OperandType::UnfinishedMemoryOperand) {
-            errorNode = implicitPlus;
-            findInvalidExpressionCause(implicitPlus->left, errorNode);
-        }
-        if (implicitPlus->right->type == OperandType::UnfinishedMemoryOperand) {
-            errorNode = implicitPlus;
-            findInvalidExpressionCause(implicitPlus->right, errorNode);
-        }
-    } else if (auto leaf = std::dynamic_pointer_cast<Leaf>(node)) {
-        return;
-    } else if (auto invalidExpr = std::dynamic_pointer_cast<InvalidExpression>(node)) {
-        return;
-    } else {
-        LOG_DETAILED_ERROR("Unknown ASTExpression Node!\n");
-        return;
-    }
-}
-
 void SemanticAnalyzer::reportMoreThanTwoRegistersAfterAdd(ASTExpressionPtr node, bool implicit)
 {
     if (panicLine) {
@@ -445,7 +452,7 @@ void SemanticAnalyzer::reportMoreThanOneScaleAfterAdd(ASTExpressionPtr node, boo
         bool first = true;
 
         for (const auto &[reg, scale] : implicitOp->left->registers) {
-            if (first) {
+            if (first && scale) {
                 diag.addPrimaryLabel(reg.span, "help: this register has a scale");
                 first = false;
                 continue;
@@ -456,7 +463,7 @@ void SemanticAnalyzer::reportMoreThanOneScaleAfterAdd(ASTExpressionPtr node, boo
         }
 
         for (const auto &[reg, scale] : implicitOp->right->registers) {
-            if (first) {
+            if (first && scale) {
                 diag.addPrimaryLabel(reg.span, "help: this register has a scale");
                 first = false;
                 continue;
@@ -477,6 +484,116 @@ void SemanticAnalyzer::reportMoreThanOneScaleAfterAdd(ASTExpressionPtr node, boo
         for (const auto &[reg, scale] : binaryOp->right->registers) {
             if (scale) {
                 diag.addSecondaryLabel(reg.span, "help: this register has a scale");
+            }
+        }
+    }
+
+    parseSess->dcx->addDiagnostic(diag);
+}
+
+void SemanticAnalyzer::reportTwoEsp(ASTExpressionPtr node, bool implicit)
+{
+    if (panicLine) {
+        return;
+    }
+    panicLine = true;
+
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::TWO_ESP_REGISTERS);
+
+    if (implicit) {
+        auto implicitOp = std::dynamic_pointer_cast<ImplicitPlusOperator>(node);
+        bool first = true;
+
+        for (const auto &[reg, scale] : implicitOp->left->registers) {
+            if (first && stringToUpper(reg.lexeme) == "ESP") {
+                diag.addPrimaryLabel(reg.span, "help: this is a ESP register");
+                first = false;
+                continue;
+            }
+            if (stringToUpper(reg.lexeme) == "ESP") {
+                diag.addSecondaryLabel(reg.span, "help: this is a ESP register");
+            }
+        }
+
+        for (const auto &[reg, scale] : implicitOp->right->registers) {
+            if (first && stringToUpper(reg.lexeme) == "ESP") {
+                diag.addPrimaryLabel(reg.span, "help: this is a ESP register");
+                first = false;
+                continue;
+            }
+            if (stringToUpper(reg.lexeme) == "ESP") {
+                diag.addSecondaryLabel(reg.span, "help: this is a ESP register");
+            }
+        }
+    } else {
+        auto binaryOp = std::dynamic_pointer_cast<BinaryOperator>(node);
+        diag.addPrimaryLabel(binaryOp->op.span, "");
+        for (const auto &[reg, scale] : binaryOp->left->registers) {
+            if (stringToUpper(reg.lexeme) == "ESP") {
+                diag.addSecondaryLabel(reg.span, "help: this is a ESP register");
+            }
+        }
+
+        for (const auto &[reg, scale] : binaryOp->right->registers) {
+            if (stringToUpper(reg.lexeme) == "ESP") {
+                diag.addSecondaryLabel(reg.span, "help: this is a ESP register");
+            }
+        }
+    }
+
+    parseSess->dcx->addDiagnostic(diag);
+}
+
+void SemanticAnalyzer::reportNon32bitRegister(ASTExpressionPtr node, bool implicit)
+{
+    if (panicLine) {
+        return;
+    }
+    panicLine = true;
+
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::NON_32BIT_REGISTER);
+
+    if (implicit) {
+        auto implicitOp = std::dynamic_pointer_cast<ImplicitPlusOperator>(node);
+        bool first = true;
+
+        for (const auto &[reg, scale] : implicitOp->left->registers) {
+            int size = registerSizes[stringToUpper(reg.lexeme)];
+            if (first && size != 4) {
+                diag.addSecondaryLabel(reg.span, fmt::format("help: this is a {} byte register", size));
+                first = false;
+                continue;
+            }
+            if (size != 4) {
+                diag.addSecondaryLabel(reg.span, fmt::format("help: this is a {} byte register", size));
+            }
+        }
+
+        for (const auto &[reg, scale] : implicitOp->right->registers) {
+            int size = registerSizes[stringToUpper(reg.lexeme)];
+            if (first && size != 4) {
+                diag.addSecondaryLabel(reg.span, fmt::format("help: this is a {} byte register", size));
+                first = false;
+                continue;
+            }
+            if (size != 4) {
+                diag.addSecondaryLabel(reg.span, fmt::format("help: this is a {} byte register", size));
+            }
+        }
+    } else {
+        auto binaryOp = std::dynamic_pointer_cast<BinaryOperator>(node);
+        diag.addPrimaryLabel(binaryOp->op.span, "");
+        for (const auto &[reg, scale] : binaryOp->left->registers) {
+            int size = registerSizes[stringToUpper(reg.lexeme)];
+            if (size != 4) {
+                diag.addSecondaryLabel(reg.span, fmt::format("help: this is a {} byte register", size));
+            }
+        }
+
+        for (const auto &[reg, scale] : binaryOp->right->registers) {
+            int size = registerSizes[stringToUpper(reg.lexeme)];
+            if (size != 4) {
+                diag.addSecondaryLabel(reg.span, fmt::format("help: this is a {} byte register", size));
             }
         }
     }

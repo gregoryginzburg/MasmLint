@@ -38,10 +38,12 @@ private:
     void reportInvalidScaleValue(std::shared_ptr<BinaryOperator> node);
     void reportIncorrectIndexRegister(std::shared_ptr<Leaf> node);
     void reportOtherBinaryOperatorIncorrectArgument(std::shared_ptr<BinaryOperator> node);
-    void reportCantAddVariables(ASTExpressionPtr node, bool implicit);
     void reportInvalidAddressExpression(ASTExpressionPtr node);
+    void reportCantAddVariables(ASTExpressionPtr node, bool implicit);
     void reportMoreThanTwoRegistersAfterAdd(ASTExpressionPtr node, bool implicit);
     void reportMoreThanOneScaleAfterAdd(ASTExpressionPtr node, bool implicit);
+    void reportTwoEsp(ASTExpressionPtr node, bool implicit);
+    void reportNon32bitRegister(ASTExpressionPtr node, bool implicit);
     void reportBinaryMinusOperatorIncorrectArgument(std::shared_ptr<BinaryOperator> node);
 
     void warnTypeReturnsZero(std::shared_ptr<UnaryOperator> node);
@@ -55,6 +57,9 @@ private:
     std::shared_ptr<ParseSession> parseSess;
     bool panicLine = false;
     int expressionDepth = 0;
+
+    static std::map<std::string, int> registerSizes;
+    static std::map<int, std::string> sizeValueToStr;
 };
 
 // TODO: move this function somewhere else

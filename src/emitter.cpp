@@ -266,6 +266,12 @@ void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, std::string lineCon
         }
     }
 
+    // trim trailing spaces from markerLine
+    // Find the last non-space character
+    auto it = std::find_if(markerLine.rbegin(), markerLine.rend(), [](char ch) { return !std::isspace(ch); });
+    // Erase the trailing spaces
+    markerLine.erase(it.base(), markerLine.end());
+
     // Print the marker line with appropriate color
     std::string coloredMarkerLine;
     for (size_t i = 0; i < markerLine.size(); ++i) {

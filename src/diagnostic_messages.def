@@ -37,6 +37,8 @@ DEFINE_ERROR(CANT_ADD_VARIABLES, "Can't {} add 2 variables")
 DEFINE_ERROR(INVALID_ADDRESS_EXPRESSION, "Invalid address expression")
 DEFINE_ERROR(MORE_THAN_TWO_REGISTERS, "Can't have more than 2 registers in an address expression with modificators")
 DEFINE_ERROR(MORE_THAN_ONE_SCALE, "Can't have more than 1 register with a scale in an address expression with modificators")
+DEFINE_ERROR(TWO_ESP_REGISTERS, "Can't have 2 ESP registers in an address expression with modificators")
+DEFINE_ERROR(NON_32BIT_REGISTER, "Can't have a non 32 bit register in an address expression with modificators")
 DEFINE_ERROR(BINARY_MINUS_OPERATOR_INCORRECT_ARGUMENT, "Incorrect argument in the binary operator `-`")
 // Warnings
 // Expression warnings
