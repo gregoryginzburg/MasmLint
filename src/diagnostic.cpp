@@ -46,6 +46,7 @@ const std::string getErrorMessage(ErrorCode code)
         return message;
 #include "diagnostic_messages.def"
 #undef DEFINE_ERROR
+#undef DEFINE_WARNING
     default:
         return "Unknown error.";
     }

@@ -5,4 +5,5 @@ enum class ErrorCode {
 #define DEFINE_WARNING(code, message) code,
 #include "diagnostic_messages.def"
 #undef DEFINE_ERROR
+#undef DEFINE_WARNING
 };

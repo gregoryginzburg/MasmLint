@@ -132,58 +132,29 @@ ASTExpressionPtr Parser::parseUnaryExpression()
         operators.push_back(op);
         advance();
     }
-    ASTExpressionPtr term = parsePostfixExpression();
+    ASTExpressionPtr term = parsePtrExpression();
     for (Token op : std::ranges::reverse_view(operators)) {
         term = std::make_shared<UnaryOperator>(op, term);
     }
     return term;
 }
 
-ASTExpressionPtr Parser::parsePostfixExpression()
+ASTExpressionPtr Parser::parsePtrExpression()
 {
-    ASTExpressionPtr term1 = parseMemberAccessExpression();
+    ASTExpressionPtr term1 = parseMemberAccessAndIndexingExpression();
     while (match("PTR")) {
         Token op = currentToken;
         advance();
-        ASTExpressionPtr term2 = parseMemberAccessExpression();
+        ASTExpressionPtr term2 = parseMemberAccessAndIndexingExpression();
         term1 = std::make_shared<BinaryOperator>(op, term1, term2);
     }
     return term1;
 }
 
-ASTExpressionPtr Parser::parseMemberAccessExpression()
+ASTExpressionPtr Parser::parseMemberAccessAndIndexingExpression()
 {
     ASTExpressionPtr term1 = parseHighPrecedenceUnaryExpression();
-    while (match(".")) {
-        Token op = currentToken;
-        advance();
-        ASTExpressionPtr term2 = parseHighPrecedenceUnaryExpression();
-        term1 = std::make_shared<BinaryOperator>(op, term1, term2);
-    }
-    return term1;
-}
-
-ASTExpressionPtr Parser::parseHighPrecedenceUnaryExpression()
-{
-    std::vector<Token> operators;
-    while (match("LENGTH") || match("LENGTHOF") || match("SIZE") || match("SIZEOF") || match("WIDTH") ||
-           match("MASK")) {
-        Token op = currentToken;
-        operators.push_back(op);
-        advance();
-    }
-
-    ASTExpressionPtr term = parseIndexSequence();
-    for (Token op : std::ranges::reverse_view(operators)) {
-        term = std::make_shared<UnaryOperator>(op, term);
-    }
-    return term;
-}
-
-ASTExpressionPtr Parser::parseIndexSequence()
-{
-    ASTExpressionPtr term1 = parsePrimaryExpression();
-    while (match(TokenType::OpenSquareBracket) || match(TokenType::OpenBracket)) {
+    while (match(TokenType::OpenSquareBracket) || match(TokenType::OpenBracket) || match(".")) {
         if (match(TokenType::OpenSquareBracket)) {
             Token leftBracket = currentToken;
             expressionDelimitersStack.push(leftBracket);
@@ -210,9 +181,36 @@ ASTExpressionPtr Parser::parseIndexSequence()
             expressionDelimitersStack.pop();
             ASTExpressionPtr term2 = std::make_shared<Brackets>(leftBracket, rightBracket.value(), expr);
             term1 = std::make_shared<ImplicitPlusOperator>(term1, term2);
+        } else if (match(".")) {
+            Token dot = currentToken;
+            advance();
+            if (currentToken.type != TokenType::Identifier) {
+                auto diag = reportExpectedIdentifier(currentToken);
+                return std::make_shared<InvalidExpression>(diag);
+            }
+            auto term2 = std::make_shared<Leaf>(currentToken);
+            advance();
+            term1 = std::make_shared<BinaryOperator>(dot, term1, term2);
         }
     }
     return term1;
+}
+
+ASTExpressionPtr Parser::parseHighPrecedenceUnaryExpression()
+{
+    std::vector<Token> operators;
+    while (match("LENGTH") || match("LENGTHOF") || match("SIZE") || match("SIZEOF") || match("WIDTH") ||
+           match("MASK")) {
+        Token op = currentToken;
+        operators.push_back(op);
+        advance();
+    }
+
+    ASTExpressionPtr term = parsePrimaryExpression();
+    for (Token op : std::ranges::reverse_view(operators)) {
+        term = std::make_shared<UnaryOperator>(op, term);
+    }
+    return term;
 }
 
 ASTExpressionPtr Parser::parsePrimaryExpression()

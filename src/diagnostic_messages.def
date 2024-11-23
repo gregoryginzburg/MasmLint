@@ -18,10 +18,11 @@ DEFINE_ERROR(UNTERMINATED_STRING_LITERAL, "Unterminated string literal")
 
 // Syntax errors
 // Expression errors
-DEFINE_ERROR(UNCLOSED_DELIMITER, "This line contains an unclosed delimiter")
+DEFINE_ERROR(UNCLOSED_DELIMITER, "This line contains an unclosed delimiter: `{}`")
 DEFINE_ERROR(EXPECTED_EXPRESSION, "Expected expression, found `{}`")
-DEFINE_ERROR(UNEXPECTED_CLOSING_DELIMITER, "Unexpected closing delimiter: `{}`")
+DEFINE_ERROR(UNEXPECTED_CLOSING_DELIMITER, "Unexpected closing delimiter: `{}`") 
 DEFINE_ERROR(EXCPECTED_OPERATOR_OR_CLOSING_DELIMITER, "Expected operator or closing delimiter")
+DEFINE_ERROR(EXPECTED_IDENTIFIER, "Expected identifier")
 
 // Semantic errors
 // Expression errors

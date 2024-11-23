@@ -11,7 +11,7 @@ std::shared_ptr<Diagnostic> Parser::reportUnclosedDelimiterError(const Token &cl
     if (expressionDelimitersStack.empty()) {
         LOG_DETAILED_ERROR("Empty demimiters stack!");
     } else {
-        Diagnostic diag(Diagnostic::Level::Error, ErrorCode::UNCLOSED_DELIMITER);
+        Diagnostic diag(Diagnostic::Level::Error, ErrorCode::UNCLOSED_DELIMITER, expressionDelimitersStack.top().lexeme);
         diag.addPrimaryLabel(closingDelimiter.span, "");
         Token openingDelimiter = expressionDelimitersStack.top();
         diag.addSecondaryLabel(openingDelimiter.span, "unclosed delimiter");
@@ -64,6 +64,18 @@ std::shared_ptr<Diagnostic> Parser::reportExpectedOperatorOrClosingDelimiter(con
     panicLine = true;
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXCPECTED_OPERATOR_OR_CLOSING_DELIMITER, token.lexeme);
     diag.addPrimaryLabel(token.span, "");
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+std::shared_ptr<Diagnostic> Parser::reportExpectedIdentifier(const Token &token)
+{
+    if (panicLine) {
+        return parseSess->dcx->getLastDiagnostic();
+    }
+    panicLine = true;
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_IDENTIFIER, token.lexeme);
+    diag.addPrimaryLabel(token.span, "this needs to be a field name");
     parseSess->dcx->addDiagnostic(diag);
     return parseSess->dcx->getLastDiagnostic();
 }

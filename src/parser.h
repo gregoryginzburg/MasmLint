@@ -36,8 +36,8 @@ private:
     ASTExpressionPtr parseExpressionHelper();
     ASTExpressionPtr parseMultiplicativeExpression();
     ASTExpressionPtr parseUnaryExpression();
-    ASTExpressionPtr parsePostfixExpression();
-    ASTExpressionPtr parseMemberAccessExpression();
+    ASTExpressionPtr parsePtrExpression();
+    ASTExpressionPtr parseMemberAccessAndIndexingExpression();
     ASTExpressionPtr parseHighPrecedenceUnaryExpression();
     ASTExpressionPtr parseIndexSequence();
     ASTExpressionPtr parsePrimaryExpression();
@@ -45,4 +45,5 @@ private:
     std::shared_ptr<Diagnostic> reportUnclosedDelimiterError(const Token &closingDelimiter);
     std::shared_ptr<Diagnostic> reportExpectedExpression(const Token &token);
     std::shared_ptr<Diagnostic> reportExpectedOperatorOrClosingDelimiter(const Token &token);
+    std::shared_ptr<Diagnostic> reportExpectedIdentifier(const Token &token);
 };
