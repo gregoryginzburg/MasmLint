@@ -20,7 +20,7 @@ private:
     void visit(const ASTPtr &node);
 
     // ASTexpression nodes
-    void visitExpression(const ASTExpressionPtr &node, ExpressionContext context);
+    void visitExpression(const ExpressionPtr &node, ExpressionContext context);
     void visitBrackets(const std::shared_ptr<Brackets> &node, ExpressionContext context);
     void visitSquareBrackets(const std::shared_ptr<SquareBrackets> &node, ExpressionContext context);
     void visitImplicitPlusOperator(const std::shared_ptr<ImplicitPlusOperator> &node, ExpressionContext context);
@@ -38,20 +38,20 @@ private:
     void reportInvalidScaleValue(const std::shared_ptr<BinaryOperator> &node);
     void reportIncorrectIndexRegister(const std::shared_ptr<Leaf> &node);
     void reportOtherBinaryOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node);
-    void reportInvalidAddressExpression(const ASTExpressionPtr &node);
-    void reportCantAddVariables(const ASTExpressionPtr &node, bool implicit);
-    void reportMoreThanTwoRegistersAfterAdd(const ASTExpressionPtr &node, bool implicit);
-    void reportMoreThanOneScaleAfterAdd(const ASTExpressionPtr &node, bool implicit);
-    void reportTwoEsp(const ASTExpressionPtr &node, bool implicit);
-    void reportNon32bitRegister(const ASTExpressionPtr &node, bool implicit);
+    void reportInvalidAddressExpression(const ExpressionPtr &node);
+    void reportCantAddVariables(const ExpressionPtr &node, bool implicit);
+    void reportMoreThanTwoRegistersAfterAdd(const ExpressionPtr &node, bool implicit);
+    void reportMoreThanOneScaleAfterAdd(const ExpressionPtr &node, bool implicit);
+    void reportTwoEsp(const ExpressionPtr &node, bool implicit);
+    void reportNon32bitRegister(const ExpressionPtr &node, bool implicit);
     void reportBinaryMinusOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node);
 
     void warnTypeReturnsZero(const std::shared_ptr<UnaryOperator> &node);
 
-    static void findRelocatableVariables(const ASTExpressionPtr &node, std::optional<Token> &firstVar,
+    static void findRelocatableVariables(const ExpressionPtr &node, std::optional<Token> &firstVar,
                                          std::optional<Token> &secondVar);
 
-    static void findInvalidExpressionCause(const ASTExpressionPtr &node, ASTExpressionPtr &errorNode);
+    static void findInvalidExpressionCause(const ExpressionPtr &node, ExpressionPtr &errorNode);
 
     std::shared_ptr<ParseSession> parseSess;
     ASTPtr ast;

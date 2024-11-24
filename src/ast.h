@@ -6,6 +6,14 @@
 #include <optional>
 #include <map>
 
+class AST;
+class Expression;
+class Statement;
+class EndDir;
+class LabelDef;
+using ASTPtr = std::shared_ptr<AST>;
+using ExpressionPtr = std::shared_ptr<Expression>;
+
 class AST {
 public:
     AST() = default;
@@ -19,16 +27,204 @@ public:
     AST &operator=(AST &&) = default;
 };
 
-class ASTExpression;
-using ASTPtr = std::shared_ptr<AST>;
-using ASTExpressionPtr = std::shared_ptr<ASTExpression>;
-
 class Program : public AST {
 public:
-    explicit Program(const std::vector<ASTExpressionPtr> &expressions) : expressions(expressions) {}
-    std::vector<ASTExpressionPtr> expressions;
+    Program(const std::vector<std::shared_ptr<Statement>> &sentences, std::shared_ptr<EndDir> endDir)
+        : statements(sentences), endDir(endDir)
+    {
+    }
+    std::vector<std::shared_ptr<Statement>> statements;
+    std::shared_ptr<EndDir> endDir;
 };
 
+class Statement : public AST {};
+
+// Init values
+class InitValue : public AST {};
+
+class DupOperator : public InitValue {
+public:
+    DupOperator(std::shared_ptr<ExpressionPtr> repeatCount, Token op, std::vector<std::shared_ptr<InitValue>> operands)
+        : repeatCount(std::move(repeatCount)), op(std::move(op)), operands(std::move(operands))
+    {
+    }
+    std::shared_ptr<ExpressionPtr> repeatCount;
+    Token op;
+    std::vector<std::shared_ptr<InitValue>> operands;
+};
+
+class StringInitValue : public InitValue {
+public:
+    StringInitValue(Token token) : token(std::move(token)) {}
+    Token token;
+};
+
+class QuestionMarkInitValue : public InitValue {
+public:
+    QuestionMarkInitValue(Token token) : token(std::move(token)) {}
+    Token token;
+};
+
+class AddressExprInitValue : public InitValue {
+public:
+    AddressExprInitValue(ExpressionPtr expr) : expr(std::move(expr)) {}
+    ExpressionPtr expr;
+};
+
+class StructInitValue {
+public:
+    StructInitValue(std::vector<std::shared_ptr<InitValue>> fields) : fields(std::move(fields)) {}
+    std::vector<std::shared_ptr<InitValue>> fields;
+};
+
+class RecordInitValue {
+public:
+    RecordInitValue(std::vector<std::shared_ptr<InitValue>> fields) : fields(std::move(fields)) {}
+    std::vector<std::shared_ptr<InitValue>> fields;
+};
+
+// Define data (data items)
+class DataItem : public AST {};
+
+class BuiltinInstance : public DataItem {
+public:
+    Token dataTypeToken;
+    std::vector<std::shared_ptr<InitValue>> initValues;
+
+    BuiltinInstance(Token dataTypeToken, const std::vector<std::shared_ptr<InitValue>> &initValues)
+        : dataTypeToken(std::move(dataTypeToken)), initValues(initValues)
+    {
+    }
+};
+
+class RecordInstance : public DataItem {
+public:
+    Token idToken;
+    std::vector<std::shared_ptr<InitValue>> initValues;
+
+    RecordInstance(Token idToken, const std::vector<std::shared_ptr<InitValue>> &initValues)
+        : idToken(std::move(idToken)), initValues(initValues)
+    {
+    }
+};
+
+class StructInstance : public DataItem {
+public:
+    Token idToken;
+    std::vector<std::shared_ptr<InitValue>> initValues;
+
+    StructInstance(Token idToken, const std::vector<std::shared_ptr<InitValue>> &initValues)
+        : idToken(std::move(idToken)), initValues(initValues)
+    {
+    }
+};
+
+// Directives
+class Directive : public Statement {};
+
+class SegDir : public Directive {
+public:
+    Token directiveToken;
+    std::optional<ExpressionPtr> constExpr;
+
+    SegDir(Token directiveToken, std::optional<ExpressionPtr> constExpr = std::nullopt)
+        : directiveToken(std::move(directiveToken)), constExpr(std::move(constExpr))
+    {
+    }
+};
+
+class DataDir : public Directive {
+public:
+    std::optional<Token> idToken;
+    Token directiveToken;
+    std::shared_ptr<DataItem> dataItem;
+
+    DataDir(std::optional<Token> idToken, Token directiveToken, std::shared_ptr<DataItem> dataItem)
+        : idToken(std::move(idToken)), directiveToken(std::move(directiveToken)), dataItem(std::move(dataItem))
+    {
+    }
+};
+
+class StructDir : public Directive {
+public:
+    Token firstIdToken;
+    Token directiveToken;
+    std::vector<std::shared_ptr<DataDir>> fields;
+    Token secondIdToken;
+    Token endsDirToken;
+
+    StructDir(Token firstIdToken, Token directiveToken, const std::vector<std::shared_ptr<DataDir>> &fields,
+              Token secondIdToken, Token endsDirToken)
+        : firstIdToken(std::move(firstIdToken)), directiveToken(std::move(directiveToken)), fields(fields),
+          secondIdToken(std::move(secondIdToken)), endsDirToken(std::move(endsDirToken))
+    {
+    }
+};
+
+class RecordDir : public Directive {
+    // TODO:
+};
+
+class EquDir : public Directive {
+public:
+    Token idToken;
+    Token directiveToken;
+    ExpressionPtr value; // TODO: can also be a string
+
+    EquDir(Token idToken, Token directiveToken, ExpressionPtr value)
+        : idToken(std::move(idToken)), directiveToken(std::move(directiveToken)), value(std::move(value))
+    {
+    }
+};
+
+class EqualDir : public Directive {
+public:
+    Token idToken;
+    Token directiveToken;
+    ExpressionPtr value;
+
+    EqualDir(Token idToken, Token directiveToken, ExpressionPtr value)
+        : idToken(std::move(idToken)), directiveToken(std::move(directiveToken)), value(std::move(value))
+    {
+    }
+};
+
+class ProcDir : public Directive {
+    // TODO
+};
+
+class EndDir : public Directive {
+public:
+    Token endToken;
+    std::optional<ExpressionPtr> addressExpr;
+
+    EndDir(Token endToken, std::optional<ExpressionPtr> addressExpr)
+        : endToken(std::move(endToken)), addressExpr(std::move(addressExpr))
+    {
+    }
+};
+
+// Instructions
+class Instruction : public Statement {
+public:
+    std::shared_ptr<LabelDef> label;
+    Token mnemonicToken;
+    std::vector<ExpressionPtr> operands;
+
+    Instruction(std::shared_ptr<LabelDef> label, Token mnemonicToken, const std::vector<ExpressionPtr> &operands)
+        : label(label), mnemonicToken(std::move(mnemonicToken)), operands(operands)
+    {
+    }
+};
+
+class LabelDef : public Statement {
+public:
+    Token idToken;
+
+    LabelDef(Token idToken) : idToken(std::move(idToken)) {}
+};
+
+// Expressions
 // UnfinishedMemoryOperand is when [] are forgotten
 enum class OperandType : uint8_t {
     ImmediateOperand,
@@ -44,7 +240,7 @@ struct OperandSize {
     int value;
 };
 
-class ASTExpression : public AST {
+class Expression : public AST {
 public:
     // expression attributes for semantic analysis
     std::optional<int32_t> constantValue;
@@ -56,66 +252,64 @@ public:
     std::optional<OperandSize> size = std::nullopt;
 };
 
-class BinaryOperator : public ASTExpression {
+class BinaryOperator : public Expression {
 public:
-    BinaryOperator(Token op, ASTExpressionPtr left, ASTExpressionPtr right)
+    BinaryOperator(Token op, ExpressionPtr left, ExpressionPtr right)
         : op(std::move(op)), left(std::move(left)), right(std::move(right))
     {
     }
 
     Token op;
-    ASTExpressionPtr left;
-    ASTExpressionPtr right;
+    ExpressionPtr left;
+    ExpressionPtr right;
 };
 
-class Brackets : public ASTExpression {
+class Brackets : public Expression {
 public:
-    Brackets(Token leftBracket, Token rightBracket, ASTExpressionPtr operand)
+    Brackets(Token leftBracket, Token rightBracket, ExpressionPtr operand)
         : leftBracket(std::move(leftBracket)), rightBracket(std::move(rightBracket)), operand(std::move(operand))
     {
     }
     Token leftBracket;
     Token rightBracket;
-    ASTExpressionPtr operand;
+    ExpressionPtr operand;
 };
 
-class SquareBrackets : public ASTExpression {
+class SquareBrackets : public Expression {
 public:
-    SquareBrackets(Token leftBracket, Token rightBracket, ASTExpressionPtr operand)
+    SquareBrackets(Token leftBracket, Token rightBracket, ExpressionPtr operand)
         : leftBracket(std::move(leftBracket)), rightBracket(std::move(rightBracket)), operand(std::move(operand))
     {
     }
     Token leftBracket;
     Token rightBracket;
-    ASTExpressionPtr operand;
+    ExpressionPtr operand;
 };
 
-class ImplicitPlusOperator : public ASTExpression {
+class ImplicitPlusOperator : public Expression {
 public:
-    ImplicitPlusOperator(ASTExpressionPtr left, ASTExpressionPtr right) : left(std::move(left)), right(std::move(right))
-    {
-    }
+    ImplicitPlusOperator(ExpressionPtr left, ExpressionPtr right) : left(std::move(left)), right(std::move(right)) {}
 
-    ASTExpressionPtr left;
-    ASTExpressionPtr right;
+    ExpressionPtr left;
+    ExpressionPtr right;
 };
 
-class UnaryOperator : public ASTExpression {
+class UnaryOperator : public Expression {
 public:
-    UnaryOperator(Token op, ASTExpressionPtr operand) : op(std::move(op)), operand(std::move(operand)) {}
+    UnaryOperator(Token op, ExpressionPtr operand) : op(std::move(op)), operand(std::move(operand)) {}
 
     Token op;
-    ASTExpressionPtr operand;
+    ExpressionPtr operand;
 };
 
-class Leaf : public ASTExpression {
+class Leaf : public Expression {
 public:
     explicit Leaf(Token token) : token(std::move(token)) {}
 
     Token token;
 };
 
-class InvalidExpression : public ASTExpression {
+class InvalidExpression : public Expression {
 public:
     explicit InvalidExpression(std::shared_ptr<Diagnostic> diag) : diag(std::move(diag)) {}
     std::shared_ptr<Diagnostic> diag;
@@ -128,7 +322,7 @@ inline void printAST(const ASTPtr &node, size_t indent)
     }
 
     if (indent == 2) {
-        auto expr = std::dynamic_pointer_cast<ASTExpression>(node);
+        auto expr = std::dynamic_pointer_cast<Expression>(node);
         auto constantValue = expr->constantValue;
         if (constantValue) {
             std::cout << "constantValue: " << constantValue.value() << "\n";
@@ -168,7 +362,7 @@ inline void printAST(const ASTPtr &node, size_t indent)
     // Create indentation string
     std::string indentation(indent, ' ');
     if (auto program = std::dynamic_pointer_cast<Program>(node)) {
-        for (const auto &expr : program->expressions) {
+        for (const auto &expr : program->statements) {
             std::cout << "Expr:\n";
             printAST(expr, indent + 2);
         }
@@ -205,7 +399,7 @@ inline void printAST(const ASTPtr &node, size_t indent)
     }
 }
 
-inline Span getExpressionSpan(const ASTExpressionPtr &node)
+inline Span getExpressionSpan(const ExpressionPtr &node)
 {
     if (auto binaryOp = std::dynamic_pointer_cast<BinaryOperator>(node)) {
         return Span::merge(getExpressionSpan(binaryOp->left), getExpressionSpan(binaryOp->right));
@@ -222,7 +416,7 @@ inline Span getExpressionSpan(const ASTExpressionPtr &node)
     } else if (auto invalidExpr = std::dynamic_pointer_cast<InvalidExpression>(node)) {
         return {0, 0, nullptr};
     } else {
-        LOG_DETAILED_ERROR("Unknown ASTExpression Node!\n");
+        LOG_DETAILED_ERROR("Unknown Expression Node!\n");
         return {0, 0, nullptr};
     }
 }

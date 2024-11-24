@@ -21,7 +21,15 @@ File ast.h:
 
 class AST {
 public:
+    AST() = default;
+
     virtual ~AST() = default;
+
+    AST(const AST &) = default;
+    AST &operator=(const AST &) = default;
+
+    AST(AST &&) = default;
+    AST &operator=(AST &&) = default;
 };
 
 class ASTExpression;
@@ -30,15 +38,21 @@ using ASTExpressionPtr = std::shared_ptr<ASTExpression>;
 
 class Program : public AST {
 public:
-    Program(std::vector<ASTExpressionPtr> expressions) : expressions(expressions) {}
+    explicit Program(const std::vector<ASTExpressionPtr> &expressions) : expressions(expressions) {}
     std::vector<ASTExpressionPtr> expressions;
 };
 
 // UnfinishedMemoryOperand is when [] are forgotten
-enum class OperandType { ImmediateOperand, RegisterOperand, MemoryOperand, UnfinishedMemoryOperand, InvalidOperand };
+enum class OperandType : uint8_t {
+    ImmediateOperand,
+    RegisterOperand,
+    MemoryOperand,
+    UnfinishedMemoryOperand,
+    InvalidOperand
+};
 
 struct OperandSize {
-    OperandSize(const std::string &symbol, int value) : symbol(symbol), value(value) {}
+    OperandSize(std::string symbol, int value) : symbol(std::move(symbol)), value(value) {}
     std::string symbol;
     int value;
 };
@@ -57,7 +71,10 @@ public:
 
 class BinaryOperator : public ASTExpression {
 public:
-    BinaryOperator(const Token &op, ASTExpressionPtr left, ASTExpressionPtr right) : op(op), left(left), right(right) {}
+    BinaryOperator(Token op, ASTExpressionPtr left, ASTExpressionPtr right)
+        : op(std::move(op)), left(std::move(left)), right(std::move(right))
+    {
+    }
 
     Token op;
     ASTExpressionPtr left;
@@ -66,8 +83,8 @@ public:
 
 class Brackets : public ASTExpression {
 public:
-    Brackets(const Token &leftBracket, const Token &rightBracket, ASTExpressionPtr operand)
-        : leftBracket(leftBracket), rightBracket(rightBracket), operand(operand)
+    Brackets(Token leftBracket, Token rightBracket, ASTExpressionPtr operand)
+        : leftBracket(std::move(leftBracket)), rightBracket(std::move(rightBracket)), operand(std::move(operand))
     {
     }
     Token leftBracket;
@@ -77,8 +94,8 @@ public:
 
 class SquareBrackets : public ASTExpression {
 public:
-    SquareBrackets(const Token &leftBracket, const Token &rightBracket, ASTExpressionPtr operand)
-        : leftBracket(leftBracket), rightBracket(rightBracket), operand(operand)
+    SquareBrackets(Token leftBracket, Token rightBracket, ASTExpressionPtr operand)
+        : leftBracket(std::move(leftBracket)), rightBracket(std::move(rightBracket)), operand(std::move(operand))
     {
     }
     Token leftBracket;
@@ -88,7 +105,9 @@ public:
 
 class ImplicitPlusOperator : public ASTExpression {
 public:
-    ImplicitPlusOperator(ASTExpressionPtr left, ASTExpressionPtr right) : left(left), right(right) {}
+    ImplicitPlusOperator(ASTExpressionPtr left, ASTExpressionPtr right) : left(std::move(left)), right(std::move(right))
+    {
+    }
 
     ASTExpressionPtr left;
     ASTExpressionPtr right;
@@ -96,7 +115,7 @@ public:
 
 class UnaryOperator : public ASTExpression {
 public:
-    UnaryOperator(const Token &op, ASTExpressionPtr operand) : op(op), operand(operand) {}
+    UnaryOperator(Token op, ASTExpressionPtr operand) : op(std::move(op)), operand(std::move(operand)) {}
 
     Token op;
     ASTExpressionPtr operand;
@@ -104,120 +123,18 @@ public:
 
 class Leaf : public ASTExpression {
 public:
-    Leaf(const Token &token) : token(token) {}
+    explicit Leaf(Token token) : token(std::move(token)) {}
 
     Token token;
 };
 
 class InvalidExpression : public ASTExpression {
 public:
-    InvalidExpression(std::shared_ptr<Diagnostic> diag) : diag(diag) {}
+    explicit InvalidExpression(std::shared_ptr<Diagnostic> diag) : diag(std::move(diag)) {}
     std::shared_ptr<Diagnostic> diag;
 };
 
-inline void printAST(ASTPtr node, int indent)
-{
-    if (!node)
-        return;
 
-    if (indent == 2) {
-        auto expr = std::dynamic_pointer_cast<ASTExpression>(node);
-        if (expr->constantValue) {
-            std::cout << "constantValue: " << expr->constantValue.value() << "\n";
-        } else {
-            std::cout << "constantValue: nullopt\n";
-        }
-
-        std::cout << "isRelocatable: " << (expr->isRelocatable ? "true" : "false") << "\n";
-
-        std::cout << "registers:\n";
-        for (const auto &[key, value] : expr->registers) {
-            std::cout << key.lexeme;
-            if (value) {
-                std::cout << *value << "\n";
-            } else {
-                std::cout << "nullopt\n";
-            }
-        }
-
-        if (expr->type == OperandType::ImmediateOperand) {
-            std::cout << "type: " << "ImmediateOperand" << "\n";
-        } else if (expr->type == OperandType::RegisterOperand) {
-            std::cout << "type: " << "RegisterOperand" << "\n";
-        } else if (expr->type == OperandType::MemoryOperand) {
-            std::cout << "type: " << "MemoryOperand" << "\n";
-        } else if (expr->type == OperandType::InvalidOperand) {
-            std::cout << "type: " << "InvalidOperand" << "\n";
-        }
-
-        if (expr->size) {
-            std::cout << "size: " << expr->size.value().symbol << "\n";
-        } else {
-            std::cout << "size: nullopt\n";
-        }
-    }
-
-    // Create indentation string
-    std::string indentation(indent, ' ');
-    if (auto program = std::dynamic_pointer_cast<Program>(node)) {
-        for (auto expr : program->expressions) {
-            std::cout << "Expr:\n";
-            printAST(expr, indent + 2);
-        }
-    } else if (auto binaryOp = std::dynamic_pointer_cast<BinaryOperator>(node)) {
-        std::cout << indentation << "BinaryOperator (" << binaryOp->op.lexeme << ")\n";
-        std::cout << indentation << "Left:\n";
-        printAST(binaryOp->left, indent + 2);
-        std::cout << indentation << "Right:\n";
-        printAST(binaryOp->right, indent + 2);
-    } else if (auto unaryOp = std::dynamic_pointer_cast<UnaryOperator>(node)) {
-        std::cout << indentation << "UnaryOperator (" << unaryOp->op.lexeme << ")\n";
-        std::cout << indentation << "Operand:\n";
-        printAST(unaryOp->operand, indent + 2);
-    } else if (auto brackets = std::dynamic_pointer_cast<Brackets>(node)) {
-        std::cout << indentation << "Brackets\n";
-        std::cout << indentation << "Operand:\n";
-        printAST(brackets->operand, indent + 2);
-    } else if (auto squareBrackets = std::dynamic_pointer_cast<SquareBrackets>(node)) {
-        std::cout << indentation << "SquareBrackets\n";
-        std::cout << indentation << "Operand:\n";
-        printAST(squareBrackets->operand, indent + 2);
-    } else if (auto implicitPlus = std::dynamic_pointer_cast<ImplicitPlusOperator>(node)) {
-        std::cout << indentation << "ImplicitPlusOperator\n";
-        std::cout << indentation << "Left:\n";
-        printAST(implicitPlus->left, indent + 2);
-        std::cout << indentation << "Right:\n";
-        printAST(implicitPlus->right, indent + 2);
-    } else if (auto leaf = std::dynamic_pointer_cast<Leaf>(node)) {
-        std::cout << indentation << "Leaf (" << leaf->token.lexeme << ")\n";
-    } else if (auto invalidExpr = std::dynamic_pointer_cast<InvalidExpression>(node)) {
-        std::cout << indentation << "Invalid Expression (" << invalidExpr->diag->getMessage() << ")\n";
-    } else {
-        LOG_DETAILED_ERROR("Unknown AST Node\n");
-    }
-}
-
-inline Span getExpressionSpan(ASTExpressionPtr node)
-{
-    if (auto binaryOp = std::dynamic_pointer_cast<BinaryOperator>(node)) {
-        return Span::merge(getExpressionSpan(binaryOp->left), getExpressionSpan(binaryOp->right));
-    } else if (auto unaryOp = std::dynamic_pointer_cast<UnaryOperator>(node)) {
-        return Span::merge(unaryOp->op.span, getExpressionSpan(unaryOp->operand));
-    } else if (auto brackets = std::dynamic_pointer_cast<Brackets>(node)) {
-        return Span::merge(brackets->leftBracket.span, brackets->rightBracket.span);
-    } else if (auto squareBrackets = std::dynamic_pointer_cast<SquareBrackets>(node)) {
-        return Span::merge(squareBrackets->leftBracket.span, squareBrackets->rightBracket.span);
-    } else if (auto implicitPlus = std::dynamic_pointer_cast<ImplicitPlusOperator>(node)) {
-        return Span::merge(getExpressionSpan(implicitPlus->left), getExpressionSpan(implicitPlus->right));
-    } else if (auto leaf = std::dynamic_pointer_cast<Leaf>(node)) {
-        return leaf->token.span;
-    } else if (auto invalidExpr = std::dynamic_pointer_cast<InvalidExpression>(node)) {
-        return Span(0, 0, nullptr);
-    } else {
-        LOG_DETAILED_ERROR("Unknown ASTExpression Node!\n");
-        return Span(0, 0, nullptr);
-    }
-}
 File diagnostic.cpp:
 
 #include "diagnostic.h"
@@ -255,9 +172,9 @@ const std::optional<std::string> &Diagnostic::getHelpMessage() const { return he
 
 void Diagnostic::cancel() { cancelled = true; }
 
-bool Diagnostic::isCancelled() { return cancelled; }
+bool Diagnostic::isCancelled() const { return cancelled; }
 
-const std::string getErrorMessage(ErrorCode code)
+std::string getErrorMessage(ErrorCode code)
 {
     switch (code) {
 #define DEFINE_ERROR(code, message)                                                                                    \
@@ -268,6 +185,7 @@ const std::string getErrorMessage(ErrorCode code)
         return message;
 #include "diagnostic_messages.def"
 #undef DEFINE_ERROR
+#undef DEFINE_WARNING
     default:
         return "Unknown error.";
     }
@@ -286,11 +204,11 @@ File diagnostic.h:
 #include "span.h"
 #include "error_codes.h"
 
-const std::string getErrorMessage(ErrorCode code);
+std::string getErrorMessage(ErrorCode code);
 
 class Diagnostic {
 public:
-    enum class Level { Error, Warning, Note };
+    enum class Level : std::uint8_t { Error, Warning, Note };
 
     template <typename... Args>
     Diagnostic(Level level, ErrorCode code, Args &&...args)
@@ -313,7 +231,7 @@ public:
     const std::optional<std::string> &getHelpMessage() const;
 
     void cancel();
-    bool isCancelled();
+    bool isCancelled() const;
 
 private:
     Level level;
@@ -348,6 +266,7 @@ std::shared_ptr<Diagnostic> DiagCtxt::getLastDiagnostic()
 {
     if (diagnostics.empty()) {
         LOG_DETAILED_ERROR("No last diagnostics exists!");
+        return nullptr;
     }
     return diagnostics.back();
 }
@@ -373,7 +292,7 @@ File diag_ctxt.h:
 
 class DiagCtxt {
 public:
-    DiagCtxt(std::shared_ptr<Emitter> emitter);
+    explicit DiagCtxt(std::shared_ptr<Emitter> emitter);
 
     void addDiagnostic(const Diagnostic &diag);
     std::shared_ptr<Diagnostic> getLastDiagnostic();
@@ -385,580 +304,39 @@ private:
     std::vector<std::shared_ptr<Diagnostic>> diagnostics;
     std::shared_ptr<Emitter> emitter;
 };
-File emitter.cpp:
 
-#include "emitter.h"
-#include "log.h"
-
-#include <fmt/core.h>
-#include <fmt/color.h>
-#include <fmt/ostream.h>
-#include <map>
-#include <algorithm>
-
-#include <nlohmann/json.hpp>
-using json = nlohmann::json;
-
-#include <utf8proc.h>
-
-Emitter::Emitter(std::shared_ptr<SourceMap> sourceMap, std::ostream &outStream, bool useColor)
-    : sourceMap(sourceMap), out(outStream), useColor(useColor)
-{
-}
-
-void Emitter::emit(std::shared_ptr<Diagnostic> diag)
-{
-    if (diag->isCancelled()) {
-        return;
-    }
-    printHeader(diag);
-    printDiagnosticBody(diag);
-    if (diag->getNoteMessage()) {
-        printNote(diag);
-    }
-    if (diag->getHelpMessage()) {
-        printHelp(diag);
-    }
-}
-
-void Emitter::printHeader(std::shared_ptr<Diagnostic> diag)
-{
-    auto levelStr = formatLevel(diag->getLevel());
-    auto codeStr = formatErrorCode(diag->getLevel(), diag->getCode());
-    auto message = format(fmt::emphasis::bold | fg(whiteColor), "{}", diag->getMessage());
-    auto colon = format(fmt::emphasis::bold | fg(whiteColor), ":");
-
-    std::string result = fmt::format("{}{}: {}\n", levelStr, codeStr, message);
-    out.write(result.data(), result.size());
-}
-
-std::string Emitter::formatLevel(Diagnostic::Level level)
-{
-
-    switch (level) {
-    case Diagnostic::Level::Error:
-        return format(fmt::emphasis::bold | fg(redColor), "error");
-    case Diagnostic::Level::Warning:
-        return format(fmt::emphasis::bold | fg(yellowColor), "warning");
-    case Diagnostic::Level::Note:
-        return format(fmt::emphasis::bold | fg(cyanColor), "note");
-    }
-
-    return "unknown";
-}
-
-std::string Emitter::formatErrorCode(Diagnostic::Level level, ErrorCode code)
-{
-    switch (level) {
-    case Diagnostic::Level::Error:
-        return format(fmt::emphasis::bold | fg(redColor), "[E{:02d}]", static_cast<int>(code));
-    case Diagnostic::Level::Warning:
-        return format(fmt::emphasis::bold | fg(yellowColor), "[E{:02d}]", static_cast<int>(code));
-    case Diagnostic::Level::Note:
-        return format(fmt::emphasis::bold | fg(cyanColor), "[E{:02d}]", static_cast<int>(code));
-    }
-
-    return "unknown";
-}
-
-void Emitter::printDiagnosticBody(std::shared_ptr<Diagnostic> diag)
-{
-    // Collect all labels
-    std::map<std::filesystem::path, std::map<size_t, std::vector<LabelType>>> labelsMapping;
-
-    size_t maxLineNumber = 0;
-    // primary label
-    const auto &[primarySpan, primaryLabelMsg] = diag->getPrimaryLabel();
-    std::filesystem::path primaryFilePath;
-    std::size_t primaryLineNumberZeroBased, primaryColumnNumberZeroBased;
-    sourceMap->spanToLocation(primarySpan, primaryFilePath, primaryLineNumberZeroBased, primaryColumnNumberZeroBased);
-    labelsMapping[primaryFilePath][primaryLineNumberZeroBased] =
-        std::vector<LabelType>(1, LabelType(primarySpan, primaryLabelMsg));
-    maxLineNumber = std::max(maxLineNumber, primaryLineNumberZeroBased + 1);
-
-    // secondary labels
-    for (const auto &[span, labelMsg] : diag->getSecondaryLabels()) {
-        std::filesystem::path filePath;
-        std::size_t lineNumberZeroBased, columnNumberZeroBased;
-        sourceMap->spanToLocation(span, filePath, lineNumberZeroBased, columnNumberZeroBased);
-        if (labelsMapping.contains(filePath) && labelsMapping[filePath].contains(lineNumberZeroBased)) {
-            labelsMapping[filePath][lineNumberZeroBased].emplace_back(span, labelMsg);
-        } else {
-            labelsMapping[filePath][lineNumberZeroBased] = std::vector<LabelType>(1, LabelType(span, labelMsg));
-        }
-        maxLineNumber = std::max(maxLineNumber, lineNumberZeroBased + 1);
-    }
-
-    spaceCount = calculateDisplayWidth(std::to_string(maxLineNumber)) + 1;
-    fmt::memory_buffer buffer;
-    int primaryLineNumberWidth = calculateDisplayWidth(std::to_string(primaryLineNumberZeroBased + 1));
-    // Print the location header
-    fmt::format_to(std::back_inserter(buffer), "{}{} {}:{}:{}\n", std::string(spaceCount, ' '),
-                   format(fg(cyanColor), "-->"), primaryFilePath.string(), primaryLineNumberZeroBased + 1,
-                   primaryColumnNumberZeroBased + 1);
-
-    // print empty line
-    fmt::format_to(std::back_inserter(buffer), "{} {}\n", std::string(spaceCount, ' '), format(fg(cyanColor), "|"));
-
-    // print primary string
-    auto primarySourceFile = sourceMap->getSourceFile(primaryFilePath);
-    std::string primaryLineContent = primarySourceFile->getLine(primaryLineNumberZeroBased);
-    fmt::format_to(std::back_inserter(buffer), "{}{} {} {}\n", std::string(spaceCount - primaryLineNumberWidth, ' '),
-                   format(fg(cyanColor), "{}", primaryLineNumberZeroBased + 1), format(fg(cyanColor), "|"),
-                   primaryLineContent);
-
-    // print labels in primary string
-    std::vector<LabelType> primarySecondaryLabels;
-    printLabelsForLine(buffer, primaryLineContent, primaryLineNumberZeroBased, LabelType(primarySpan, primaryLabelMsg),
-                       labelsMapping[primaryFilePath][primaryLineNumberZeroBased], diag->getLevel());
-
-    // print all other lines in primary file
-    for (const auto &[lineNumberZeroBased, labels] : labelsMapping[primaryFilePath]) {
-        if (lineNumberZeroBased == primaryLineNumberZeroBased) {
-            continue;
-        }
-        // print "..."
-        fmt::format_to(std::back_inserter(buffer), "{}{}\n", std::string(spaceCount, ' '),
-                       format(fg(cyanColor), "..."));
-        // print empty line
-        fmt::format_to(std::back_inserter(buffer), "{} {}\n", std::string(spaceCount, ' '), format(fg(cyanColor), "|"));
-
-        // print string
-        std::string lineContent = primarySourceFile->getLine(lineNumberZeroBased);
-        int lineNumberWidth = calculateDisplayWidth(std::to_string(lineNumberZeroBased + 1));
-        fmt::format_to(std::back_inserter(buffer), "{}{} {} {}\n", std::string(spaceCount - lineNumberWidth, ' '),
-                       format(fg(cyanColor), "{}", lineNumberZeroBased + 1), format(fg(cyanColor), "|"), lineContent);
-        printLabelsForLine(buffer, lineContent, lineNumberZeroBased, std::nullopt,
-                           labelsMapping[primaryFilePath][lineNumberZeroBased], diag->getLevel());
-    }
-
-    // print all other files and labels
-    for (const auto &[filePath, linesToLabelsMap] : labelsMapping) {
-        if (filePath == primaryFilePath) {
-            continue;
-        }
-        // print location
-        // print all lines
-        // TODO: finish this
-        fmt::format_to(std::back_inserter(buffer), "{}\n",
-                       format(fg(redColor), "Labels in different files not implemented!"));
-    }
-
-    out.write(buffer.data(), buffer.size());
-}
-
-int Emitter::calculateDisplayWidth(const std::string &text)
-{
-    int width = 0;
-    const char *str = text.c_str();
-    utf8proc_ssize_t len = text.size();
-    utf8proc_ssize_t idx = 0;
-    utf8proc_int32_t codepoint;
-    while (idx < len) {
-        utf8proc_ssize_t charLen = utf8proc_iterate((const utf8proc_uint8_t *)(str + idx), len - idx, &codepoint);
-        if (charLen <= 0) {
-            LOG_DETAILED_ERROR("Invalid utf-8 formatting in calculateDisplayWidth");
-            break;
-        }
-
-        width += utf8proc_charwidth(codepoint);
-        idx += charLen;
-    }
-    return width;
-}
-
-int Emitter::calculateCodePoints(const std::string &text)
-{
-    int codePoints = 0;
-    const char *str = text.c_str();
-    utf8proc_ssize_t len = text.size();
-    utf8proc_ssize_t idx = 0;
-    utf8proc_int32_t codepoint;
-    while (idx < len) {
-        utf8proc_ssize_t charLen = utf8proc_iterate((const utf8proc_uint8_t *)(str + idx), len - idx, &codepoint);
-        if (charLen <= 0) {
-            LOG_DETAILED_ERROR("Invalid utf-8 formatting in calculateCodePoints");
-            break;
-        }
-        idx += charLen;
-        codePoints += static_cast<int>(charLen);
-    }
-    return codePoints;
-}
-
-void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, std::string lineContent, size_t lineNumberZeroBased,
-                                 const std::optional<LabelType> &primaryLabel, std::vector<LabelType> &labels,
-                                 Diagnostic::Level level)
-{
-    fmt::rgb primaryColor;
-    switch (level) {
-    case Diagnostic::Level::Error:
-        primaryColor = redColor;
-        break;
-    case Diagnostic::Level::Warning:
-        primaryColor = yellowColor;
-        break;
-    }
-
-    // Initialize a marker line
-    // + 1 needed if we are underlining the '\n' (it's not included in the lineContent)
-    std::string markerLine(calculateDisplayWidth(lineContent) + 1, ' ');
-
-    // Vector to hold messages that need to be printed under the marker line
-    std::vector<std::tuple<size_t, std::string, bool>> labelMessagesToPrint;
-    // Label Message to print on the same line
-    std::string labelMessageToAdd = "";
-
-    // Sort in the descneding order
-    std::sort(labels.begin(), labels.end(), [](auto a, auto b) { return a > b; });
-
-    // Apply labels to the marker line
-    for (const auto &[span, labelMsg] : labels) {
-        std::filesystem::path filePath;
-        std::size_t startLine, startColumn, endLine, endColumn;
-        sourceMap->spanToStartPosition(span, filePath, startLine, startColumn);
-        sourceMap->spanToEndPosition(span, filePath, endLine, endColumn);
-
-        if (startLine != lineNumberZeroBased || endLine != lineNumberZeroBased) {
-            LOG_DETAILED_ERROR("In printLabelsForLine label span isn't the same as specified");
-            return;
-        }
-
-        // Adjust for UTF-8 characters
-        size_t startPos = calculateDisplayWidth(lineContent.substr(0, startColumn));
-        size_t endPos = calculateDisplayWidth(lineContent.substr(0, endColumn));
-
-        char markerChar = '-';
-        bool isPrimaryLabel = primaryLabel && primaryLabel.value().first == span;
-        if (isPrimaryLabel) {
-            markerChar = '^';
-        }
-
-        // Fill in the markers
-        for (size_t i = startPos; i < endPos && i < markerLine.size(); ++i) {
-            markerLine[i] = markerChar;
-        }
-
-        // '\n' has empty width, need to handle separately
-        if (startPos == endPos && startPos < markerLine.size()) {
-            markerLine[startPos] = markerChar;
-        }
-
-        // Handle label messages
-        if (!labelMsg.empty()) {
-            // Append the message after the markers if it's the first from the right and it's the primary
-            if (labels[0].first == span && isPrimaryLabel) {
-                labelMessageToAdd = " " + labelMsg;
-            } else {
-                labelMessagesToPrint.emplace_back(startPos, labelMsg, isPrimaryLabel);
-            }
-        }
-    }
-
-    // Print the marker line with appropriate color
-    std::string coloredMarkerLine;
-    for (size_t i = 0; i < markerLine.size(); ++i) {
-        char c = markerLine[i];
-        if (c == '^') {
-            // Color primary markers red
-            coloredMarkerLine += format(fmt::emphasis::bold | fg(primaryColor), "{}", c);
-        } else if (c == '-') {
-            // Color secondary markers cyan
-            coloredMarkerLine += format(fmt::emphasis::bold | fg(cyanColor), "{}", c);
-        } else if (c == ' ') {
-            // Keep spaces
-            coloredMarkerLine += c;
-        }
-    }
-
-    if (!labelMessageToAdd.empty()) {
-        coloredMarkerLine += format(fg(primaryColor), "{}", labelMessageToAdd);
-    }
-
-    fmt::format_to(std::back_inserter(buffer), "{} {} {}\n", std::string(spaceCount, ' '), format(fg(cyanColor), "|"),
-                   coloredMarkerLine);
-
-    if (labelMessagesToPrint.empty()) {
-        return;
-    }
-
-    // Now print any label messages that didn't fit on the marker line
-    // first print initial line of | | | ...
-    {
-        const auto &[currentStartPos, currentLabelMsg, currentIsPrimaryLabel] = labelMessagesToPrint[0];
-        size_t lineLength = currentStartPos + 1;
-        std::string messageLine(lineLength, ' ');
-
-        std::optional<size_t> primaryLabelIndex;
-        for (const auto &[startPos, _, isPrimaryLabel] : labelMessagesToPrint) {
-            if (startPos > currentStartPos) {
-                continue;
-            }
-            messageLine[startPos] = '|';
-            if (isPrimaryLabel) {
-                primaryLabelIndex = startPos;
-            }
-        }
-
-        std::string coloredLine;
-        for (size_t i = 0; i < messageLine.size(); ++i) {
-            char c = messageLine[i];
-            if (c == '|') {
-                if (primaryLabelIndex && primaryLabelIndex == i) {
-                    coloredLine += format(fg(primaryColor), "{}", "│");
-                } else {
-                    coloredLine += format(fg(cyanColor), "{}", "│");
-                }
-            } else {
-                coloredLine += c;
-            }
-        }
-        fmt::format_to(std::back_inserter(buffer), "{} {} {}\n", std::string(spaceCount, ' '),
-                       format(fg(cyanColor), "|"), coloredLine);
-    }
-
-    // then print all the messages
-    for (const auto &[currentStartPos, currentLabelMsg, currentIsPrimaryLabel] : labelMessagesToPrint) {
-        // + 1 isn't needed, because last can't be a |
-        size_t lineLength = currentStartPos;
-        std::string messageLine(lineLength, ' ');
-
-        std::optional<size_t> primaryLabelIndex;
-        for (const auto &[startPos, _, isPrimaryLabel] : labelMessagesToPrint) {
-            if (startPos >= currentStartPos) {
-                continue;
-            }
-            messageLine[startPos] = '|';
-            if (isPrimaryLabel) {
-                primaryLabelIndex = startPos;
-            }
-        }
-        std::string coloredLine;
-        for (size_t i = 0; i < messageLine.size(); ++i) {
-            char c = messageLine[i];
-            if (c == '|') {
-                if (primaryLabelIndex && primaryLabelIndex == i) {
-                    coloredLine += format(fg(primaryColor), "{}", "│");
-                } else {
-                    coloredLine += format(fg(cyanColor), "{}", "│");
-                }
-            } else {
-                coloredLine += c;
-            }
-        }
-        std::string labelMessage = currentLabelMsg;
-        if (currentIsPrimaryLabel) {
-            coloredLine += format(fg(primaryColor), "{}", labelMessage);
-        } else {
-            coloredLine += format(fg(cyanColor), "{}", labelMessage);
-        }
-
-        fmt::format_to(std::back_inserter(buffer), "{} {} {}\n", std::string(spaceCount, ' '),
-                       format(fg(cyanColor), "|"), coloredLine);
-    }
-}
-
-void Emitter::printNote(std::shared_ptr<Diagnostic> diag)
-{
-    if (!diag->getNoteMessage()) {
-        return;
-    }
-    std::string result =
-        fmt::format("{} {} {}: {}\n", std::string(spaceCount, ' '), format(fg(cyanColor), "="),
-                    format(fg(whiteColor) | fmt::emphasis::bold, "note"), diag->getNoteMessage().value());
-
-    out.write(result.data(), result.size());
-}
-
-void Emitter::printHelp(std::shared_ptr<Diagnostic> /*diag*/) {}
-
-void Emitter::emitJSON(const std::vector<std::shared_ptr<Diagnostic>> &diagnostics) {
-    nlohmann::json output = nlohmann::json::array();
-
-    for (const auto &diag : diagnostics) {
-        nlohmann::json diagJson;
-
-        diagJson["message"] = diag->getMessage();
-        diagJson["severity"] = diag->getLevel() == Diagnostic::Level::Error ? "Error" :
-                               diag->getLevel() == Diagnostic::Level::Warning ? "Warning" : "Info";
-        diagJson["code"] = static_cast<int>(diag->getCode());
-
-        // Primary label
-        const auto &primaryLabel = diag->getPrimaryLabel();
-        nlohmann::json primaryLabelJson;
-
-        std::filesystem::path filePath;
-        std::size_t lineStart, characterStart;
-        sourceMap->spanToLocation(primaryLabel.first, filePath, lineStart, characterStart);
-
-        std::size_t lineEnd, characterEnd;
-        sourceMap->spanToEndLocation(primaryLabel.first, filePath, lineEnd, characterEnd);
-
-        primaryLabelJson["span"]["start"]["line"] = lineStart;
-        primaryLabelJson["span"]["start"]["character"] = characterStart;
-        primaryLabelJson["span"]["end"]["line"] = lineEnd;
-        primaryLabelJson["span"]["end"]["character"] = characterEnd;
-        primaryLabelJson["message"] = primaryLabel.second;
-        diagJson["primaryLabel"] = primaryLabelJson;
-
-        // Secondary labels
-        nlohmann::json secondaryLabelsJson = nlohmann::json::array();
-        for (const auto &secondaryLabel : diag->getSecondaryLabels()) {
-            nlohmann::json secondaryLabelJson;
-
-            sourceMap->spanToLocation(secondaryLabel.first, filePath, lineStart, characterStart);
-            sourceMap->spanToEndLocation(secondaryLabel.first, filePath, lineEnd, characterEnd);
-
-            secondaryLabelJson["span"]["start"]["line"] = lineStart;
-            secondaryLabelJson["span"]["start"]["character"] = characterStart;
-            secondaryLabelJson["span"]["end"]["line"] = lineEnd;
-            secondaryLabelJson["span"]["end"]["character"] = characterEnd;
-            secondaryLabelJson["message"] = secondaryLabel.second;
-            secondaryLabelsJson.push_back(secondaryLabelJson);
-        }
-        diagJson["secondaryLabels"] = secondaryLabelsJson;
-
-        output.push_back(diagJson);
-    }
-
-    std::string result = output.dump(2);
-    out.write(result.data(), result.size());
-}
-
-void Emitter::spanToLineChar(const Span &span, int &startLine, int &startChar, int &endLine, int &endChar)
-{
-    std::filesystem::path filePath;
-    std::size_t lineNumberZeroBased, columnNumberZeroBased;
-
-    sourceMap->spanToLocation(span, filePath, lineNumberZeroBased, columnNumberZeroBased);
-    startLine = static_cast<int>(lineNumberZeroBased);
-    startChar = static_cast<int>(columnNumberZeroBased);
-    sourceMap->spanToEndLocation(span, filePath, lineNumberZeroBased, columnNumberZeroBased);
-    endLine = static_cast<int>(lineNumberZeroBased);
-    endChar = static_cast<int>(columnNumberZeroBased);
-
-    // startChar = static_cast<int>(columnNumberZeroBased);
-
-    // auto sourceFile = sourceMap->lookupSourceFile(span.lo);
-    // if (sourceFile) {
-    //     std::string lineContent = sourceFile->getLine(lineNumberZeroBased);
-    //     std::size_t lineStartByte = sourceFile->getLineStart(lineNumberZeroBased);
-    //     std::size_t byteOffsetInLine = span.lo - lineStartByte;
-    //     std::size_t byteLength = span.hi - span.lo;
-    //     std::string underlineText = lineContent.substr(byteOffsetInLine, byteLength);
-    //     endChar = startChar + calculateCodePoints(underlineText) + 1;
-    // }
-}
-File emitter.h:
-
-#pragma once
-
-#include "source_map.h"
-#include "diagnostic.h"
-
-#include <memory>
-#include <ostream>
-#include <iostream>
-#include <fmt/color.h>
-
-using LabelType = std::pair<Span, std::string>;
-
-class Emitter {
-public:
-    Emitter(std::shared_ptr<SourceMap> sourceMap, std::ostream &outStream = std::cout, bool useColor = true);
-
-    void emit(std::shared_ptr<Diagnostic> diag);
-    void emitJSON(const std::vector<std::shared_ptr<Diagnostic>> &diagnostics);
-
-private:
-    std::shared_ptr<SourceMap> sourceMap;
-    std::ostream &out;
-    bool useColor;
-    fmt::rgb whiteColor = fmt::rgb(200, 200, 200);
-    fmt::rgb redColor = fmt::rgb(254, 89, 89);
-    fmt::rgb yellowColor = fmt::rgb(255, 191, 0);
-    fmt::rgb cyanColor = fmt::rgb(0, 200, 200);
-    int spaceCount = -1;
-
-    template <typename... Args>
-    std::string format(const fmt::text_style &ts, fmt::format_string<Args...> fmt_str, Args &&...args)
-    {
-        return fmt::format(useColor ? ts : fmt::text_style(), fmt_str, std::forward<Args>(args)...);
-    }
-
-    void printHeader(std::shared_ptr<Diagnostic> diag);
-    void printDiagnosticBody(std::shared_ptr<Diagnostic> diag);
-    void printNote(std::shared_ptr<Diagnostic> diag);
-    void printHelp(std::shared_ptr<Diagnostic> diag);
-    void printLabelsForLine(fmt::memory_buffer &buffer, std::string lineContent, size_t lineNumberZeroBased,
-                            const std::optional<LabelType> &primaryLabel, std::vector<LabelType> &labels,
-                            Diagnostic::Level level);
-
-    std::string formatLevel(Diagnostic::Level level);
-    std::string formatErrorCode(Diagnostic::Level level, ErrorCode code);
-    std::string createUnderline(std::shared_ptr<SourceFile> sourceFile, size_t lineNumberZeroBased,
-                                std::optional<Span> primarySpan, std::vector<Span> spans);
-    std::string createUnderline(const std::string &lineContent, std::size_t byteOffsetInLine, std::size_t byteLength);
-    int calculateDisplayWidth(const std::string &text);
-    int calculateCodePoints(const std::string &text);
-    void spanToLineChar(const Span &span, int &startLine, int &startChar, int &endLine, int &endChar);
-};
 
 File error_codes.h:
 
 #pragma once
 
-enum class ErrorCode {
+enum class ErrorCode : std::uint8_t {
 #define DEFINE_ERROR(code, message) code,
 #define DEFINE_WARNING(code, message) code,
 #include "diagnostic_messages.def"
 #undef DEFINE_ERROR
+#undef DEFINE_WARNING
 };
 
 File log.h:
 
 #pragma once
 
-// Regular logging macros
-// #define LOG_TRACE(...) Log::get_core_logger()->trace(__VA_ARGS__)
-// #define LOG_INFO(...) Log::get_core_logger()->info(__VA_ARGS__)
-// #define LOG_WARN(...) Log::get_core_logger()->warn(__VA_ARGS__)
-// #define LOG_ERROR(...) Log::get_core_logger()->error(__VA_ARGS__)
 
-// // Detailed logging macros
-// #if defined(__clang__)
-// #    define PRETTY_FUNCTION __PRETTY_FUNCTION__
-// #elif defined(__GNUC__) || defined(__GNUG__)
-// #    define PRETTY_FUNCTION __PRETTY_FUNCTION__
-// #elif defined(_MSC_VER)
-// #    define PRETTY_FUNCTION __FUNCSIG__
-// #else
-// #    define PRETTY_FUNCTION __func__
-// #endif
-
-// #define LOG_FORMAT_DETAILED(message, file, line, function) "[{}:{} ({})] {}", file, line, function, message
-
-// #define LOG_DETAILED_TRACE(...)                                                                                        \
-//     Log::get_core_logger()->trace(LOG_FORMAT_DETAILED(fmt::format(__VA_ARGS__), __FILE__, __LINE__, PRETTY_FUNCTION))
-// #define LOG_DETAILED_INFO(...)                                                                                         \
-//     Log::get_core_logger()->info(LOG_FORMAT_DETAILED(fmt::format(__VA_ARGS__), __FILE__, __LINE__, PRETTY_FUNCTION))
-// #define LOG_DETAILED_WARN(...)                                                                                         \
-//     Log::get_core_logger()->warn(LOG_FORMAT_DETAILED(fmt::format(__VA_ARGS__), __FILE__, __LINE__, PRETTY_FUNCTION))
-// #define LOG_DETAILED_ERROR(...)                                                                                        \
-//     Log::get_core_logger()->error(LOG_FORMAT_DETAILED(fmt::format(__VA_ARGS__), __FILE__, __LINE__, PRETTY_FUNCTION))
 #include <fmt/core.h>
 #include <fmt/color.h>
 
 #if defined(__GNUC__) || defined(__clang__)
-    #define PRETTY_FUNCTION __PRETTY_FUNCTION__
+#    define PRETTY_FUNCTION __PRETTY_FUNCTION__
 #elif defined(_MSC_VER)
-    #define PRETTY_FUNCTION __FUNCSIG__
+#    define PRETTY_FUNCTION __FUNCSIG__
 #else
-    #define PRETTY_FUNCTION __func__
+#    define PRETTY_FUNCTION __func__
 #endif
 
-#define LOG_DETAILED_ERROR(...) \
-    fmt::print(stderr, "{} {} ({}:{}): {}\n", fmt::format(fg(fmt::color::red), "[ERROR]"), __FILE__, __LINE__, PRETTY_FUNCTION, fmt::format(__VA_ARGS__));
+#define LOG_DETAILED_ERROR(...)                                                                                        \
+    fmt::print(stderr, "{} {} ({}:{}): {}\n", fmt::format(fg(fmt::color::red), "[ERROR]"), __FILE__, __LINE__,         \
+               PRETTY_FUNCTION, fmt::format(__VA_ARGS__));
 
 File main.cpp:
 
@@ -1007,7 +385,7 @@ int main(int argc, char *argv[])
         }
     }
     // TODO: Remove in release
-    std::filesystem::path new_path = "C:\\Users\\grigo\\Documents\\MasmLint";
+    std::filesystem::path new_path = R"(C:\Users\grigo\Documents\MasmLint)";
     std::filesystem::current_path(new_path);
 
     auto parseSess = std::make_shared<ParseSession>();
@@ -1076,48 +454,9 @@ File parser.cpp:
 
 // #include <fmt/core.h>
 
-Parser::Parser(std::shared_ptr<ParseSession> parseSession, const std::vector<Token> &tokens)
-    : parseSess(parseSession), tokens(tokens), currentIndex(0)
+Parser::Parser(const std::shared_ptr<ParseSession> &parseSession, const std::vector<Token> &tokens)
+    : parseSess(parseSession), tokens(tokens), currentToken(tokens[currentIndex])
 {
-    currentToken = tokens[currentIndex];
-}
-
-ASTPtr Parser::parse()
-{
-    std::vector<ASTExpressionPtr> expressions;
-    currentIndex = 0;
-    while (true) {
-        ASTExpressionPtr expr = parseLine();
-        expressions.push_back(expr);
-        if (currentToken.type == TokenType::EndOfFile) {
-            return std::make_shared<Program>(expressions);
-        }
-    }
-    return std::make_shared<Program>(expressions);
-}
-
-ASTExpressionPtr Parser::parseLine()
-{
-    // reset panicLine
-    panicLine = false;
-    ASTExpressionPtr expr = parseExpression();
-
-    if (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
-        if (!panicLine) {
-            Diagnostic diag(Diagnostic::Level::Error, ErrorCode::UNEXPECTED_TOKEN, currentToken.lexeme);
-            diag.addPrimaryLabel(currentToken.span, "");
-            parseSess->dcx->addDiagnostic(diag);
-        }
-    }
-    while (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
-        advance();
-    }
-    if (currentToken.type == TokenType::EndOfFile) {
-        return expr;
-    }
-    consume(TokenType::EndOfLine);
-
-    return expr;
 }
 
 // Only advance when matched a not EndOfFile
@@ -1130,16 +469,16 @@ void Parser::advance()
     currentToken = tokens[++currentIndex];
 }
 
-bool Parser::match(TokenType type) { return currentToken.type == type; }
+bool Parser::match(TokenType type) const { return currentToken.type == type; }
 
-bool Parser::match(const std::string &value) { return stringToUpper(currentToken.lexeme) == value; }
+bool Parser::match(const std::string &value) const { return stringToUpper(currentToken.lexeme) == value; }
 
-bool Parser::match(TokenType type, const std::string &value)
+bool Parser::match(TokenType type, const std::string &value) const
 {
     return currentToken.type == type && stringToUpper(currentToken.lexeme) == value;
 }
 
-// Can't consume EndOfFile ?
+// Can't consume EndOfFile
 std::optional<Token> Parser::consume(TokenType type)
 {
     if (currentToken.type == type) {
@@ -1150,7 +489,7 @@ std::optional<Token> Parser::consume(TokenType type)
         return std::nullopt;
     }
 }
-
+// Can't consume EndOfFile
 std::optional<Token> Parser::consume(TokenType type, const std::string &value)
 {
     if (currentToken.type == type && currentToken.lexeme == value) {
@@ -1162,188 +501,16 @@ std::optional<Token> Parser::consume(TokenType type, const std::string &value)
     }
 }
 
-ASTExpressionPtr Parser::parseExpression()
+ASTPtr Parser::parse()
 {
-    // need to initialize to {} before every parseExpression()
-    expressionDelimitersStack = {};
-    return parseExpressionHelper();
+
 }
 
-ASTExpressionPtr Parser::parseExpressionHelper()
+ASTExpressionPtr Parser::parseLine()
 {
-    ASTExpressionPtr term1 = parseMultiplicativeExpression();
-    while (match("+") || match("-")) {
-        Token op = currentToken;
-        advance();
-        ASTExpressionPtr term2 = parseMultiplicativeExpression();
-        term1 = std::make_shared<BinaryOperator>(op, term1, term2);
-    }
-    return term1;
+
 }
 
-ASTExpressionPtr Parser::parseMultiplicativeExpression()
-{
-    ASTExpressionPtr term1 = parseUnaryExpression();
-    while (match("*") || match("/") || match("MOD") || match("SHL") || match("SHR")) {
-        Token op = currentToken;
-        advance();
-        ASTExpressionPtr term2 = parseUnaryExpression();
-        term1 = std::make_shared<BinaryOperator>(op, term1, term2);
-    }
-    return term1;
-}
-
-ASTExpressionPtr Parser::parseUnaryExpression()
-{
-    std::vector<Token> operators;
-    while (match("+") || match("-") || match("OFFSET") || match("TYPE")) {
-        Token op = currentToken;
-        operators.push_back(op);
-        advance();
-    }
-    ASTExpressionPtr term = parsePostfixExpression();
-    for (Token op : std::ranges::reverse_view(operators)) {
-        term = std::make_shared<UnaryOperator>(op, term);
-    }
-    return term;
-}
-
-ASTExpressionPtr Parser::parsePostfixExpression()
-{
-    ASTExpressionPtr term1 = parseMemberAccessExpression();
-    while (match("PTR")) {
-        Token op = currentToken;
-        advance();
-        ASTExpressionPtr term2 = parseMemberAccessExpression();
-        term1 = std::make_shared<BinaryOperator>(op, term1, term2);
-    }
-    return term1;
-}
-
-ASTExpressionPtr Parser::parseMemberAccessExpression()
-{
-    ASTExpressionPtr term1 = parseHighPrecedenceUnaryExpression();
-    while (match(".")) {
-        Token op = currentToken;
-        advance();
-        ASTExpressionPtr term2 = parseHighPrecedenceUnaryExpression();
-        term1 = std::make_shared<BinaryOperator>(op, term1, term2);
-    }
-    return term1;
-}
-
-ASTExpressionPtr Parser::parseHighPrecedenceUnaryExpression()
-{
-    std::vector<Token> operators;
-    while (match("LENGTH") || match("LENGTHOF") || match("SIZE") || match("SIZEOF") || match("WIDTH") ||
-           match("MASK")) {
-        Token op = currentToken;
-        operators.push_back(op);
-        advance();
-    }
-
-    ASTExpressionPtr term = parseIndexSequence();
-    for (Token op : std::ranges::reverse_view(operators)) {
-        term = std::make_shared<UnaryOperator>(op, term);
-    }
-    return term;
-}
-
-ASTExpressionPtr Parser::parseIndexSequence()
-{
-    ASTExpressionPtr term1 = parsePrimaryExpression();
-    while (match(TokenType::OpenSquareBracket) || match(TokenType::OpenBracket)) {
-        if (match(TokenType::OpenSquareBracket)) {
-            Token leftBracket = currentToken;
-            expressionDelimitersStack.push(leftBracket);
-            advance();
-            ASTExpressionPtr expr = parseExpressionHelper();
-            std::optional<Token> rightBracket = consume(TokenType::CloseSquareBracket);
-            if (!rightBracket) {
-                std::shared_ptr<Diagnostic> diag = reportUnclosedDelimiterError(currentToken);
-                return std::make_shared<InvalidExpression>(diag);
-            }
-            expressionDelimitersStack.pop();
-            ASTExpressionPtr term2 = std::make_shared<SquareBrackets>(leftBracket, rightBracket.value(), expr);
-            term1 = std::make_shared<ImplicitPlusOperator>(term1, term2);
-        } else if (match(TokenType::OpenBracket)) {
-            Token leftBracket = currentToken;
-            expressionDelimitersStack.push(leftBracket);
-            advance();
-            ASTExpressionPtr expr = parseExpressionHelper();
-            std::optional<Token> rightBracket = consume(TokenType::CloseBracket);
-            if (!rightBracket) {
-                std::shared_ptr<Diagnostic> diag = reportUnclosedDelimiterError(currentToken);
-                return std::make_shared<InvalidExpression>(diag);
-            }
-            expressionDelimitersStack.pop();
-            ASTExpressionPtr term2 = std::make_shared<Brackets>(leftBracket, rightBracket.value(), expr);
-            term1 = std::make_shared<ImplicitPlusOperator>(term1, term2);
-        }
-    }
-    return term1;
-}
-
-ASTExpressionPtr Parser::parsePrimaryExpression()
-{
-    if (match(TokenType::OpenBracket)) {
-        Token leftBracket = currentToken;
-        expressionDelimitersStack.push(leftBracket);
-        advance();
-        ASTExpressionPtr expr = parseExpressionHelper();
-        std::optional<Token> rightBracket = consume(TokenType::CloseBracket);
-        if (!rightBracket) {
-            auto diag = reportUnclosedDelimiterError(currentToken);
-            return std::make_shared<InvalidExpression>(diag);
-        }
-        expressionDelimitersStack.pop();
-        return std::make_shared<Brackets>(leftBracket, rightBracket.value(), expr);
-
-    } else if (match(TokenType::OpenSquareBracket)) {
-        Token leftBracket = currentToken;
-        expressionDelimitersStack.push(leftBracket);
-        advance();
-        ASTExpressionPtr expr = parseExpressionHelper();
-        std::optional<Token> rightBracket = consume(TokenType::CloseSquareBracket);
-        if (!rightBracket) {
-            auto diag = reportUnclosedDelimiterError(currentToken);
-            return std::make_shared<InvalidExpression>(diag);
-        }
-        expressionDelimitersStack.pop();
-        return std::make_shared<SquareBrackets>(leftBracket, rightBracket.value(), expr);
-    } else if (match(TokenType::Identifier) || match(TokenType::Number) || match(TokenType::StringLiteral) ||
-               match(TokenType::Register) || match(TokenType::Type) || match(TokenType::Dollar)) {
-        Token token = currentToken;
-        advance();
-        // (var var) - can't be
-        std::string curentTokenLexemeUpper = stringToUpper(currentToken.lexeme);
-        // after leaf when there'are unclosed parenthesis `()` or `[]` must be operator (binary operator)
-        // or closing `)` or `]`
-        // or there might be `(` or `[` - implicit plus for index operator
-        if (!expressionDelimitersStack.empty() && currentToken.type != TokenType::CloseSquareBracket &&
-            currentToken.type != TokenType::CloseBracket && currentToken.type != TokenType::OpenSquareBracket &&
-            currentToken.type != TokenType::OpenBracket && curentTokenLexemeUpper != "+" &&
-            curentTokenLexemeUpper != "-" && curentTokenLexemeUpper != "*" && curentTokenLexemeUpper != "/" &&
-            curentTokenLexemeUpper != "/" && curentTokenLexemeUpper != "PTR" && curentTokenLexemeUpper != "." &&
-            curentTokenLexemeUpper != "SHL" && curentTokenLexemeUpper != "SHR") {
-
-            // try to distinct between `(var var` and `(1 + 2` or `(1 + 2,
-            // when after var there aren't any vars and only possible closing things and then endofline -
-            if (currentToken.type == TokenType::EndOfLine || currentToken.type == TokenType::EndOfFile ||
-                currentToken.type == TokenType::Comma || currentToken.type == TokenType::OpenAngleBracket) {
-                auto diag = reportUnclosedDelimiterError(currentToken);
-                return std::make_shared<InvalidExpression>(diag);
-            }
-            auto diag = reportExpectedOperatorOrClosingDelimiter(currentToken);
-            return std::make_shared<InvalidExpression>(diag);
-        }
-        // var var - can't be - handled in the upper parsing (only var is parsed as expression)
-        return std::make_shared<Leaf>(token);
-    } else {
-        auto diag = reportExpectedExpression(currentToken);
-        return std::make_shared<InvalidExpression>(diag);
-    }
-}
 
 File parser.h:
 
@@ -1360,23 +527,23 @@ File parser.h:
 
 class Parser {
 public:
-    Parser(std::shared_ptr<ParseSession> parseSession, const std::vector<Token> &tokens);
+    Parser(const std::shared_ptr<ParseSession> &parseSession, const std::vector<Token> &tokens);
     ASTPtr parse();
 
 private:
     std::shared_ptr<ParseSession> parseSess;
-
-    int currentIndex;
-    Token currentToken;
     const std::vector<Token> &tokens;
+    size_t currentIndex = 0;
+    Token currentToken;
+
     bool panicLine = false;
 
     std::stack<Token> expressionDelimitersStack;
 
     void advance();
-    bool match(TokenType type);
-    bool match(const std::string &value);
-    bool match(TokenType type, const std::string &value);
+    bool match(TokenType type) const;
+    bool match(const std::string &value) const;
+    bool match(TokenType type, const std::string &value) const;
     std::optional<Token> consume(TokenType type);
     std::optional<Token> consume(TokenType type, const std::string &value);
 
@@ -1385,8 +552,8 @@ private:
     ASTExpressionPtr parseExpressionHelper();
     ASTExpressionPtr parseMultiplicativeExpression();
     ASTExpressionPtr parseUnaryExpression();
-    ASTExpressionPtr parsePostfixExpression();
-    ASTExpressionPtr parseMemberAccessExpression();
+    ASTExpressionPtr parsePtrExpression();
+    ASTExpressionPtr parseMemberAccessAndIndexingExpression();
     ASTExpressionPtr parseHighPrecedenceUnaryExpression();
     ASTExpressionPtr parseIndexSequence();
     ASTExpressionPtr parsePrimaryExpression();
@@ -1394,1259 +561,11 @@ private:
     std::shared_ptr<Diagnostic> reportUnclosedDelimiterError(const Token &closingDelimiter);
     std::shared_ptr<Diagnostic> reportExpectedExpression(const Token &token);
     std::shared_ptr<Diagnostic> reportExpectedOperatorOrClosingDelimiter(const Token &token);
-};
-File parser_errors_reporting.cpp:
-
-#include "parser.h"
-#include "log.h"
-#include "tokenize.h"
-
-std::shared_ptr<Diagnostic> Parser::reportUnclosedDelimiterError(const Token &closingDelimiter)
-{
-    if (panicLine) {
-        return parseSess->dcx->getLastDiagnostic();
-    }
-    panicLine = true;
-    if (expressionDelimitersStack.empty()) {
-        LOG_DETAILED_ERROR("Empty demimiters stack!");
-    } else {
-        Diagnostic diag(Diagnostic::Level::Error, ErrorCode::UNCLOSED_DELIMITER);
-        diag.addPrimaryLabel(closingDelimiter.span, "");
-        Token openingDelimiter = expressionDelimitersStack.top();
-        diag.addSecondaryLabel(openingDelimiter.span, "unclosed delimiter");
-        parseSess->dcx->addDiagnostic(diag);
-    }
-    return parseSess->dcx->getLastDiagnostic();
-}
-
-std::shared_ptr<Diagnostic> Parser::reportExpectedExpression(const Token &token)
-{
-    if (panicLine) {
-        return parseSess->dcx->getLastDiagnostic();
-    }
-    panicLine = true;
-    if ((token.type == TokenType::CloseSquareBracket || token.type == TokenType::CloseBracket) &&
-        expressionDelimitersStack.empty()) {
-        Diagnostic diag(Diagnostic::Level::Error, ErrorCode::UNEXPECTED_CLOSING_DELIMITER, token.lexeme);
-        diag.addPrimaryLabel(token.span, "");
-        parseSess->dcx->addDiagnostic(diag);
-    } else {
-        std::string lexeme;
-        if (token.type == TokenType::EndOfLine) {
-            lexeme = "\\n";
-        } else if (token.type == TokenType::EndOfFile) {
-            lexeme = "End Of File";
-        } else {
-            lexeme = token.lexeme;
-        }
-        Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_EXPRESSION, lexeme);
-        diag.addPrimaryLabel(token.span, "");
-
-        // 10 * MOD 3 - causes unexpected MOD
-        // PTR [eax] - causes unexpected PTR
-        // add note message, saying that MOD, SHL, SHR, PTR take 2 arguments
-        // other binary operators are obvious enough
-        std::string lexemeUpper = stringToUpper(token.lexeme);
-        if (lexemeUpper == "MOD" || lexemeUpper == "SHL" || lexemeUpper == "SHR" || lexemeUpper == "PTR") {
-            diag.addNoteMessage(fmt::format("{} operator takes 2 arguments", lexemeUpper));
-        }
-        parseSess->dcx->addDiagnostic(diag);
-    }
-    return parseSess->dcx->getLastDiagnostic();
-}
-
-std::shared_ptr<Diagnostic> Parser::reportExpectedOperatorOrClosingDelimiter(const Token &token)
-{
-    if (panicLine) {
-        return parseSess->dcx->getLastDiagnostic();
-    }
-    panicLine = true;
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXCPECTED_OPERATOR_OR_CLOSING_DELIMITER, token.lexeme);
-    diag.addPrimaryLabel(token.span, "");
-    parseSess->dcx->addDiagnostic(diag);
-    return parseSess->dcx->getLastDiagnostic();
-}
-File preprocessor.cpp:
-
-#include "preprocessor.h"
-#include "tokenize.h"
-#include <sstream>
-#include <algorithm>
-#include <stdexcept>
-
-Preprocessor::Preprocessor(std::shared_ptr<ParseSession> parseSess, const std::vector<Token> &tokens) : parseSess(parseSess), tokens(tokens) {}
-
-std::vector<Token> Preprocessor::preprocess()
-{
-    // TODO: implement preprocessing
-    return tokens;
-}
-
-File preprocessor.h:
-
-#pragma once
-
-#include "diag_ctxt.h"
-#include "tokenize.h"
-#include "session.h"
-#include <string>
-#include <vector>
-#include <stack>
-#include <unordered_map>
-#include <memory>
-
-class Preprocessor {
-public:
-    Preprocessor(std::shared_ptr<ParseSession> parseSess, const std::vector<Token> &tokens);
-    std::vector<Token> preprocess();
-
-private:
-    std::shared_ptr<ParseSession> parseSess;
-    const std::vector<Token> &tokens;
+    std::shared_ptr<Diagnostic> reportExpectedIdentifier(const Token &token);
 };
 
-File semantic_analyzer.cpp:
 
-// File: semantic_analyzer.cpp
-#include "semantic_analyzer.h"
-#include "log.h"
 
-SemanticAnalyzer::SemanticAnalyzer(std::shared_ptr<ParseSession> parseSession, ASTPtr ast)
-    : parseSess(parseSession), ast(ast)
-{
-}
-
-void SemanticAnalyzer::analyze() { visit(ast); }
-
-void SemanticAnalyzer::visit(ASTPtr node)
-{
-    if (auto program = std::dynamic_pointer_cast<Program>(node)) {
-        for (auto expr : program->expressions) {
-            panicLine = false;
-            expressionDepth = 0;
-            visitExpression(expr, ExpressionContext::InstructionOperand);
-            if (expr->type == OperandType::UnfinishedMemoryOperand) {
-                reportInvalidAddressExpression(expr);
-            }
-        }
-    }
-}
-
-void SemanticAnalyzer::visitExpression(ASTExpressionPtr node, ExpressionContext context)
-{
-    expressionDepth++;
-    if (auto brackets = std::dynamic_pointer_cast<Brackets>(node)) {
-        visitBrackets(brackets, context);
-    } else if (auto squareBrackets = std::dynamic_pointer_cast<SquareBrackets>(node)) {
-        visitSquareBrackets(squareBrackets, context);
-    } else if (auto implicitPlus = std::dynamic_pointer_cast<ImplicitPlusOperator>(node)) {
-        visitImplicitPlusOperator(implicitPlus, context);
-    } else if (auto binaryOp = std::dynamic_pointer_cast<BinaryOperator>(node)) {
-        visitBinaryOperator(binaryOp, context);
-    } else if (auto unaryOp = std::dynamic_pointer_cast<UnaryOperator>(node)) {
-        visitUnaryOperator(unaryOp, context);
-    } else if (auto leaf = std::dynamic_pointer_cast<Leaf>(node)) {
-        visitLeaf(leaf, context);
-    } else if (auto invalidExpr = std::dynamic_pointer_cast<InvalidExpression>(node)) {
-        visitInvalidExpression(invalidExpr, context);
-    } else {
-        LOG_DETAILED_ERROR("Unknown expression ptr node");
-    }
-    expressionDepth--;
-}
-
-void SemanticAnalyzer::visitBrackets(std::shared_ptr<Brackets> node, ExpressionContext context)
-{
-    visitExpression(node->operand, context);
-
-    auto operand = node->operand;
-    node->constantValue = operand->constantValue;
-    node->isRelocatable = operand->isRelocatable;
-    node->type = operand->type;
-    node->size = operand->size;
-    node->registers = operand->registers;
-}
-
-void SemanticAnalyzer::visitSquareBrackets(std::shared_ptr<SquareBrackets> node, ExpressionContext context)
-{
-    visitExpression(node->operand, context);
-
-    auto operand = node->operand;
-    node->constantValue = operand->constantValue;
-    node->isRelocatable = operand->isRelocatable;
-    if (operand->type == OperandType::UnfinishedMemoryOperand) {
-        node->type = OperandType::MemoryOperand;
-    } else {
-        node->type = operand->type;
-    }
-    node->size = operand->size;
-    node->registers = operand->registers;
-}
-
-void SemanticAnalyzer::visitImplicitPlusOperator(std::shared_ptr<ImplicitPlusOperator> node, ExpressionContext context)
-{
-    visitExpression(node->left, context);
-    visitExpression(node->right, context);
-
-    auto left = node->left;
-    auto right = node->right;
-
-    if (!(left->isRelocatable && right->isRelocatable)) {
-        // check that we have not more then 2 registers, and only one has scale (eax * 1) is counted as having scale
-        if (left->registers.size() + right->registers.size() <= 2) {
-            auto newRegisters = left->registers;
-            for (const auto &[regToken, scale] : right->registers) {
-                newRegisters[regToken] = scale;
-            }
-            // ensure only one has scale
-            int scaleCount = 0;
-            for (const auto &[regToken, scale] : newRegisters) {
-                if (newRegisters[regToken].has_value()) {
-                    scaleCount += 1;
-                }
-            }
-            if (scaleCount < 2) {
-                // everything now is correct
-                if (left->constantValue && right->constantValue) {
-                    node->constantValue = left->constantValue.value() + right->constantValue.value();
-                } else {
-                    node->constantValue = std::nullopt;
-                }
-                node->isRelocatable = left->isRelocatable || right->isRelocatable;
-
-                if (left->type == OperandType::ImmediateOperand && right->type == OperandType::ImmediateOperand) {
-                    node->type = OperandType::ImmediateOperand;
-                } else if (left->type == OperandType::RegisterOperand || right->type == OperandType::RegisterOperand) {
-                    node->type = OperandType::UnfinishedMemoryOperand;
-                } else if (left->type == OperandType::UnfinishedMemoryOperand ||
-                           right->type == OperandType::UnfinishedMemoryOperand) {
-                    node->type = OperandType::UnfinishedMemoryOperand;
-                } else if (left->type == OperandType::MemoryOperand || right->type == OperandType::MemoryOperand) {
-                    node->type = OperandType::MemoryOperand;
-                } else {
-                    // shouldn't happen (except in OperandType::InvalidOperand)
-                }
-
-                if (!left->size || !right->size) {
-                    node->size = std::nullopt;
-                } else {
-                    // TODO: report that operands have different sizes
-                    node->size = left->size;
-                }
-                node->registers = newRegisters;
-                return;
-            }
-            node->type = OperandType::InvalidOperand;
-            reportMoreThanOneScaleAfterAdd(node, true);
-            return;
-        }
-        node->type = OperandType::InvalidOperand;
-        reportMoreThanTwoRegistersAfterAdd(node, true);
-        return;
-    }
-    node->type = OperandType::InvalidOperand;
-    if (left->type == OperandType::UnfinishedMemoryOperand) {
-        reportInvalidAddressExpression(left);
-        return;
-    } else if (right->type == OperandType::UnfinishedMemoryOperand) {
-        reportInvalidAddressExpression(right);
-        return;
-    }
-    reportCantAddVariables(node, true);
-}
-
-void SemanticAnalyzer::visitBinaryOperator(std::shared_ptr<BinaryOperator> node, ExpressionContext context)
-{
-    visitExpression(node->left, context);
-    visitExpression(node->right, context);
-
-    std::string op = stringToUpper(node->op.lexeme);
-    auto left = node->left;
-    auto right = node->right;
-
-    if (op == ".") {
-        if (!left->constantValue && left->type != OperandType::RegisterOperand &&
-            left->type != OperandType::UnfinishedMemoryOperand) {
-            std::shared_ptr<Leaf> leaf;
-            if ((leaf = std::dynamic_pointer_cast<Leaf>(right)) && leaf->token.type == TokenType::Identifier) {
-                // TODO: check that left type has field and that field is valid
-                node->constantValue = std::nullopt;
-                node->isRelocatable = left->isRelocatable;
-                node->type = OperandType::MemoryOperand;
-                node->size = left->size;
-                node->registers = left->registers;
-                return;
-            }
-        }
-        node->type = OperandType::InvalidOperand;
-        if (left->type == OperandType::UnfinishedMemoryOperand) {
-            reportInvalidAddressExpression(left);
-            return;
-        } else if (right->type == OperandType::UnfinishedMemoryOperand) {
-            reportInvalidAddressExpression(right);
-            return;
-        }
-        reportDotOperatorIncorrectArgument(node);
-
-    } else if (op == "PTR") {
-        std::shared_ptr<Leaf> leaf;
-        // CRITICAL TODO: left can also be identifier, if it's a type symbol
-        if ((leaf = std::dynamic_pointer_cast<Leaf>(left)) &&
-            leaf->token.type == TokenType::Type /* !=TokenType::Identifier */) {
-            if (right->type != OperandType::UnfinishedMemoryOperand && right->type != OperandType::RegisterOperand) {
-                node->constantValue = right->constantValue;
-                node->isRelocatable = right->isRelocatable;
-                node->type = right->type;
-                node->size = OperandSize(leaf->token.lexeme, 4); // TODO: get size from right id symbol table
-                node->registers = left->registers;
-                return;
-            }
-        }
-        node->type = OperandType::InvalidOperand;
-        if (left->type == OperandType::UnfinishedMemoryOperand) {
-            reportInvalidAddressExpression(left);
-            return;
-        } else if (right->type == OperandType::UnfinishedMemoryOperand) {
-            reportInvalidAddressExpression(right);
-            return;
-        }
-        reportPtrOperatorIncorrectArgument(node);
-    } else if (op == "*" || op == "/" || op == "MOD" || op == "SHL" || op == "SHR") {
-        // handle eax * 4
-        if (op == "*") {
-            if (left->constantValue && right->type == OperandType::RegisterOperand ||
-                right->constantValue && left->type == OperandType::RegisterOperand) {
-                int32_t value;
-                std::shared_ptr<Leaf> leafNode;
-                if (left->constantValue) {
-                    value = left->constantValue.value();
-                    leafNode = std::dynamic_pointer_cast<Leaf>(right);
-                } else {
-                    value = right->constantValue.value();
-                    leafNode = std::dynamic_pointer_cast<Leaf>(left);
-                }
-                if (value != 1 && value != 2 && value != 4 && value != 8) {
-                    node->type = OperandType::InvalidOperand;
-                    reportInvalidScaleValue(node);
-                    return;
-                }
-                if (stringToUpper(leafNode->token.lexeme) == "ESP") {
-                    node->type = OperandType::InvalidOperand;
-                    reportIncorrectIndexRegister(leafNode);
-                    return;
-                }
-
-                node->constantValue = std::nullopt;
-                node->isRelocatable = false;
-                node->type = OperandType::UnfinishedMemoryOperand;
-                node->size = std::nullopt;
-                if (left->type == OperandType::RegisterOperand) {
-                    std::shared_ptr<Leaf> leftLeaf = std::dynamic_pointer_cast<Leaf>(left);
-                    node->registers[leftLeaf->token] = value;
-                } else {
-                    std::shared_ptr<Leaf> rightLeaf = std::dynamic_pointer_cast<Leaf>(right);
-                    node->registers[rightLeaf->token] = value;
-                }
-                return;
-            }
-        }
-        if (left->constantValue && right->constantValue) {
-            if (op == "*") {
-                node->constantValue = left->constantValue.value() * right->constantValue.value();
-            } else if (op == "/") {
-                if (right->constantValue.value() == 0) {
-                    node->type = OperandType::InvalidOperand;
-                    reportDivisionByZero(node);
-                    return;
-                }
-                node->constantValue = left->constantValue.value() / right->constantValue.value();
-            } else if (op == "MOD") {
-                if (right->constantValue.value() == 0) {
-                    node->type = OperandType::InvalidOperand;
-                    reportDivisionByZero(node);
-                    return;
-                }
-                node->constantValue = left->constantValue.value() % right->constantValue.value();
-            } else if (op == "SHL") {
-                // TODO: calculate SHL
-                node->constantValue = 0;
-            } else if (op == "SHR") {
-                // TODO: calculate SHR
-                node->constantValue = 0;
-            }
-
-            node->constantValue = right->constantValue;
-            node->isRelocatable = right->isRelocatable;
-            node->type = right->type;
-            node->size = OperandSize("DWORD", 4);
-            node->registers = left->registers;
-            return;
-        }
-        node->type = OperandType::InvalidOperand;
-        if (left->type == OperandType::UnfinishedMemoryOperand) {
-            reportInvalidAddressExpression(left);
-            return;
-        } else if (right->type == OperandType::UnfinishedMemoryOperand) {
-            reportInvalidAddressExpression(right);
-            return;
-        }
-        reportOtherBinaryOperatorIncorrectArgument(node);
-    } else if (op == "+") {
-        if (!(left->isRelocatable && right->isRelocatable)) {
-            // check that we have not more then 2 registers, and only one has scale (eax * 1) is counted as having scale
-            if (left->registers.size() + right->registers.size() <= 2) {
-                auto newRegisters = left->registers;
-                for (const auto &[regToken, scale] : right->registers) {
-                    newRegisters[regToken] = scale;
-                }
-                // ensure only one has scale
-                int scaleCount = 0;
-                for (const auto &[regToken, scale] : newRegisters) {
-                    if (newRegisters[regToken].has_value()) {
-                        scaleCount += 1;
-                    }
-                }
-                if (scaleCount < 2) {
-                    // everything now is correct
-                    if (left->constantValue && right->constantValue) {
-                        node->constantValue = left->constantValue.value() + right->constantValue.value();
-                    } else {
-                        node->constantValue = std::nullopt;
-                    }
-                    node->isRelocatable = left->isRelocatable || right->isRelocatable;
-
-                    if (left->type == OperandType::ImmediateOperand && right->type == OperandType::ImmediateOperand) {
-                        node->type = OperandType::ImmediateOperand;
-                    } else if (left->type == OperandType::RegisterOperand ||
-                               right->type == OperandType::RegisterOperand) {
-                        node->type = OperandType::UnfinishedMemoryOperand;
-                    } else if (left->type == OperandType::UnfinishedMemoryOperand ||
-                               right->type == OperandType::UnfinishedMemoryOperand) {
-                        node->type = OperandType::UnfinishedMemoryOperand;
-                    } else if (left->type == OperandType::MemoryOperand || right->type == OperandType::MemoryOperand) {
-                        node->type = OperandType::MemoryOperand;
-                    } else {
-                        // shouldn't happen (except in OperandType::InvalidOperand)
-                    }
-
-                    if (!left->size || !right->size) {
-                        node->size = std::nullopt;
-                    } else {
-                        // TODO: report that operands have different sizes
-                        node->size = left->size;
-                    }
-                    node->registers = newRegisters;
-                    return;
-                }
-                node->type = OperandType::InvalidOperand;
-                reportMoreThanOneScaleAfterAdd(node, false);
-                return;
-            }
-            node->type = OperandType::InvalidOperand;
-            reportMoreThanTwoRegistersAfterAdd(node, false);
-            return;
-        }
-        node->type = OperandType::InvalidOperand;
-        if (left->type == OperandType::UnfinishedMemoryOperand) {
-            reportInvalidAddressExpression(left);
-            return;
-        } else if (right->type == OperandType::UnfinishedMemoryOperand) {
-            reportInvalidAddressExpression(right);
-            return;
-        }
-        reportCantAddVariables(node, false);
-    } else if (op == "-") {
-        if (left->registers.empty() && left->isRelocatable) {
-            // left is an adress expression, right can be an address expression or constant
-            if (right->constantValue) {
-                node->constantValue = left->constantValue.value() - right->constantValue.value();
-                node->isRelocatable = false;
-                node->type = OperandType::ImmediateOperand;
-                node->size = OperandSize("DWORD", 4);
-                node->registers = {};
-                return;
-            } else if (right->isRelocatable && right->registers.empty()) {
-                node->constantValue = 1; // TODO: calculate actual constant value of the differece between 2 relocations
-                node->isRelocatable = false;
-                node->type = OperandType::ImmediateOperand;
-                node->size = OperandSize("DWORD", 4);
-                node->registers = {};
-                return;
-            }
-        }
-        // left is not an adress expression, right must be constant
-        if (right->constantValue) {
-            // everything fine
-            node->constantValue = left->constantValue;
-            node->isRelocatable = left->isRelocatable;
-            node->type = left->type;
-            node->size = left->size;
-            node->registers = left->registers;
-            return;
-        }
-        node->type = OperandType::InvalidOperand;
-        if (left->type == OperandType::UnfinishedMemoryOperand) {
-            reportInvalidAddressExpression(left);
-            return;
-        } else if (right->type == OperandType::UnfinishedMemoryOperand) {
-            reportInvalidAddressExpression(right);
-            return;
-        }
-        reportBinaryMinusOperatorIncorrectArgument(node);
-    } else {
-        LOG_DETAILED_ERROR("Unknown binary operator!");
-    }
-}
-
-void SemanticAnalyzer::visitUnaryOperator(std::shared_ptr<UnaryOperator> node, ExpressionContext context)
-{
-    visitExpression(node->operand, context);
-
-    std::string op = stringToUpper(node->op.lexeme);
-    auto operand = node->operand;
-
-    if (op == "LENGTH" || op == "LENGTHOF") {
-        std::shared_ptr<Leaf> leaf;
-        if ((leaf = std::dynamic_pointer_cast<Leaf>(operand)) && leaf->token.type == TokenType::Identifier) {
-            // TODO: calculate actual size
-            node->constantValue = 1;
-            node->isRelocatable = false;
-            node->type = OperandType::ImmediateOperand;
-            node->size = OperandSize("DWORD", 4);
-            node->registers = {};
-            return;
-        }
-        node->type = OperandType::InvalidOperand;
-        if (operand->type == OperandType::UnfinishedMemoryOperand) {
-            reportInvalidAddressExpression(operand);
-            return;
-        }
-        reportUnaryOperatorIncorrectArgument(node);
-    } else if (op == "SIZE" || op == "SIZEOF") {
-        std::shared_ptr<Leaf> leaf;
-        if ((leaf = std::dynamic_pointer_cast<Leaf>(operand)) && leaf->token.type == TokenType::Identifier) {
-            // TODO: calculate actual size
-            node->constantValue = 1;
-            node->isRelocatable = false;
-            node->type = OperandType::ImmediateOperand;
-            node->size = OperandSize("DWORD", 4);
-            node->registers = {};
-            return;
-        }
-        node->type = OperandType::InvalidOperand;
-        if (operand->type == OperandType::UnfinishedMemoryOperand) {
-            reportInvalidAddressExpression(operand);
-            return;
-        }
-        reportUnaryOperatorIncorrectArgument(node);
-    } else if (op == "WIDTH" || op == "MASK") {
-        std::shared_ptr<Leaf> leaf;
-        if ((leaf = std::dynamic_pointer_cast<Leaf>(operand)) && leaf->token.type == TokenType::Identifier) {
-            // TODO: check that leaf->token id is a record type (or field of record)
-            // TODO: calculate actual size
-            node->constantValue = 1;
-            node->isRelocatable = false;
-            node->type = OperandType::ImmediateOperand;
-            node->size = OperandSize("DWORD", 4);
-            node->registers = {};
-            return;
-        }
-        node->type = OperandType::InvalidOperand;
-        if (operand->type == OperandType::UnfinishedMemoryOperand) {
-            reportInvalidAddressExpression(operand);
-            return;
-        }
-        reportUnaryOperatorIncorrectArgument(node);
-    } else if (op == "OFFSET") {
-        if (operand->constantValue || operand->registers.empty()) {
-            node->constantValue = operand->constantValue;
-            node->isRelocatable = operand->isRelocatable;
-            node->type = OperandType::ImmediateOperand;
-            node->size = operand->size;
-            node->registers = operand->registers;
-            return;
-        }
-        node->type = OperandType::InvalidOperand;
-        if (operand->type == OperandType::UnfinishedMemoryOperand) {
-            reportInvalidAddressExpression(operand);
-            return;
-        }
-        reportUnaryOperatorIncorrectArgument(node);
-    } else if (op == "TYPE") {
-        if (operand->type != OperandType::UnfinishedMemoryOperand) {
-            if (!operand->size) {
-                node->constantValue = 0;
-                warnTypeReturnsZero(node);
-            } else {
-                node->constantValue = operand->size.value().value;
-            }
-            node->isRelocatable = false;
-            node->type = OperandType::ImmediateOperand;
-            node->size = OperandSize("DWORD", 4);
-            node->registers = {};
-        }
-        node->type = OperandType::InvalidOperand;
-        if (operand->type == OperandType::UnfinishedMemoryOperand) {
-            reportInvalidAddressExpression(operand);
-            return;
-        }
-        reportUnaryOperatorIncorrectArgument(node);
-    } else if (op == "+" || op == "-") {
-        if (operand->constantValue) {
-            if (op == "-") {
-                node->constantValue = -operand->constantValue.value();
-            } else if (op == "+") {
-                node->constantValue = operand->constantValue.value();
-            }
-            node->isRelocatable = false;
-            node->type = OperandType::ImmediateOperand;
-            node->size = OperandSize("DWORD", 4);
-            node->registers = {};
-            return;
-        }
-        node->type = OperandType::InvalidOperand;
-        if (operand->type == OperandType::UnfinishedMemoryOperand) {
-            reportInvalidAddressExpression(operand);
-            return;
-        }
-        reportUnaryOperatorIncorrectArgument(node);
-    } else {
-        LOG_DETAILED_ERROR("Unknown unary operator!");
-    }
-}
-
-void SemanticAnalyzer::visitLeaf(std::shared_ptr<Leaf> node, ExpressionContext context)
-{
-    Token token = node->token;
-
-    if (token.type == TokenType::Identifier) {
-        // TODO: check if symbol is defined
-        node->constantValue = std::nullopt;
-        node->isRelocatable = true;
-        node->size = OperandSize("DWORD", 4); // TODO: get size from symbol table
-        node->type = OperandType::MemoryOperand;
-        node->registers = {};
-        // TODO: check if symbol is type and other properties from symbol table
-    } else if (token.type == TokenType::Number) {
-        auto numberValue = parseNumber(token.lexeme);
-        if (!numberValue) {
-            node->type = OperandType::InvalidOperand;
-            reportNumberTooLarge(token);
-            return;
-        }
-        node->constantValue = numberValue;
-        node->isRelocatable = false;
-        node->size = OperandSize("DWORD", 4);
-        node->type = OperandType::ImmediateOperand;
-        node->registers = {};
-    } else if (token.type == TokenType::StringLiteral) {
-        // if expressionDepth == 1 in DataDefiniton context - string literal can be any length
-        // any other - needs to be less than 4 bytes
-        // size() + 2, because " " are in the lexeme
-        if (context == ExpressionContext::InstructionOperand && token.lexeme.size() > 4 + 2) {
-            node->type = OperandType::InvalidOperand;
-            reportStringTooLarge(token);
-            return;
-        }
-        node->constantValue = 0; // TODO: convert string value to bytes and then to int32_t
-        node->isRelocatable = false;
-        node->size = OperandSize("DWORD", 4);
-        node->type = OperandType::ImmediateOperand;
-        node->registers = {};
-    } else if (token.type == TokenType::Register) {
-        // TODO if context == DataDefinition - report error
-        node->constantValue = std::nullopt;
-        node->isRelocatable = false;
-        std::map<std::string, int> registerSizes = {{"AL", 1},  {"AX", 2},  {"EAX", 4}, {"BL", 1},  {"BX", 2},
-                                                    {"EBX", 4}, {"CL", 1},  {"CX", 2},  {"ECX", 4}, {"DL", 1},
-                                                    {"DX", 2},  {"EDX", 4}, {"SI", 2},  {"ESI", 4}, {"DI", 2},
-                                                    {"EDI", 4}, {"BP", 2},  {"EBP", 4}, {"SP", 2},  {"ESP", 4}};
-
-        std::map<int, std::string> sizeValueToStr = {{1, "BYTE"}, {2, "WORD"}, {4, "DWORD"}};
-        int value = registerSizes[stringToUpper(token.lexeme)];
-        node->size = OperandSize(sizeValueToStr[value], value);
-        node->type = OperandType::RegisterOperand;
-        node->registers[token] = std::nullopt;
-    } else if (token.type == TokenType::Dollar) {
-        node->constantValue = std::nullopt;
-        node->isRelocatable = true;
-        node->type = OperandType::ImmediateOperand;
-        node->size = OperandSize("DWORD", 4);
-        node->registers = {};
-    } else if (token.type == TokenType::Type) {
-        // TODO if expressionDepth == 1 - report error (operand can't be a type)
-        node->constantValue = std::nullopt;
-        node->isRelocatable = false;
-        node->type = OperandType::InvalidOperand;
-        node->size = std::nullopt;
-        node->registers = {};
-    } else {
-        LOG_DETAILED_ERROR("Unkown leaf token!");
-    }
-}
-
-void SemanticAnalyzer::visitInvalidExpression(std::shared_ptr<InvalidExpression> node,
-                                              [[maybe_unused]] ExpressionContext context)
-{
-    panicLine = true;
-    node->type = OperandType::InvalidOperand;
-}
-
-File semantic_analyzer.h:
-
-#pragma once
-
-#include "ast.h"
-#include "symbol_table.h"
-#include "diag_ctxt.h"
-#include "log.h"
-
-enum class ExpressionContext {
-    InstructionOperand,
-    DataDefinition,
-};
-
-class SemanticAnalyzer {
-public:
-    SemanticAnalyzer(std::shared_ptr<ParseSession> parseSession, ASTPtr ast);
-
-    void analyze();
-
-private:
-    void visit(ASTPtr node);
-
-    // ASTexpression nodes
-    void visitExpression(ASTExpressionPtr node, ExpressionContext context);
-    void visitBrackets(std::shared_ptr<Brackets> node, ExpressionContext context);
-    void visitSquareBrackets(std::shared_ptr<SquareBrackets> node, ExpressionContext context);
-    void visitImplicitPlusOperator(std::shared_ptr<ImplicitPlusOperator> node, ExpressionContext context);
-    void visitBinaryOperator(std::shared_ptr<BinaryOperator> node, ExpressionContext context);
-    void visitUnaryOperator(std::shared_ptr<UnaryOperator> node, ExpressionContext context);
-    void visitLeaf(std::shared_ptr<Leaf> node, ExpressionContext context);
-    void visitInvalidExpression(std::shared_ptr<InvalidExpression> node, ExpressionContext context);
-
-    void reportNumberTooLarge(const Token &number);
-    void reportStringTooLarge(const Token &string);
-    void reportUnaryOperatorIncorrectArgument(std::shared_ptr<UnaryOperator> node);
-    void reportDotOperatorIncorrectArgument(std::shared_ptr<BinaryOperator> node);
-    void reportPtrOperatorIncorrectArgument(std::shared_ptr<BinaryOperator> node);
-    void reportDivisionByZero(std::shared_ptr<BinaryOperator> node);
-    void reportInvalidScaleValue(std::shared_ptr<BinaryOperator> node);
-    void reportIncorrectIndexRegister(std::shared_ptr<Leaf> node);
-    void reportOtherBinaryOperatorIncorrectArgument(std::shared_ptr<BinaryOperator> node);
-    void reportCantAddVariables(ASTExpressionPtr node, bool implicit);
-    void reportInvalidAddressExpression(ASTExpressionPtr node);
-    void reportMoreThanTwoRegistersAfterAdd(ASTExpressionPtr node, bool implicit);
-    void reportMoreThanOneScaleAfterAdd(ASTExpressionPtr node, bool implicit);
-    void reportBinaryMinusOperatorIncorrectArgument(std::shared_ptr<BinaryOperator> node);
-
-    void warnTypeReturnsZero(std::shared_ptr<UnaryOperator> node);
-
-    static void findRelocatableVariables(ASTExpressionPtr node, std::optional<Token> &firstVar,
-                                         std::optional<Token> &secondVar);
-
-    ASTPtr ast;
-    std::shared_ptr<ParseSession> parseSess;
-    bool panicLine = false;
-    int expressionDepth = 0;
-};
-
-// TODO: move this function somewhere else
-inline std::optional<int32_t> parseNumber(const std::string &input)
-{
-    if (input.empty()) {
-        LOG_DETAILED_ERROR("Input string is empty!");
-        return -1;
-    }
-
-    char suffix = static_cast<char>(tolower(input.back()));
-    int base = 10;
-    std::string numberPart = input;
-
-    switch (suffix) {
-    case 'h':
-        base = 16;
-        break;
-    case 'b':
-    case 'y':
-        base = 2;
-        break;
-    case 'o':
-    case 'q':
-        base = 8;
-        break;
-    case 'd':
-    case 't':
-        base = 10;
-        break;
-    default:
-        base = 10;
-        break;
-    }
-
-    // If there's a valid suffix, remove it from the number part
-    if (suffix == 'h' || suffix == 'b' || suffix == 'y' || suffix == 'o' || suffix == 'q' || suffix == 'd' ||
-        suffix == 't') {
-        numberPart = input.substr(0, input.size() - 1);
-    }
-
-    // Convert the string to a number
-    char *end;
-    int64_t result = std::strtoll(numberPart.c_str(), &end, base);
-
-    // Check for conversion errors
-    if (*end != '\0') {
-        LOG_DETAILED_ERROR("Invalid number format!");
-        return -1;
-    }
-
-    // Check for out-of-range values for int32_t
-    if (result < INT32_MIN || result > INT32_MAX) {
-        return std::nullopt;
-    }
-
-    return static_cast<int32_t>(result);
-}
-File semantic_analyzer_errors_reporting.cpp:
-
-#include "semantic_analyzer.h"
-#include "log.h"
-#include "tokenize.h"
-
-// TODO: think more about naming types for users
-// dont rely on this in code
-std::string getOperandType(ASTExpressionPtr node)
-{
-    std::shared_ptr<Leaf> leaf;
-    if ((leaf = std::dynamic_pointer_cast<Leaf>(node))) {
-        switch (leaf->token.type) {
-        case TokenType::Identifier:
-            return "identifier"; // TODO: check from symbolTable what kind of symbol
-        case TokenType::Number:
-        case TokenType::StringLiteral:
-            return "constant";
-        case TokenType::Type:
-            return "builtin type";
-        }
-    }
-
-    if (node->constantValue) {
-        return "constant expression";
-    }
-    if (node->type == OperandType::RegisterOperand) {
-        return "register";
-    }
-    if (node->type == OperandType::ImmediateOperand) {
-        return "immediate operand"; // = relocatable constant expression
-    }
-    if (node->type == OperandType::UnfinishedMemoryOperand) {
-        // return "invalid expression";
-        return "address expression without []";
-    }
-    if (node->registers.empty()) {
-        return "address expression";
-    } else {
-        return "address expression with modificators";
-    }
-}
-
-void SemanticAnalyzer::reportNumberTooLarge(const Token &number)
-{
-    if (panicLine) {
-        return;
-    }
-    panicLine = true;
-
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::CONSTANT_TOO_LARGE);
-    diag.addPrimaryLabel(number.span, "");
-    diag.addNoteMessage("maximum allowed size is 32 bits");
-    parseSess->dcx->addDiagnostic(diag);
-}
-void SemanticAnalyzer::reportStringTooLarge(const Token &string)
-{
-    if (panicLine) {
-        return;
-    }
-    panicLine = true;
-
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::CONSTANT_TOO_LARGE);
-    diag.addPrimaryLabel(string.span, "");
-    diag.addNoteMessage("maximum allowed size is 32 bits");
-    parseSess->dcx->addDiagnostic(diag);
-}
-
-void SemanticAnalyzer::reportUnaryOperatorIncorrectArgument(std::shared_ptr<UnaryOperator> node)
-{
-    if (panicLine) {
-        return;
-    }
-    panicLine = true;
-
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::UNARY_OPERATOR_INCORRECT_ARGUMENT,
-                    stringToUpper(node->op.lexeme));
-
-    std::string op = stringToUpper(node->op.lexeme);
-    std::string expectedStr = "";
-    if (op == "LENGTH" || op == "LENGTHOF" || op == "SIZE" || op == "SIZEOF") {
-        expectedStr = "expected `identifier`";
-    } else if (op == "WIDTH" || op == "MASK") {
-        // TODO: change expected type?
-        expectedStr = "expected `identifier`";
-    } else if (op == "OFFSET") {
-        expectedStr = "expected `constant expression` or `address expression`";
-    } else if (op == "TYPE") {
-        expectedStr = "expected valid expression";
-    } else if (op == "+" || op == "-") {
-        expectedStr = "expected `constant expression`";
-    }
-    auto operand = node->operand;
-    diag.addPrimaryLabel(getExpressionSpan(operand),
-                         fmt::format("{}, found `{}`", expectedStr, getOperandType(operand)));
-
-    parseSess->dcx->addDiagnostic(diag);
-}
-
-void SemanticAnalyzer::reportDotOperatorIncorrectArgument(std::shared_ptr<BinaryOperator> node)
-{
-    if (panicLine) {
-        return;
-    }
-    panicLine = true;
-
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::DOT_OPERATOR_INCORRECT_ARGUMENT);
-
-    auto left = node->left;
-    auto right = node->right;
-
-    diag.addPrimaryLabel(node->op.span, "");
-
-    std::shared_ptr<Leaf> leaf;
-    if (left->constantValue || left->type == OperandType::RegisterOperand) {
-        diag.addSecondaryLabel(getExpressionSpan(left),
-                               fmt::format("expected `address expression`, found `{}`", getOperandType(left)));
-    }
-    if (!(leaf = std::dynamic_pointer_cast<Leaf>(right)) || leaf->token.type != TokenType::Identifier) {
-        diag.addSecondaryLabel(getExpressionSpan(right),
-                               fmt::format("expected `identifier`, found `{}`", getOperandType(right)));
-    }
-
-    parseSess->dcx->addDiagnostic(diag);
-}
-
-void SemanticAnalyzer::reportPtrOperatorIncorrectArgument(std::shared_ptr<BinaryOperator> node)
-{
-    if (panicLine) {
-        return;
-    }
-    panicLine = true;
-
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::PTR_OPERATOR_INCORRECT_ARGUMENT);
-
-    auto left = node->left;
-    auto right = node->right;
-
-    diag.addPrimaryLabel(node->op.span, "");
-
-    std::shared_ptr<Leaf> leaf;
-    // CRITICAL TODO: left can also be identifier, if it's a type symbol
-    if (!(leaf = std::dynamic_pointer_cast<Leaf>(left)) ||
-        leaf->token.type != TokenType::Type /* !=TokenType::Identifier */) {
-        diag.addSecondaryLabel(getExpressionSpan(left),
-                               fmt::format("expected `type`, found `{}`", getOperandType(left)));
-    }
-    if (right->type == OperandType::UnfinishedMemoryOperand || right->type == OperandType::RegisterOperand) {
-        // Change that we can expect also constants?
-        diag.addSecondaryLabel(getExpressionSpan(right),
-                               fmt::format("expected `address expression`, found `{}`", getOperandType(right)));
-    }
-
-    parseSess->dcx->addDiagnostic(diag);
-}
-
-void SemanticAnalyzer::reportDivisionByZero(std::shared_ptr<BinaryOperator> node)
-{
-    if (panicLine) {
-        return;
-    }
-    panicLine = true;
-
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::DIVISION_BY_ZERO_IN_EXPRESSION);
-
-    auto left = node->left;
-    auto right = node->right;
-
-    diag.addPrimaryLabel(node->op.span, "");
-
-    diag.addSecondaryLabel(getExpressionSpan(right), "this evaluates to `0`");
-
-    parseSess->dcx->addDiagnostic(diag);
-}
-
-void SemanticAnalyzer::reportInvalidScaleValue(std::shared_ptr<BinaryOperator> node)
-{
-    if (panicLine) {
-        return;
-    }
-    panicLine = true;
-
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_SCALE_VALUE);
-
-    auto left = node->left;
-    auto right = node->right;
-
-    if (left->constantValue) {
-        diag.addPrimaryLabel(getExpressionSpan(left),
-                             fmt::format("this evaluates to `{}`", left->constantValue.value()));
-    } else {
-        diag.addPrimaryLabel(getExpressionSpan(right),
-                             fmt::format("this evaluates to `{}`", right->constantValue.value()));
-    }
-
-    diag.addNoteMessage("scale can only be {1, 2, 4, 8}");
-
-    parseSess->dcx->addDiagnostic(diag);
-}
-
-void SemanticAnalyzer::reportIncorrectIndexRegister(std::shared_ptr<Leaf> node)
-{
-    if (panicLine) {
-        return;
-    }
-    panicLine = true;
-
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INCORRECT_INDEX_REGISTER);
-    diag.addPrimaryLabel(node->token.span, "");
-
-    parseSess->dcx->addDiagnostic(diag);
-}
-
-void SemanticAnalyzer::reportOtherBinaryOperatorIncorrectArgument(std::shared_ptr<BinaryOperator> node)
-{
-
-    if (panicLine) {
-        return;
-    }
-    panicLine = true;
-
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::OTHER_BINARY_OPERATOR_INCORRECT_ARGUMENT, node->op.lexeme);
-
-    auto left = node->left;
-    auto right = node->right;
-
-    if (left->type == OperandType::RegisterOperand) {
-        diag.addPrimaryLabel(node->op.span, "");
-        diag.addSecondaryLabel(getExpressionSpan(right),
-                               fmt::format("expected `constant expression`, found `{}`", getOperandType(right)));
-    } else if (right->type == OperandType::RegisterOperand) {
-        diag.addPrimaryLabel(node->op.span, "");
-        diag.addSecondaryLabel(getExpressionSpan(left),
-                               fmt::format("expected `constant expression`, found `{}`", getOperandType(left)));
-    } else {
-        diag.addPrimaryLabel(node->op.span, "can only multiply constant expressions or a register by the scale");
-        diag.addSecondaryLabel(getExpressionSpan(left), fmt::format("help: this has type `{}`", getOperandType(left)));
-        diag.addSecondaryLabel(getExpressionSpan(right),
-                               fmt::format("help: this has type `{}`", getOperandType(right)));
-    }
-
-    parseSess->dcx->addDiagnostic(diag);
-}
-
-void SemanticAnalyzer::reportCantAddVariables(ASTExpressionPtr node, bool implicit)
-{
-    if (panicLine) {
-        return;
-    }
-    panicLine = true;
-
-    std::optional<Token> firstVar;
-    std::optional<Token> secondVar;
-    findRelocatableVariables(node, firstVar, secondVar);
-    if (!firstVar || !secondVar) {
-        LOG_DETAILED_ERROR("Can't find the 2 relocatable variables!\n");
-        return;
-    }
-
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::CANT_ADD_VARIABLES);
-
-    if (implicit) {
-        auto implicitOp = std::dynamic_pointer_cast<ImplicitPlusOperator>(node);
-        // TODO: what to underline when [var][var]
-        diag.addPrimaryLabel(getExpressionSpan(implicitOp), "");
-    } else {
-        auto binaryOp = std::dynamic_pointer_cast<BinaryOperator>(node);
-        diag.addPrimaryLabel(binaryOp->op.span, "");
-    }
-
-    diag.addSecondaryLabel(firstVar.value().span, "first variable");
-    diag.addSecondaryLabel(secondVar.value().span, "second variable");
-    parseSess->dcx->addDiagnostic(diag);
-}
-
-void SemanticAnalyzer::findRelocatableVariables(ASTExpressionPtr node, std::optional<Token> &firstVar,
-                                                std::optional<Token> &secondVar)
-{
-    if (auto binaryOp = std::dynamic_pointer_cast<BinaryOperator>(node)) {
-        if (binaryOp->left->isRelocatable) {
-            findRelocatableVariables(binaryOp->left, firstVar, secondVar);
-        }
-        if (binaryOp->right->isRelocatable) {
-            findRelocatableVariables(binaryOp->right, firstVar, secondVar);
-        }
-    } else if (auto unaryOp = std::dynamic_pointer_cast<UnaryOperator>(node)) {
-        if (unaryOp->operand->isRelocatable) {
-            findRelocatableVariables(unaryOp->operand, firstVar, secondVar);
-        }
-    } else if (auto brackets = std::dynamic_pointer_cast<Brackets>(node)) {
-        if (brackets->operand->isRelocatable) {
-            findRelocatableVariables(brackets->operand, firstVar, secondVar);
-        }
-    } else if (auto squareBrackets = std::dynamic_pointer_cast<SquareBrackets>(node)) {
-        if (squareBrackets->operand->isRelocatable) {
-            findRelocatableVariables(squareBrackets->operand, firstVar, secondVar);
-        }
-    } else if (auto implicitPlus = std::dynamic_pointer_cast<ImplicitPlusOperator>(node)) {
-        if (implicitPlus->left->isRelocatable) {
-            findRelocatableVariables(implicitPlus->left, firstVar, secondVar);
-        }
-        if (implicitPlus->right->isRelocatable) {
-            findRelocatableVariables(implicitPlus->right, firstVar, secondVar);
-        }
-    } else if (auto leaf = std::dynamic_pointer_cast<Leaf>(node)) {
-        if (!firstVar) {
-            firstVar = leaf->token;
-        } else if (!secondVar) {
-            secondVar = leaf->token;
-        }
-    } else if (auto invalidExpr = std::dynamic_pointer_cast<InvalidExpression>(node)) {
-        return;
-    } else {
-        LOG_DETAILED_ERROR("Unknown ASTExpression Node!\n");
-        return;
-    }
-}
-
-void SemanticAnalyzer::reportInvalidAddressExpression(ASTExpressionPtr node)
-{
-    if (panicLine) {
-        return;
-    }
-    panicLine = true;
-
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_ADDRESS_EXPRESSION);
-
-    // TODO: find first thing that lead to UnfinishedMemoryOperand and print it
-    diag.addPrimaryLabel(getExpressionSpan(node), "need to add [] to create a valid address expression");
-
-    parseSess->dcx->addDiagnostic(diag);
-}
-
-void findInvalidExpressionCause() {}
-
-void SemanticAnalyzer::reportMoreThanTwoRegistersAfterAdd(ASTExpressionPtr node, bool implicit)
-{
-    if (panicLine) {
-        return;
-    }
-    panicLine = true;
-
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::MORE_THAN_TWO_REGISTERS);
-
-    if (implicit) {
-        auto implicitOp = std::dynamic_pointer_cast<ImplicitPlusOperator>(node);
-        // TODO: what to underline when [var][var]
-        diag.addPrimaryLabel(getExpressionSpan(implicitOp), "");
-        for (const auto &[reg, scale] : implicitOp->left->registers) {
-            diag.addSecondaryLabel(reg.span, "help: register");
-        }
-
-        for (const auto &[reg, scale] : implicitOp->right->registers) {
-            diag.addSecondaryLabel(reg.span, "help: register");
-        }
-    } else {
-        auto binaryOp = std::dynamic_pointer_cast<BinaryOperator>(node);
-        diag.addPrimaryLabel(binaryOp->op.span, ""); // write "this + resulted in having more than 2 registers?""
-        for (const auto &[reg, scale] : binaryOp->left->registers) {
-            diag.addSecondaryLabel(reg.span, "help: register");
-        }
-
-        for (const auto &[reg, scale] : binaryOp->right->registers) {
-            diag.addSecondaryLabel(reg.span, "help: register");
-        }
-    }
-
-    parseSess->dcx->addDiagnostic(diag);
-}
-
-void SemanticAnalyzer::reportMoreThanOneScaleAfterAdd(ASTExpressionPtr node, bool implicit)
-{
-    if (panicLine) {
-        return;
-    }
-    panicLine = true;
-
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::MORE_THAN_ONE_SCALE);
-
-    if (implicit) {
-        auto implicitOp = std::dynamic_pointer_cast<ImplicitPlusOperator>(node);
-        // TODO: what to underline when [var][var]
-        diag.addPrimaryLabel(getExpressionSpan(implicitOp), "");
-        for (const auto &[reg, scale] : implicitOp->left->registers) {
-            if (scale) {
-                diag.addSecondaryLabel(reg.span, "help: this register has a scale");
-            }
-        }
-
-        for (const auto &[reg, scale] : implicitOp->right->registers) {
-            if (scale) {
-                diag.addSecondaryLabel(reg.span, "help: this register has a scale");
-            }
-        }
-    } else {
-        auto binaryOp = std::dynamic_pointer_cast<BinaryOperator>(node);
-        diag.addPrimaryLabel(binaryOp->op.span, ""); // write "this + resulted in having more than 1 scale?""
-        for (const auto &[reg, scale] : binaryOp->left->registers) {
-            if (scale) {
-                diag.addSecondaryLabel(reg.span, "help: this register has a scale");
-            }
-        }
-
-        for (const auto &[reg, scale] : binaryOp->right->registers) {
-            if (scale) {
-                diag.addSecondaryLabel(reg.span, "help: this register has a scale");
-            }
-        }
-    }
-
-    parseSess->dcx->addDiagnostic(diag);
-}
-
-void SemanticAnalyzer::reportBinaryMinusOperatorIncorrectArgument(std::shared_ptr<BinaryOperator> node)
-{
-    if (panicLine) {
-        return;
-    }
-    panicLine = true;
-
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::BINARY_MINUS_OPERATOR_INCORRECT_ARGUMENT);
-
-    auto left = node->left;
-    auto right = node->right;
-
-    diag.addPrimaryLabel(node->op.span, "can only subtract constant expressions or 2 address expressions");
-
-    diag.addSecondaryLabel(getExpressionSpan(left), fmt::format("help: this has type `{}`", getOperandType(left)));
-    diag.addSecondaryLabel(getExpressionSpan(right), fmt::format("help: this has type `{}`", getOperandType(right)));
-
-    parseSess->dcx->addDiagnostic(diag);
-}
-
-void SemanticAnalyzer::warnTypeReturnsZero(std::shared_ptr<UnaryOperator> node)
-{
-    // when reprting warnings don't need to set panicLine to true
-    Diagnostic diag(Diagnostic::Level::Warning, ErrorCode::TYPE_RETURNS_ZERO);
-    diag.addPrimaryLabel(getExpressionSpan(node->operand), "this expression doesn't have a type");
-    parseSess->dcx->addDiagnostic(diag);
-}
 File session.cpp:
 
 #include "session.h"
@@ -2684,270 +603,7 @@ public:
     std::shared_ptr<SourceMap> sourceMap;
     std::shared_ptr<SymbolTable> symbolTable;
 };
-File source_map.cpp:
 
-#include "source_map.h"
-#include "log.h"
-#include "span.h"
-
-#include <fstream>
-#include <filesystem>
-
-SourceFile::SourceFile(const std::filesystem::path &path, const std::string &src, std::size_t startPos)
-    : path(path), src(src), startPos(startPos), endPos(startPos + src.size())
-{
-    // Initialize lineStarts
-    lineStarts.push_back(0);
-    for (std::size_t i = 0; i < src.size(); ++i) {
-        if (src[i] == '\n') {
-            lineStarts.push_back(i + 1);
-        }
-    }
-}
-
-const std::filesystem::path &SourceFile::getPath() const { return path; }
-
-const std::string &SourceFile::getSource() const { return src; }
-
-std::size_t SourceFile::getStartPos() const { return startPos; }
-
-std::size_t SourceFile::getEndPos() const { return endPos; }
-
-std::size_t SourceFile::getLineNumber(std::size_t pos) const
-{
-    if (pos < startPos || pos >= endPos) {
-        LOG_DETAILED_ERROR("Position out of range in getLineNumber");
-        return 0;
-    }
-    std::size_t localPos = pos - startPos;
-    auto it = std::upper_bound(lineStarts.begin(), lineStarts.end(), localPos);
-    return (it - lineStarts.begin()) - 1;
-}
-
-// lineNumber is zero based
-std::string SourceFile::getLine(std::size_t lineNumber) const
-{
-    if (lineNumber >= lineStarts.size()) {
-        LOG_DETAILED_ERROR("Line number out of range in getLine");
-        return "";
-    }
-    std::size_t start = lineStarts[lineNumber];
-    std::size_t end;
-    if (lineNumber + 1 < lineStarts.size()) {
-        end = lineStarts[lineNumber + 1];
-    } else {
-        end = src.size();
-    }
-
-    // Exclude the newline character at the end if present
-    if (end > start && src[end - 1] == '\n') {
-        end--;
-    }
-    return src.substr(start, end - start);
-}
-
-// lineNumber is zero based
-std::size_t SourceFile::getLineStart(std::size_t lineNumber) const
-{
-    if (lineNumber >= lineStarts.size()) {
-        LOG_DETAILED_ERROR("Line number out of range in getLineStart");
-        return 0;
-    }
-    return lineStarts[lineNumber];
-}
-
-std::size_t SourceFile::countCodePoints(const std::string &str, std::size_t startByte, std::size_t endByte)
-{
-    std::size_t codePointCount = 0;
-    std::size_t i = startByte;
-    while (i < endByte) {
-        unsigned char c = static_cast<unsigned char>(str[i]);
-        std::size_t charSize = 1;
-        if ((c & 0x80) == 0x00) {
-            charSize = 1; // ASCII character
-        } else if ((c & 0xE0) == 0xC0) {
-            charSize = 2; // 2-byte sequence
-        } else if ((c & 0xF0) == 0xE0) {
-            charSize = 3; // 3-byte sequence
-        } else if ((c & 0xF8) == 0xF0) {
-            charSize = 4; // 4-byte sequence
-        } else {
-            // Invalid UTF-8 start byte
-            LOG_DETAILED_ERROR("Invalid UTF-8 encoding in countCodePoints");
-            charSize = 1;
-        }
-
-        // Move to the next character
-        i += charSize;
-        codePointCount++;
-    }
-    return codePointCount;
-}
-
-std::size_t SourceFile::getColumnNumber(std::size_t pos) const
-{
-    std::size_t lineNumber = getLineNumber(pos);
-    std::size_t lineStartPos = lineStarts[lineNumber];
-    std::size_t localPos = pos - startPos;
-
-    // Count code points between lineStartPos and localPos
-    return countCodePoints(src, lineStartPos, localPos);
-}
-
-std::size_t SourceFile::getColumnPosition(std::size_t pos) const
-{
-    std::size_t lineNumber = getLineNumber(pos);
-    std::size_t lineStartPos = lineStarts[lineNumber];
-    std::size_t localPos = pos - startPos;
-
-    return localPos - lineStartPos;
-}
-
-std::shared_ptr<SourceFile> SourceMap::newSourceFile(const std::filesystem::path &path, const std::string &src)
-{
-    std::size_t startPos = 0;
-    if (!files.empty()) {
-        startPos = files.back()->getEndPos();
-    }
-    auto file = std::make_shared<SourceFile>(path, src, startPos);
-    files.push_back(file);
-    return file;
-}
-
-std::shared_ptr<SourceFile> SourceMap::loadFile(const std::filesystem::path &path)
-{
-    auto existingFile = getSourceFile(path);
-    if (existingFile) {
-        return existingFile;
-    }
-
-    std::ifstream file(path);
-    if (!file.is_open()) {
-        return nullptr;
-    }
-
-    std::stringstream buffer;
-    buffer << file.rdbuf();
-    std::string content = buffer.str();
-    // TODO: remove this hack to handle EndOfFile drawing
-    content += "\n";
-
-    return newSourceFile(path, content);
-}
-
-std::shared_ptr<SourceFile> SourceMap::lookupSourceFile(std::size_t pos) const
-{
-    for (const auto &file : files) {
-        if (file->getStartPos() <= pos && pos < file->getEndPos()) {
-            return file;
-        }
-    }
-    return nullptr;
-}
-
-std::shared_ptr<SourceFile> SourceMap::getSourceFile(const std::filesystem::path &path) const
-{
-    for (const auto &file : files) {
-        if (file->getPath() == path) {
-            return file;
-        }
-    }
-    return nullptr;
-}
-
-std::pair<std::size_t, std::size_t> SourceMap::lookupLineColumn(std::size_t pos) const
-{
-    auto file = lookupSourceFile(pos);
-    if (file) {
-        std::size_t lineNumber = file->getLineNumber(pos);
-        std::size_t columnNumber = file->getColumnNumber(pos);
-        return {lineNumber + 1, columnNumber + 1}; // Lines and columns are 1-based
-    } else {
-        return {0, 0};
-    }
-}
-
-void SourceMap::spanToLocation(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
-                               std::size_t &outColumn) const
-{
-    // check if span corresponds to EndOfFile
-    // if (files->())
-    auto file = lookupSourceFile(span.lo);
-    if (file) {
-        outPath = file->getPath();
-        outLine = file->getLineNumber(span.lo);     // Zero-based
-        outColumn = file->getColumnNumber(span.lo); // Zero-based
-    } else {
-        outPath.clear();
-        outLine = 0;
-        outColumn = 0;
-    }
-}
-
-void SourceMap::spanToEndLocation(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
-                       std::size_t &outColumn) const
-{
-    auto file = lookupSourceFile(span.hi - 1);
-    if (file) {
-        outPath = file->getPath();
-        outLine = file->getLineNumber(span.hi - 1);     // Zero-based
-        outColumn = file->getColumnNumber(span.hi - 1) + 1; // Zero-based
-    } else {
-        outPath.clear();
-        outLine = 0;
-        outColumn = 0;
-    }
-}
-
-void SourceMap::spanToStartPosition(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
-                                    std::size_t &outColumn) const
-{
-    auto file = lookupSourceFile(span.lo);
-    if (file) {
-        outPath = file->getPath();
-        outLine = file->getLineNumber(span.lo); // Zero-based
-        outColumn = file->getColumnPosition(span.lo);
-    } else {
-        outPath.clear();
-        outLine = 0;
-        outColumn = 0;
-    }
-}
-
-void SourceMap::spanToEndPosition(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
-                                  std::size_t &outColumn) const
-{
-    auto file = lookupSourceFile(span.hi - 1);
-    if (file) {
-        outPath = file->getPath();
-        outLine = file->getLineNumber(span.hi - 1); // Zero-based
-        // (need to add one because in the span (4, 5) startLocation is column 4 but endLocation column should be 5)
-        outColumn = file->getColumnPosition(span.hi - 1) + 1; // Zero-based
-    } else {
-        outPath.clear();
-        outLine = 0;
-        outColumn = 0;
-    }
-}
-
-std::string SourceMap::spanToSnippet(const Span &span) const
-{
-    auto sourceFile = lookupSourceFile(span.lo);
-    if (!sourceFile) {
-        LOG_DETAILED_ERROR("Span does not belong to any source file");
-        return "";
-    }
-
-    std::size_t start_pos = span.lo - sourceFile->getStartPos();
-    std::size_t end_pos = span.hi - sourceFile->getStartPos();
-
-    if (end_pos > sourceFile->getSource().size()) {
-        LOG_DETAILED_ERROR("Span end position out of range");
-        return "";
-    }
-
-    return sourceFile->getSource().substr(start_pos, end_pos - start_pos);
-}
 File source_map.h:
 
 #pragma once
@@ -2958,7 +614,7 @@ File source_map.h:
 
 class SourceFile {
 public:
-    SourceFile(const std::filesystem::path &path, const std::string &src, std::size_t startPos);
+    SourceFile(std::filesystem::path path, const std::string &src, std::size_t startPos);
 
     const std::filesystem::path &getPath() const;
     const std::string &getSource() const;
@@ -2990,7 +646,7 @@ private:
 
 class SourceMap {
 public:
-    SourceMap() {};
+    SourceMap() = default;
 
     std::shared_ptr<SourceFile> newSourceFile(const std::filesystem::path &path, const std::string &src);
 
@@ -3023,59 +679,7 @@ public:
 private:
     std::vector<std::shared_ptr<SourceFile>> files;
 };
-File span.cpp:
 
-#include "span.h"
-#include "log.h"
-
-void SyntaxContextData::pushMacro(const std::string &macroName) { macroStack.push_back(macroName); }
-
-void SyntaxContextData::popMacro()
-{
-    if (!macroStack.empty()) {
-        macroStack.pop_back();
-    }
-}
-
-const std::string SyntaxContextData::currentMacro() const { return macroStack.empty() ? "" : macroStack.back(); }
-
-bool Span::contains(std::size_t pos) const { return lo <= pos && pos < hi; }
-
-bool Span::overlaps(const Span &other) const { return lo < other.hi && other.lo < hi; }
-
-Span Span::merge(const Span &first, const Span &second)
-{
-    std::size_t new_lo = std::min(first.lo, second.lo);
-    std::size_t new_hi = std::max(first.hi, second.hi);
-
-    std::shared_ptr<SyntaxContextData> new_context = first.context;
-
-    if (first.context != second.context) {
-        LOG_DETAILED_ERROR("Can't merge spans with different contexts!");
-        return Span(0, 0, nullptr);
-    }
-
-    return Span(new_lo, new_hi, new_context);
-}
-
-bool Span::operator==(const Span &other) const { return lo == other.lo && hi == other.hi && context == other.context; }
-
-bool Span::operator!=(const Span &other) const { return !(*this == other); }
-
-bool Span::operator<(const Span &other) const
-{
-    if (lo != other.lo)
-        return lo < other.lo;
-    if (hi != other.hi)
-        return hi < other.hi;
-    return true;
-}
-
-bool Span::operator>(const Span &other) const { return other < *this; }
-
-bool Span::operator<=(const Span &other) const { return !(other < *this); }
-
-bool Span::operator>=(const Span &other) const { return !(*this < other); }
 File span.h:
 
 #pragma once
@@ -3092,12 +696,12 @@ struct SyntaxContextData {
 
     void popMacro();
 
-    const std::string currentMacro() const;
+    std::string currentMacro() const;
 };
 
 struct Span {
     Span() : lo(0), hi(0), context(nullptr) {};
-    Span(std::size_t start, std::size_t end, std::shared_ptr<SyntaxContextData> ctxt)
+    Span(std::size_t start, std::size_t end, const std::shared_ptr<SyntaxContextData> &ctxt)
         : lo(start), hi(end), context(ctxt) {};
 
     bool contains(std::size_t pos) const;
@@ -3143,9 +747,9 @@ File symbol_table.h:
 
 struct Symbol {
     std::string name;
-    enum class Type { Label, Variable, Macro, Segment };
-    Type type;
-    int lineNumber;
+    enum class Type : std::uint8_t { Label, Variable, Macro, Segment };
+    Type type{};
+    int lineNumber = -1;
     std::string fileName;
 };
 
@@ -3158,432 +762,9 @@ private:
     std::unordered_map<std::string, Symbol> symbols;
 };
 
-File timer.h:
 
-#pragma once
-
-#include <chrono>
-#include <iostream>
-#include <string>
-
-class Timer {
-public:
-    Timer() { reset(); }
-
-    void reset() { m_start = std::chrono::high_resolution_clock::now(); }
-
-    float elapsed()
-    {
-        return static_cast<float>(std::chrono::duration_cast<std::chrono::nanoseconds>(
-                                      std::chrono::high_resolution_clock::now() - m_start)
-                                      .count()) *
-               0.001f * 0.001f * 0.001f;
-    }
-
-    float elapsed_millis() { return elapsed() * 1000.0f; }
-
-private:
-    std::chrono::time_point<std::chrono::high_resolution_clock> m_start;
-};
-
-// class ScopedTimer
-// {
-// public:
-//     explicit ScopedTimer(const std::string &name) : m_name(name) {}
-//     ~ScopedTimer() // NOLINT(cppcoreguidelines-special-member-functions): not using heap allocated memory here
-//     {
-//         const float time = m_timer.elapsed_millis();
-//          LOG
-//     }
-
-// private:
-//     std::string m_name;
-//     Timer m_timer;
-// };
 File tokenize.cpp:
 
-#include "tokenize.h"
-#include "diagnostic.h"
-#include "session.h"
-#include "log.h"
-#include "error_codes.h"
-
-#include <cctype>
-#include <algorithm>
-#include <unordered_set>
-#include <string>
-
-static const std::unordered_set<std::string> directives = {"INCLUDE", "EQU",    "DB",     "DW",    "DD",   "DQ",
-                                                           "END",     ".STACK", ".DATA",  ".CODE", "PROC", "ENDP",
-                                                           "STRUC",   "ENDS",   "RECORD", "="};
-
-static const std::unordered_set<std::string> reservedWords = {"DUP"};
-
-static const std::unordered_set<std::string> operators = {"+",      "-",        "*",     "/",    ".",     "MOD",
-                                                          "SHL",    "SHR",      "PTR",   "TYPE", "SIZE",  "SIZEOF",
-                                                          "LENGTH", "LENGTHOF", "WIDTH", "MASK", "OFFSET"};
-
-static const std::unordered_set<std::string> types = {"BYTE", "WORD", "DWORD", "QWORD"};
-
-static const std::unordered_set<std::string> instructions = {
-    "MOV",   "XCHG",  "MOVZX", "MOVSX", "DIV",   "IDIV",  "MUL",   "IMUL",  "ADD",   "ADC",   "INC",   "SUB",
-    "SBB",   "DEC",   "NEG",   "JE",    "JNE",   "JA",    "JAE",   "JB",    "JBE",   "JL",    "JLE",   "JG",
-    "JGE",   "JC",    "JNC",   "JZ",    "JNZ",   "JMP",   "CALL",  "RET",   "SHL",   "SHR",   "ROL",   "RCL",
-    "ROR",   "RCR",   "AND",   "OR",    "XOR",   "REP",   "REPE",  "REPNE", "MOVSB", "MOVSW", "MOVSD", "LODSB",
-    "LODSW", "LODSD", "STOSB", "STOSW", "STOSD", "SCASB", "SCASW", "SCASD", "CMPSB", "CMPSW", "CMPSD",
-};
-
-static const std::unordered_set<std::string> registers = {"AL", "AX",  "EAX", "BL",  "BX",  "EBX", "CL",
-                                                          "CX", "ECX", "DL",  "DX",  "EDX", "SI",  "ESI",
-                                                          "DI", "EDI", "BP",  "EBP", "SP",  "ESP"};
-
-std::vector<Token> Tokenizer::tokenize()
-{
-    size_t length = src.size();
-    std::shared_ptr<SyntaxContextData> context = std::make_shared<SyntaxContextData>();
-
-    while (pos < length) {
-        skipWhitespace();
-
-        if (pos >= length)
-            break;
-
-        if (src[pos] == '\n') {
-            tokens.emplace_back(Token{TokenType::EndOfLine, "", Span(pos, pos + 1, context)});
-            ++pos;
-            continue; // Skip calling getNextToken() after processing '\n'
-        }
-
-        Token token = getNextToken();
-        // if (token.type == TokenType::Invalid) {
-        //     // Stop tokenizing on error
-        //     break;
-        // }
-        tokens.push_back(token);
-    }
-
-    // because files always ends with a '\n', we can make EndOfFile span equal to the last '\n'
-    // to be able to underline EndOfFile correctly
-    tokens.emplace_back(Token{TokenType::EndOfFile, "", Span(pos - 1, pos, context)});
-
-    // TODO: remove testing code
-    // Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_NUMBER_FORMAT);
-    // diag.addSecondaryLabel(Span(0, 1, nullptr), "pr");
-    // diag.addPrimaryLabel(Span(2, 3, nullptr), "hey");
-    // diag.addSecondaryLabel(Span(4, 5, nullptr), "hi");
-    // diag.addPrimaryLabel(Span(pos - 1, pos, nullptr), "nice");
-    // psess->dcx->addDiagnostic(diag);
-
-    return tokens;
-}
-
-void Tokenizer::skipWhitespace()
-{
-    while (pos < src.size() && std::isspace(static_cast<unsigned char>(src[pos])) && src[pos] != '\n') {
-        ++pos;
-    }
-}
-
-Token Tokenizer::getNextToken()
-{
-    char currentChar = src[pos];
-
-    if (isValidNumberStart(currentChar)) {
-        return getNumberToken();
-    } else if (isValidIdentifierStart(currentChar)) {
-        return getIdentifierOrKeywordToken();
-    } else if (currentChar == '.' && isDotName()) {
-        return getIdentifierOrKeywordToken();
-    } else if (currentChar == '"' || currentChar == '\'') {
-        return getStringLiteralToken();
-    } else if (currentChar == '\\') {
-        // Line continuations are not handled; report an error
-        size_t errorStart = pos;
-        ++pos;
-        addDiagnostic(errorStart, pos, ErrorCode::LINE_CONTINUATION_NOT_SUPPORTED);
-        return Token{TokenType::Invalid, "\\", Span(errorStart, pos, nullptr)};
-    } else if (currentChar == ';') {
-        size_t commentStart = pos;
-        while (pos < src.size() && src[pos] != '\n') {
-            ++pos;
-        }
-        std::string commentText = src.substr(commentStart, pos - commentStart);
-        return Token{TokenType::Comment, commentText, Span(commentStart, pos, nullptr)};
-    } else {
-        return getSpecialSymbolToken();
-    }
-}
-
-bool Tokenizer::isDotName()
-{
-    if (pos + 1 >= src.size())
-        return false;
-
-    size_t newPos = pos + 1;
-    while (newPos < src.size() && isValidIdentifierChar(src[newPos])) {
-        ++newPos;
-    }
-
-    std::string lexeme = src.substr(pos, newPos - pos);
-    std::string lexemeUpper = stringToUpper(lexeme);
-    if (directives.count(lexemeUpper)) {
-        return true;
-    }
-    return false;
-
-    // char nextChar = src[pos + 1];
-
-    // if (!isValidIdentifierChar(nextChar))
-    //     return false;
-
-    // // Check previous token
-    // if (tokens.empty()) {
-    //     // No previous token, accept the dotted name
-    //     return true;
-    // }
-
-    // TokenType prevType = tokens.back().type;
-    // std::string prevLexeme = tokens.back().lexeme;
-
-    // if (prevType == TokenType::Register || prevType == TokenType::Identifier || prevLexeme == ")" ||
-    //     prevLexeme == "]") {
-    //     // Previous token is a register, identifier, or closing bracket; dot is an operator
-    //     return false;
-    // }
-
-    // return true;
-}
-
-bool Tokenizer::isValidNumberStart(char c)
-{
-    return isdigit(static_cast<unsigned char>(c)) || (tolower(c) >= 'a' && tolower(c) <= 'f');
-}
-
-Token Tokenizer::getIdentifierOrKeywordToken()
-{
-    size_t start = pos;
-
-    // Handle optional starting dot
-    if (src[pos] == '.') {
-        ++pos;
-    }
-
-    while (pos < src.size() && isValidIdentifierChar(src[pos])) {
-        ++pos;
-    }
-
-    std::string lexeme = src.substr(start, pos - start);
-    std::string lexemeUpper = stringToUpper(lexeme);
-
-    Span tokenSpan(start, pos, nullptr);
-
-    if (directives.count(lexemeUpper)) {
-        return Token{TokenType::Directive, lexeme, tokenSpan};
-    } else if (instructions.count(lexemeUpper)) {
-        return Token{TokenType::Instruction, lexeme, tokenSpan};
-    } else if (registers.count(lexemeUpper)) {
-        return Token{TokenType::Register, lexeme, tokenSpan};
-    } else if (operators.count(lexemeUpper)) {
-        return Token{TokenType::Operator, lexeme, tokenSpan};
-    } else if (types.count(lexemeUpper)) {
-        return Token{TokenType::Type, lexeme, tokenSpan};
-    } else {
-        return Token{TokenType::Identifier, lexeme, tokenSpan};
-    }
-}
-
-Token Tokenizer::getNumberToken()
-{
-    size_t start = pos;
-    size_t length = src.size();
-
-    // Collect alphanumeric characters until whitespace or operator
-    while (pos < length && isalnum(static_cast<unsigned char>(src[pos]))) {
-        ++pos;
-    }
-    std::string lexeme = src.substr(start, pos - start);
-
-    // Now check if the lexeme is a valid number
-    if (isValidNumber(lexeme)) {
-        return Token{TokenType::Number, lexeme, Span(start, pos, nullptr)};
-    } else {
-        // check in cases like fffrh
-        if (isValidIdentifier(lexeme)) {
-            pos = start;
-            return getIdentifierOrKeywordToken();
-        }
-        addDiagnostic(start, pos, ErrorCode::INVALID_NUMBER_FORMAT);
-        return Token{TokenType::Invalid, lexeme, Span(start, pos, nullptr)};
-    }
-}
-
-bool Tokenizer::isValidNumber(const std::string &lexeme)
-{
-    if (lexeme.empty()) {
-        return false;
-    }
-
-    size_t len = lexeme.size();
-    char suffix = static_cast<char>(tolower(lexeme[len - 1]));
-    std::string digits = lexeme.substr(0, len - 1);
-    unsigned int base = 10;
-
-    // Determine base from suffix
-    switch (suffix) {
-    case 'h':
-        base = 16;
-        break;
-    case 'b':
-    case 'y':
-        base = 2;
-        break;
-    case 'o':
-    case 'q':
-        base = 8;
-        break;
-    case 'd':
-    case 't':
-        base = 10;
-        break;
-    default:
-        // No valid suffix; include the last character
-        digits = lexeme;
-        suffix = '\0';
-        break;
-    }
-
-    // check that digits are valid for the base
-    if (digits.empty()) {
-        return false;
-    }
-    for (char c : digits) {
-        c = static_cast<char>(tolower(c));
-        if (base == 16) {
-            if (!isxdigit(static_cast<unsigned char>(c))) {
-                return false;
-            }
-        } else if (base == 10) {
-            if (!isdigit(static_cast<unsigned char>(c))) {
-                return false;
-            }
-        } else if (base == 8) {
-            if (c < '0' || c > '7') {
-                return false;
-            }
-        } else if (base == 2) {
-            if (c != '0' && c != '1') {
-                return false;
-            }
-        } else {
-            return false; // Invalid base
-        }
-    }
-
-    return true;
-}
-
-Token Tokenizer::getStringLiteralToken()
-{
-    char quoteChar = src[pos];
-    size_t start = pos;
-    ++pos; // skip the opening quote
-    while (pos < src.size() && src[pos] != quoteChar) {
-        if (src[pos] == '\n') {
-            break;
-        } else {
-            ++pos;
-        }
-    }
-    if (pos >= src.size() || src[pos] != quoteChar) {
-        addDiagnostic(start, pos, ErrorCode::UNTERMINATED_STRING_LITERAL);
-        return Token{TokenType::Invalid, src.substr(start, pos - start), Span(start, pos, nullptr)};
-    }
-    ++pos; // Skip the closing quote
-    std::string lexeme = src.substr(start, pos - start);
-    return Token{TokenType::StringLiteral, lexeme, Span(start, pos, nullptr)};
-}
-
-Token Tokenizer::getSpecialSymbolToken()
-{
-    size_t start = pos;
-    char currentChar = src[pos];
-    ++pos;
-
-    std::string lexeme(1, currentChar);
-    TokenType type = TokenType::Operator;
-
-    switch (currentChar) {
-    case '(':
-        type = TokenType::OpenBracket;
-        break;
-    case ')':
-        type = TokenType::CloseBracket;
-        break;
-    case '[':
-        type = TokenType::OpenSquareBracket;
-        break;
-    case ']':
-        type = TokenType::CloseSquareBracket;
-        break;
-    case ',':
-        type = TokenType::Comma;
-        break;
-    case ':':
-        type = TokenType::Colon;
-        break;
-    case '+':
-    case '-':
-    case '*':
-    case '/':
-    case '.':
-        type = TokenType::Operator;
-        break;
-    case '=':
-        type = TokenType::Directive;
-        break;
-    case '<':
-        type = TokenType::OpenAngleBracket;
-        break;
-    case '>':
-        type = TokenType::CloseAngleBracket;
-        break;
-    case '?':
-        type = TokenType::QuestionMark;
-        break;
-    case '$':
-        type = TokenType::Dollar;
-        break;
-    default:
-        addDiagnostic(start, pos, ErrorCode::UNRECOGNIZED_SYMBOL);
-        return Token{TokenType::Invalid, lexeme, Span(start, pos, nullptr)};
-    }
-
-    return Token{type, lexeme, Span(start, pos, nullptr)};
-}
-
-// TODO fix isalpha to handle utf8
-bool Tokenizer::isValidIdentifierStart(char c) { return isalpha(c) || c == '_' || c == '@' || c == '$' || c == '?'; }
-
-// TODO fix isalnum to handle utf8
-bool Tokenizer::isValidIdentifierChar(char c) { return isalnum(c) || c == '_' || c == '@' || c == '$' || c == '?'; }
-
-bool Tokenizer::isValidIdentifier(const std::string &lexeme)
-{
-    if (lexeme.empty())
-        return false;
-
-    if (!isValidIdentifierStart(lexeme[0])) {
-        return false;
-    }
-
-    for (size_t i = 1; i < lexeme.size(); ++i) {
-        if (!isValidIdentifierChar(lexeme[i])) {
-            return false;
-        }
-    }
-
-    return true;
-}
 File tokenize.h:
 
 #pragma once
@@ -3595,7 +776,7 @@ File tokenize.h:
 #include <deque>
 #include <unordered_set>
 
-enum class TokenType {
+enum class TokenType : uint8_t {
     Identifier,
     Directive,
     Instruction,
@@ -3635,7 +816,7 @@ struct Token {
 
 class Tokenizer {
 public:
-    Tokenizer(std::shared_ptr<ParseSession> psess, const std::string &src) : psess(psess), src(src), pos(0) {}
+    Tokenizer(const std::shared_ptr<ParseSession> &psess, const std::string &src) : psess(psess), src(src) {}
     std::vector<Token> tokenize();
 
 private:
@@ -3659,10 +840,10 @@ private:
         psess->dcx->addDiagnostic(diag);
     }
 
-    std::vector<Token> tokens;
-    std::size_t pos;
-    const std::string &src;
     std::shared_ptr<ParseSession> psess;
+    const std::string &src;
+    std::size_t pos = 0;
+    std::vector<Token> tokens;
 };
 
 inline std::string stringToUpper(const std::string &str)
@@ -3672,295 +853,3 @@ inline std::string stringToUpper(const std::string &str)
                    [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
     return upperStr;
 }
-File test_add.cpp:
-
-#define DOCTEST_CONFIG_COLORS_ANSI
-#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
-#include <doctest/doctest.h>
-#include "add.h"
-#include "tokenize.h"
-#include "session.h"
-#include "diagnostic.h"
-#include <memory>
-
-// int add(int a, int b) { return a + b; }
-
-TEST_CASE("testing the add function")
-{
-    CHECK(add(1, 2) == 3);
-    CHECK(add(2, 5) == 7);
-}
-
-TEST_CASE("Tokenizer: Identifiers and Keywords")
-{
-    auto parseSess = std::make_shared<ParseSession>();
-
-    SUBCASE("Valid Identifier")
-    {
-        std::string source = "myVar";
-        Tokenizer tokenizer(parseSess, source);
-        auto tokens = tokenizer.tokenize();
-
-        CHECK(tokens.size() == 2); // Identifier + EndOfFile
-        CHECK(tokens[0].type == TokenType::Identifier);
-        CHECK(tokens[0].lexeme == "myVar");
-    }
-
-    SUBCASE("Directive Keyword")
-    {
-        std::string source = "EQU";
-        Tokenizer tokenizer(parseSess, source);
-        auto tokens = tokenizer.tokenize();
-
-        CHECK(tokens[0].type == TokenType::Directive);
-        CHECK(tokens[0].lexeme == "EQU");
-    }
-
-    SUBCASE("Instruction Keyword")
-    {
-        std::string source = "mov";
-        Tokenizer tokenizer(parseSess, source);
-        auto tokens = tokenizer.tokenize();
-
-        CHECK(tokens[0].type == TokenType::Instruction);
-        CHECK(tokens[0].lexeme == "mov");
-    }
-
-    SUBCASE("Register Keyword")
-    {
-        std::string source = "AX";
-        Tokenizer tokenizer(parseSess, source);
-        auto tokens = tokenizer.tokenize();
-
-        CHECK(tokens[0].type == TokenType::Register);
-        CHECK(tokens[0].lexeme == "AX");
-    }
-
-    SUBCASE("Identifier Starting with Dot")
-    {
-        std::string source = ".myLabel";
-        Tokenizer tokenizer(parseSess, source);
-        auto tokens = tokenizer.tokenize();
-
-        CHECK(tokens[0].type == TokenType::Identifier);
-        CHECK(tokens[0].lexeme == ".myLabel");
-    }
-}
-
-// TEST_CASE("Tokenizer: Numbers") {
-//     auto parseSess = std::make_shared<ParseSession>();
-
-//     SUBCASE("Decimal Number") {
-//         std::string source = "12345";
-//         Tokenizer tokenizer(parseSess, source);
-//         auto tokens = tokenizer.tokenize();
-
-//         CHECK(tokens[0].type == TokenType::Number);
-//         CHECK(tokens[0].lexeme == "12345");
-//     }
-
-//     SUBCASE("Hexadecimal Number with 'h' Suffix") {
-//         std::string source = "0FFh";
-//         Tokenizer tokenizer(parseSess, source);
-//         auto tokens = tokenizer.tokenize();
-
-//         CHECK(tokens[0].type == TokenType::Number);
-//         CHECK(tokens[0].lexeme == "0FFh");
-//     }
-
-//     SUBCASE("Binary Number with 'b' Suffix") {
-//         std::string source = "1010b";
-//         Tokenizer tokenizer(parseSess, source);
-//         auto tokens = tokenizer.tokenize();
-
-//         CHECK(tokens[0].type == TokenType::Number);
-//         CHECK(tokens[0].lexeme == "1010b");
-//     }
-
-//     SUBCASE("Octal Number with 'o' Suffix") {
-//         std::string source = "77o";
-//         Tokenizer tokenizer(parseSess, source);
-//         auto tokens = tokenizer.tokenize();
-
-//         CHECK(tokens[0].type == TokenType::Number);
-//         CHECK(tokens[0].lexeme == "77o");
-//     }
-
-//     SUBCASE("Floating Point Number") {
-//         std::string source = "3.14";
-//         Tokenizer tokenizer(parseSess, source);
-//         auto tokens = tokenizer.tokenize();
-
-//         CHECK(tokens[0].type == TokenType::Number);
-//         CHECK(tokens[0].lexeme == "3.14");
-//     }
-
-//     SUBCASE("Invalid Number Format") {
-//         std::string source = "123XYZ";
-//         Tokenizer tokenizer(parseSess, source);
-//         auto tokens = tokenizer.tokenize();
-
-//         CHECK(tokens[0].type == TokenType::Invalid);
-//         CHECK(parseSess->dcx->hasErrors());
-//     }
-// }
-
-// TEST_CASE("Tokenizer: Strings") {
-//     auto parseSess = std::make_shared<ParseSession>();
-
-//     SUBCASE("Double-Quoted String") {
-//         std::string source = "\"Hello, World!\"";
-//         Tokenizer tokenizer(parseSess, source);
-//         auto tokens = tokenizer.tokenize();
-
-//         CHECK(tokens[0].type == TokenType::StringLiteral);
-//         CHECK(tokens[0].lexeme == "\"Hello, World!\"");
-//     }
-
-//     SUBCASE("Single-Quoted String") {
-//         std::string source = "'Hello, MASM'";
-//         Tokenizer tokenizer(parseSess, source);
-//         auto tokens = tokenizer.tokenize();
-
-//         CHECK(tokens[0].type == TokenType::StringLiteral);
-//         CHECK(tokens[0].lexeme == "'Hello, MASM'");
-//     }
-
-//     SUBCASE("String with Escaped Quote") {
-//         std::string source = "\"She said, \\\"Hello\\\"\"";
-//         Tokenizer tokenizer(parseSess, source);
-//         auto tokens = tokenizer.tokenize();
-
-//         CHECK(tokens[0].type == TokenType::StringLiteral);
-//         CHECK(tokens[0].lexeme == "\"She said, \\\"Hello\\\"\"");
-//     }
-
-//     SUBCASE("Unterminated String") {
-//         std::string source = "\"This string is not closed";
-//         Tokenizer tokenizer(parseSess, source);
-//         auto tokens = tokenizer.tokenize();
-
-//         CHECK(tokens[0].type == TokenType::Invalid);
-//         CHECK(parseSess->dcx->hasErrors());
-//     }
-// }
-
-// TEST_CASE("Tokenizer: Comments") {
-//     auto parseSess = std::make_shared<ParseSession>();
-
-//     SUBCASE("Single-Line Comment") {
-//         std::string source = "; This is a comment";
-//         Tokenizer tokenizer(parseSess, source);
-//         auto tokens = tokenizer.tokenize();
-
-//         CHECK(tokens[0].type == TokenType::Comment);
-//         CHECK(tokens[0].lexeme == "; This is a comment");
-//     }
-
-//     SUBCASE("Code with Comment") {
-//         std::string source = "MOV AX, BX ; Move BX into AX";
-//         Tokenizer tokenizer(parseSess, source);
-//         auto tokens = tokenizer.tokenize();
-
-//         CHECK(tokens.size() == 7); // MOV, AX, ,, BX, Comment, EndOfFile
-//         CHECK(tokens[0].type == TokenType::Instruction);
-//         CHECK(tokens[0].lexeme == "MOV");
-//         CHECK(tokens[5].type == TokenType::Comment);
-//         CHECK(tokens[5].lexeme == "; Move BX into AX");
-//     }
-// }
-
-// TEST_CASE("Tokenizer: Operators and Special Symbols") {
-//     auto parseSess = std::make_shared<ParseSession>();
-
-//     SUBCASE("Single-Character Operators") {
-//         std::string source = "+ - * / % = < > & | ^ ~";
-//         Tokenizer tokenizer(parseSess, source);
-//         auto tokens = tokenizer.tokenize();
-
-//         CHECK(tokens.size() == 14); // 12 operators + EndOfFile
-//         CHECK(tokens[0].lexeme == "+");
-//         CHECK(tokens[2].lexeme == "-");
-//         CHECK(tokens[4].lexeme == "*");
-//         CHECK(tokens[6].lexeme == "/");
-//         // ... continue checking other operators
-//     }
-
-//     SUBCASE("Multi-Character Operators") {
-//         std::string source = "== != <= >= && || ::";
-//         Tokenizer tokenizer(parseSess, source);
-//         auto tokens = tokenizer.tokenize();
-
-//         CHECK(tokens.size() == 8); // 7 operators + EndOfFile
-//         CHECK(tokens[0].lexeme == "==");
-//         CHECK(tokens[1].lexeme == "!=");
-//         CHECK(tokens[2].lexeme == "<=");
-//         CHECK(tokens[3].lexeme == ">=");
-//         CHECK(tokens[4].lexeme == "&&");
-//         CHECK(tokens[5].lexeme == "||");
-//         CHECK(tokens[6].lexeme == "::");
-//     }
-
-//     SUBCASE("Unrecognized Symbol") {
-//         std::string source = "@";
-//         Tokenizer tokenizer(parseSess, source);
-//         auto tokens = tokenizer.tokenize();
-
-//         // '@' can be part of identifiers in MASM, so it should be recognized
-//         CHECK(tokens[0].type == TokenType::Identifier);
-//         CHECK(tokens[0].lexeme == "@");
-//     }
-// }
-
-// TEST_CASE("Tokenizer: Line Continuations") {
-//     auto parseSess = std::make_shared<ParseSession>();
-
-//     SUBCASE("Simple Line Continuation") {
-//         std::string source = "MOV AX, \\\nBX";
-//         Tokenizer tokenizer(parseSess, source);
-//         auto tokens = tokenizer.tokenize();
-
-//         CHECK(tokens.size() == 6); // MOV, AX, ,, BX, EndOfFile
-//         CHECK(tokens[0].type == TokenType::Instruction);
-//         CHECK(tokens[0].lexeme == "MOV");
-//         CHECK(tokens[3].lexeme == "BX");
-//     }
-
-//     SUBCASE("Continuation with Comments") {
-//         std::string source = "MOV AX, \\ ; continue\nBX";
-//         Tokenizer tokenizer(parseSess, source);
-//         auto tokens = tokenizer.tokenize();
-
-//         CHECK(tokens.size() == 7); // MOV, AX, ,, BX, EndOfFile
-//         CHECK(tokens[0].type == TokenType::Instruction);
-//         CHECK(tokens[0].lexeme == "MOV");
-//         CHECK(tokens[5].type == TokenType::Identifier);
-//         CHECK(tokens[5].lexeme == "BX");
-//     }
-// }
-
-// TEST_CASE("Tokenizer: Error Handling") {
-//     auto parseSess = std::make_shared<ParseSession>();
-
-//     SUBCASE("Unrecognized Character") {
-//         std::string source = "#";
-//         Tokenizer tokenizer(parseSess, source);
-//         auto tokens = tokenizer.tokenize();
-
-//         CHECK(tokens[0].type == TokenType::Invalid);
-//         CHECK(parseSess->dcx->hasErrors());
-//     }
-
-//     SUBCASE("Recovery After Error") {
-//         std::string source = "# MOV AX, BX";
-//         Tokenizer tokenizer(parseSess, source);
-//         auto tokens = tokenizer.tokenize();
-
-//         // Should report error but continue tokenizing
-//         CHECK(tokens[0].type == TokenType::Invalid);
-//         CHECK(tokens[1].type == TokenType::Instruction);
-//         CHECK(tokens[1].lexeme == "MOV");
-//         CHECK(parseSess->dcx->hasErrors());
-//     }
-// }
-

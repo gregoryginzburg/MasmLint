@@ -26,7 +26,7 @@ private:
     fmt::rgb redColor = fmt::rgb(254, 89, 89);
     fmt::rgb yellowColor = fmt::rgb(255, 191, 0);
     fmt::rgb cyanColor = fmt::rgb(0, 200, 200);
-    size_t spaceCount = 0xffffffff;
+    size_t spaceCount = 0;
 
     template <typename... Args>
     std::string format(const fmt::text_style &ts, fmt::format_string<Args...> fmt_str, Args &&...args)

@@ -12,44 +12,6 @@ Parser::Parser(const std::shared_ptr<ParseSession> &parseSession, const std::vec
 {
 }
 
-ASTPtr Parser::parse()
-{
-    std::vector<ASTExpressionPtr> expressions;
-    currentIndex = 0;
-    while (true) {
-        ASTExpressionPtr expr = parseLine();
-        expressions.push_back(expr);
-        if (currentToken.type == TokenType::EndOfFile) {
-            return std::make_shared<Program>(expressions);
-        }
-    }
-    return std::make_shared<Program>(expressions);
-}
-
-ASTExpressionPtr Parser::parseLine()
-{
-    // reset panicLine
-    panicLine = false;
-    ASTExpressionPtr expr = parseExpression();
-
-    if (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
-        if (!panicLine) {
-            Diagnostic diag(Diagnostic::Level::Error, ErrorCode::UNEXPECTED_TOKEN, currentToken.lexeme);
-            diag.addPrimaryLabel(currentToken.span, "");
-            parseSess->dcx->addDiagnostic(diag);
-        }
-    }
-    while (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
-        advance();
-    }
-    if (currentToken.type == TokenType::EndOfFile) {
-        return expr;
-    }
-    consume(TokenType::EndOfLine);
-
-    return expr;
-}
-
 // Only advance when matched a not EndOfFile
 void Parser::advance()
 {
@@ -69,7 +31,7 @@ bool Parser::match(TokenType type, const std::string &value) const
     return currentToken.type == type && stringToUpper(currentToken.lexeme) == value;
 }
 
-// Can't consume EndOfFile ?
+// Can't consume EndOfFile
 std::optional<Token> Parser::consume(TokenType type)
 {
     if (currentToken.type == type) {
@@ -80,7 +42,7 @@ std::optional<Token> Parser::consume(TokenType type)
         return std::nullopt;
     }
 }
-
+// Can't consume EndOfFile
 std::optional<Token> Parser::consume(TokenType type, const std::string &value)
 {
     if (currentToken.type == type && currentToken.lexeme == value) {
@@ -92,38 +54,63 @@ std::optional<Token> Parser::consume(TokenType type, const std::string &value)
     }
 }
 
-ASTExpressionPtr Parser::parseExpression()
+ASTPtr Parser::parse()
+{
+    std::vector<std::shared_ptr<Statement>> statements;
+    currentIndex = 0;
+    while (true) {
+        // ExpressionPtr expr = parseLine();
+        // expressions.push_back(expr);
+        // if (currentToken.type == TokenType::EndOfFile) {
+        //     return std::make_shared<Program>(expressions);
+        // }
+    }
+    return std::make_shared<Program>(statements, nullptr);
+}
+
+std::shared_ptr<Directive> Parser::parseSegDir() { return nullptr; }
+std::shared_ptr<Directive> Parser::parseDataDir() { return nullptr; }
+std::shared_ptr<Directive> Parser::parseStructDir() { return nullptr; }
+std::shared_ptr<Directive> Parser::parseRecordDir() { return nullptr; }
+std::shared_ptr<Directive> Parser::parseEquDir() { return nullptr; }
+std::shared_ptr<Directive> Parser::parseEqualDir() { return nullptr; }
+std::shared_ptr<Directive> Parser::parseProcDir() { return nullptr; }
+
+std::shared_ptr<Instruction> Parser::parseInstruction() { return nullptr; }
+std::shared_ptr<LabelDef> Parser::parseLabelDef() { return nullptr; }
+
+ExpressionPtr Parser::parseExpression()
 {
     // need to initialize to {} before every parseExpression()
     expressionDelimitersStack = {};
     return parseExpressionHelper();
 }
 
-ASTExpressionPtr Parser::parseExpressionHelper()
+ExpressionPtr Parser::parseExpressionHelper()
 {
-    ASTExpressionPtr term1 = parseMultiplicativeExpression();
+    ExpressionPtr term1 = parseMultiplicativeExpression();
     while (match("+") || match("-")) {
         Token op = currentToken;
         advance();
-        ASTExpressionPtr term2 = parseMultiplicativeExpression();
+        ExpressionPtr term2 = parseMultiplicativeExpression();
         term1 = std::make_shared<BinaryOperator>(op, term1, term2);
     }
     return term1;
 }
 
-ASTExpressionPtr Parser::parseMultiplicativeExpression()
+ExpressionPtr Parser::parseMultiplicativeExpression()
 {
-    ASTExpressionPtr term1 = parseUnaryExpression();
+    ExpressionPtr term1 = parseUnaryExpression();
     while (match("*") || match("/") || match("MOD") || match("SHL") || match("SHR")) {
         Token op = currentToken;
         advance();
-        ASTExpressionPtr term2 = parseUnaryExpression();
+        ExpressionPtr term2 = parseUnaryExpression();
         term1 = std::make_shared<BinaryOperator>(op, term1, term2);
     }
     return term1;
 }
 
-ASTExpressionPtr Parser::parseUnaryExpression()
+ExpressionPtr Parser::parseUnaryExpression()
 {
     std::vector<Token> operators;
     while (match("+") || match("-") || match("OFFSET") || match("TYPE")) {
@@ -131,54 +118,54 @@ ASTExpressionPtr Parser::parseUnaryExpression()
         operators.push_back(op);
         advance();
     }
-    ASTExpressionPtr term = parsePtrExpression();
+    ExpressionPtr term = parsePtrExpression();
     for (const Token &op : std::ranges::reverse_view(operators)) {
         term = std::make_shared<UnaryOperator>(op, term);
     }
     return term;
 }
 
-ASTExpressionPtr Parser::parsePtrExpression()
+ExpressionPtr Parser::parsePtrExpression()
 {
-    ASTExpressionPtr term1 = parseMemberAccessAndIndexingExpression();
+    ExpressionPtr term1 = parseMemberAccessAndIndexingExpression();
     while (match("PTR")) {
         Token op = currentToken;
         advance();
-        ASTExpressionPtr term2 = parseMemberAccessAndIndexingExpression();
+        ExpressionPtr term2 = parseMemberAccessAndIndexingExpression();
         term1 = std::make_shared<BinaryOperator>(op, term1, term2);
     }
     return term1;
 }
 
-ASTExpressionPtr Parser::parseMemberAccessAndIndexingExpression()
+ExpressionPtr Parser::parseMemberAccessAndIndexingExpression()
 {
-    ASTExpressionPtr term1 = parseHighPrecedenceUnaryExpression();
+    ExpressionPtr term1 = parseHighPrecedenceUnaryExpression();
     while (match(TokenType::OpenSquareBracket) || match(TokenType::OpenBracket) || match(".")) {
         if (match(TokenType::OpenSquareBracket)) {
             Token leftBracket = currentToken;
             expressionDelimitersStack.push(leftBracket);
             advance();
-            ASTExpressionPtr expr = parseExpressionHelper();
+            ExpressionPtr expr = parseExpressionHelper();
             std::optional<Token> rightBracket = consume(TokenType::CloseSquareBracket);
             if (!rightBracket) {
                 std::shared_ptr<Diagnostic> diag = reportUnclosedDelimiterError(currentToken);
                 return std::make_shared<InvalidExpression>(diag);
             }
             expressionDelimitersStack.pop();
-            ASTExpressionPtr term2 = std::make_shared<SquareBrackets>(leftBracket, rightBracket.value(), expr);
+            ExpressionPtr term2 = std::make_shared<SquareBrackets>(leftBracket, rightBracket.value(), expr);
             term1 = std::make_shared<ImplicitPlusOperator>(term1, term2);
         } else if (match(TokenType::OpenBracket)) {
             Token leftBracket = currentToken;
             expressionDelimitersStack.push(leftBracket);
             advance();
-            ASTExpressionPtr expr = parseExpressionHelper();
+            ExpressionPtr expr = parseExpressionHelper();
             std::optional<Token> rightBracket = consume(TokenType::CloseBracket);
             if (!rightBracket) {
                 std::shared_ptr<Diagnostic> diag = reportUnclosedDelimiterError(currentToken);
                 return std::make_shared<InvalidExpression>(diag);
             }
             expressionDelimitersStack.pop();
-            ASTExpressionPtr term2 = std::make_shared<Brackets>(leftBracket, rightBracket.value(), expr);
+            ExpressionPtr term2 = std::make_shared<Brackets>(leftBracket, rightBracket.value(), expr);
             term1 = std::make_shared<ImplicitPlusOperator>(term1, term2);
         } else if (match(".")) {
             Token dot = currentToken;
@@ -195,7 +182,7 @@ ASTExpressionPtr Parser::parseMemberAccessAndIndexingExpression()
     return term1;
 }
 
-ASTExpressionPtr Parser::parseHighPrecedenceUnaryExpression()
+ExpressionPtr Parser::parseHighPrecedenceUnaryExpression()
 {
     std::vector<Token> operators;
     while (match("LENGTH") || match("LENGTHOF") || match("SIZE") || match("SIZEOF") || match("WIDTH") ||
@@ -205,20 +192,20 @@ ASTExpressionPtr Parser::parseHighPrecedenceUnaryExpression()
         advance();
     }
 
-    ASTExpressionPtr term = parsePrimaryExpression();
+    ExpressionPtr term = parsePrimaryExpression();
     for (const Token &op : std::ranges::reverse_view(operators)) {
         term = std::make_shared<UnaryOperator>(op, term);
     }
     return term;
 }
 
-ASTExpressionPtr Parser::parsePrimaryExpression()
+ExpressionPtr Parser::parsePrimaryExpression()
 {
     if (match(TokenType::OpenBracket)) {
         Token leftBracket = currentToken;
         expressionDelimitersStack.push(leftBracket);
         advance();
-        ASTExpressionPtr expr = parseExpressionHelper();
+        ExpressionPtr expr = parseExpressionHelper();
         std::optional<Token> rightBracket = consume(TokenType::CloseBracket);
         if (!rightBracket) {
             auto diag = reportUnclosedDelimiterError(currentToken);
@@ -231,7 +218,7 @@ ASTExpressionPtr Parser::parsePrimaryExpression()
         Token leftBracket = currentToken;
         expressionDelimitersStack.push(leftBracket);
         advance();
-        ASTExpressionPtr expr = parseExpressionHelper();
+        ExpressionPtr expr = parseExpressionHelper();
         std::optional<Token> rightBracket = consume(TokenType::CloseSquareBracket);
         if (!rightBracket) {
             auto diag = reportUnclosedDelimiterError(currentToken);

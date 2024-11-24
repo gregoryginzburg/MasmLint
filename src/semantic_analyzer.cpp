@@ -20,18 +20,10 @@ void SemanticAnalyzer::analyze() { visit(ast); }
 void SemanticAnalyzer::visit(const ASTPtr &node)
 {
     if (auto program = std::dynamic_pointer_cast<Program>(node)) {
-        for (const auto &expr : program->expressions) {
-            panicLine = false;
-            expressionDepth = 0;
-            visitExpression(expr, ExpressionContext::InstructionOperand);
-            if (expr->type == OperandType::UnfinishedMemoryOperand) {
-                reportInvalidAddressExpression(expr);
-            }
-        }
     }
 }
 
-void SemanticAnalyzer::visitExpression(const ASTExpressionPtr &node, ExpressionContext context)
+void SemanticAnalyzer::visitExpression(const ExpressionPtr &node, ExpressionContext context)
 {
     expressionDepth++;
     if (auto brackets = std::dynamic_pointer_cast<Brackets>(node)) {
@@ -78,7 +70,7 @@ void SemanticAnalyzer::visitSquareBrackets(const std::shared_ptr<SquareBrackets>
         // delay checking for this, because for (esp + esp) we want to report can have registers in expressions
         // dont want to call this (reportInvalidAddressExpression())
         bool implicit = false;
-        ASTExpressionPtr expr;
+        ExpressionPtr expr;
         if ((expr = std::dynamic_pointer_cast<BinaryOperator>(operand))) {
             implicit = false;
         } else if ((expr = std::dynamic_pointer_cast<ImplicitPlusOperator>(operand))) {

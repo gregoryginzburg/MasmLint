@@ -2,6 +2,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <memory>
 
 struct Symbol {
     std::string name;
@@ -14,7 +15,7 @@ struct Symbol {
 class SymbolTable {
 public:
     void addSymbol(const Symbol &symbol);
-    Symbol *findSymbol(const std::string &name);
+    std::unique_ptr<Symbol> findSymbol(const std::string &name);
 
 private:
     std::unordered_map<std::string, Symbol> symbols;

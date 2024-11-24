@@ -31,16 +31,26 @@ private:
     std::optional<Token> consume(TokenType type);
     std::optional<Token> consume(TokenType type, const std::string &value);
 
-    ASTExpressionPtr parseLine();
-    ASTExpressionPtr parseExpression();
-    ASTExpressionPtr parseExpressionHelper();
-    ASTExpressionPtr parseMultiplicativeExpression();
-    ASTExpressionPtr parseUnaryExpression();
-    ASTExpressionPtr parsePtrExpression();
-    ASTExpressionPtr parseMemberAccessAndIndexingExpression();
-    ASTExpressionPtr parseHighPrecedenceUnaryExpression();
-    ASTExpressionPtr parseIndexSequence();
-    ASTExpressionPtr parsePrimaryExpression();
+    std::shared_ptr<Directive> parseSegDir();
+    std::shared_ptr<Directive> parseDataDir();
+    std::shared_ptr<Directive> parseStructDir();
+    std::shared_ptr<Directive> parseRecordDir();
+    std::shared_ptr<Directive> parseEquDir();
+    std::shared_ptr<Directive> parseEqualDir();
+    std::shared_ptr<Directive> parseProcDir();
+
+    std::shared_ptr<Instruction> parseInstruction();
+    std::shared_ptr<LabelDef> parseLabelDef();
+
+    ExpressionPtr parseExpression();
+    ExpressionPtr parseExpressionHelper();
+    ExpressionPtr parseMultiplicativeExpression();
+    ExpressionPtr parseUnaryExpression();
+    ExpressionPtr parsePtrExpression();
+    ExpressionPtr parseMemberAccessAndIndexingExpression();
+    ExpressionPtr parseHighPrecedenceUnaryExpression();
+    ExpressionPtr parseIndexSequence();
+    ExpressionPtr parsePrimaryExpression();
 
     std::shared_ptr<Diagnostic> reportUnclosedDelimiterError(const Token &closingDelimiter);
     std::shared_ptr<Diagnostic> reportExpectedExpression(const Token &token);

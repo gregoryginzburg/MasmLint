@@ -4,7 +4,7 @@
 
 // TODO: think more about naming types for users
 // dont rely on this in code
-std::string getOperandType(const ASTExpressionPtr &node)
+std::string getOperandType(const ExpressionPtr &node)
 {
     std::shared_ptr<Leaf> leaf;
     if ((leaf = std::dynamic_pointer_cast<Leaf>(node))) {
@@ -249,7 +249,7 @@ void SemanticAnalyzer::reportOtherBinaryOperatorIncorrectArgument(const std::sha
     parseSess->dcx->addDiagnostic(diag);
 }
 
-void SemanticAnalyzer::reportInvalidAddressExpression(const ASTExpressionPtr &node)
+void SemanticAnalyzer::reportInvalidAddressExpression(const ExpressionPtr &node)
 {
     if (panicLine) {
         return;
@@ -259,7 +259,7 @@ void SemanticAnalyzer::reportInvalidAddressExpression(const ASTExpressionPtr &no
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_ADDRESS_EXPRESSION);
 
     // find first thing that lead to UnfinishedMemoryOperand and print it
-    ASTExpressionPtr errorNode;
+    ExpressionPtr errorNode;
     findInvalidExpressionCause(node, errorNode);
 
     if (!errorNode) {
@@ -277,7 +277,7 @@ void SemanticAnalyzer::reportInvalidAddressExpression(const ASTExpressionPtr &no
     parseSess->dcx->addDiagnostic(diag);
 }
 
-void SemanticAnalyzer::findInvalidExpressionCause(const ASTExpressionPtr &node, ASTExpressionPtr &errorNode)
+void SemanticAnalyzer::findInvalidExpressionCause(const ExpressionPtr &node, ExpressionPtr &errorNode)
 {
     if (node->type == OperandType::UnfinishedMemoryOperand) {
         errorNode = node;
@@ -311,12 +311,12 @@ void SemanticAnalyzer::findInvalidExpressionCause(const ASTExpressionPtr &node, 
     } else if (auto invalidExpr = std::dynamic_pointer_cast<InvalidExpression>(node)) {
         return;
     } else {
-        LOG_DETAILED_ERROR("Unknown ASTExpression Node!\n");
+        LOG_DETAILED_ERROR("Unknown Expression Node!\n");
         return;
     }
 }
 
-void SemanticAnalyzer::reportCantAddVariables(const ASTExpressionPtr &node, bool implicit)
+void SemanticAnalyzer::reportCantAddVariables(const ExpressionPtr &node, bool implicit)
 {
     if (panicLine) {
         return;
@@ -348,7 +348,7 @@ void SemanticAnalyzer::reportCantAddVariables(const ASTExpressionPtr &node, bool
     parseSess->dcx->addDiagnostic(diag);
 }
 
-void SemanticAnalyzer::findRelocatableVariables(const ASTExpressionPtr &node, std::optional<Token> &firstVar,
+void SemanticAnalyzer::findRelocatableVariables(const ExpressionPtr &node, std::optional<Token> &firstVar,
                                                 std::optional<Token> &secondVar)
 {
     if (auto binaryOp = std::dynamic_pointer_cast<BinaryOperator>(node)) {
@@ -386,12 +386,12 @@ void SemanticAnalyzer::findRelocatableVariables(const ASTExpressionPtr &node, st
     } else if (auto invalidExpr = std::dynamic_pointer_cast<InvalidExpression>(node)) {
         return;
     } else {
-        LOG_DETAILED_ERROR("Unknown ASTExpression Node!\n");
+        LOG_DETAILED_ERROR("Unknown Expression Node!\n");
         return;
     }
 }
 
-void SemanticAnalyzer::reportMoreThanTwoRegistersAfterAdd(const ASTExpressionPtr &node, bool implicit)
+void SemanticAnalyzer::reportMoreThanTwoRegistersAfterAdd(const ExpressionPtr &node, bool implicit)
 {
     if (panicLine) {
         return;
@@ -438,7 +438,7 @@ void SemanticAnalyzer::reportMoreThanTwoRegistersAfterAdd(const ASTExpressionPtr
     parseSess->dcx->addDiagnostic(diag);
 }
 
-void SemanticAnalyzer::reportMoreThanOneScaleAfterAdd(const ASTExpressionPtr &node, bool implicit)
+void SemanticAnalyzer::reportMoreThanOneScaleAfterAdd(const ExpressionPtr &node, bool implicit)
 {
     if (panicLine) {
         return;
@@ -492,7 +492,7 @@ void SemanticAnalyzer::reportMoreThanOneScaleAfterAdd(const ASTExpressionPtr &no
     parseSess->dcx->addDiagnostic(diag);
 }
 
-void SemanticAnalyzer::reportTwoEsp(const ASTExpressionPtr &node, bool implicit)
+void SemanticAnalyzer::reportTwoEsp(const ExpressionPtr &node, bool implicit)
 {
     if (panicLine) {
         return;
@@ -545,7 +545,7 @@ void SemanticAnalyzer::reportTwoEsp(const ASTExpressionPtr &node, bool implicit)
     parseSess->dcx->addDiagnostic(diag);
 }
 
-void SemanticAnalyzer::reportNon32bitRegister(const ASTExpressionPtr &node, bool implicit)
+void SemanticAnalyzer::reportNon32bitRegister(const ExpressionPtr &node, bool implicit)
 {
     if (panicLine) {
         return;
