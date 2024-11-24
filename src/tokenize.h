@@ -7,7 +7,7 @@
 #include <deque>
 #include <unordered_set>
 
-enum class TokenType {
+enum class TokenType : uint8_t {
     Identifier,
     Directive,
     Instruction,
@@ -47,7 +47,7 @@ struct Token {
 
 class Tokenizer {
 public:
-    Tokenizer(std::shared_ptr<ParseSession> psess, const std::string &src) : psess(psess), src(src), pos(0) {}
+    Tokenizer(const std::shared_ptr<ParseSession> &psess, const std::string &src) : psess(psess), src(src) {}
     std::vector<Token> tokenize();
 
 private:
@@ -71,10 +71,10 @@ private:
         psess->dcx->addDiagnostic(diag);
     }
 
-    std::vector<Token> tokens;
-    std::size_t pos;
-    const std::string &src;
     std::shared_ptr<ParseSession> psess;
+    const std::string &src;
+    std::size_t pos = 0;
+    std::vector<Token> tokens;
 };
 
 inline std::string stringToUpper(const std::string &str)

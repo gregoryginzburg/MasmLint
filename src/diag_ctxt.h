@@ -7,7 +7,7 @@
 
 class DiagCtxt {
 public:
-    DiagCtxt(std::shared_ptr<Emitter> emitter);
+    explicit DiagCtxt(std::shared_ptr<Emitter> emitter);
 
     void addDiagnostic(const Diagnostic &diag);
     std::shared_ptr<Diagnostic> getLastDiagnostic();

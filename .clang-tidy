@@ -43,7 +43,19 @@ Checks: "*,
         -misc-include-cleaner,
         -misc-confusable-identifiers,
 
-        -modernize-use-nodiscard
+        -modernize-use-nodiscard,
+        -misc-const-correctness,
+        -misc-no-recursion,
+        -cppcoreguidelines-pro-type-reinterpret-cast,
+        -cppcoreguidelines-avoid-const-or-ref-data-members,
+        -bugprone-assignment-in-if-condition,
+        -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+        -bugprone-branch-clone,
+        -clang-diagnostic-parentheses,
+        -bugprone-unchecked-optional-access,
+        -useStlAlgorithm,
+        -bugprone-exception-escape,
+        -readability-avoid-nested-conditional-operator
 "
 
 

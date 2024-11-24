@@ -11,7 +11,8 @@ std::shared_ptr<Diagnostic> Parser::reportUnclosedDelimiterError(const Token &cl
     if (expressionDelimitersStack.empty()) {
         LOG_DETAILED_ERROR("Empty demimiters stack!");
     } else {
-        Diagnostic diag(Diagnostic::Level::Error, ErrorCode::UNCLOSED_DELIMITER, expressionDelimitersStack.top().lexeme);
+        Diagnostic diag(Diagnostic::Level::Error, ErrorCode::UNCLOSED_DELIMITER,
+                        expressionDelimitersStack.top().lexeme);
         diag.addPrimaryLabel(closingDelimiter.span, "");
         Token openingDelimiter = expressionDelimitersStack.top();
         diag.addSecondaryLabel(openingDelimiter.span, "unclosed delimiter");

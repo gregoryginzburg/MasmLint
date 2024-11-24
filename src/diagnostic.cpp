@@ -33,9 +33,9 @@ const std::optional<std::string> &Diagnostic::getHelpMessage() const { return he
 
 void Diagnostic::cancel() { cancelled = true; }
 
-bool Diagnostic::isCancelled() { return cancelled; }
+bool Diagnostic::isCancelled() const { return cancelled; }
 
-const std::string getErrorMessage(ErrorCode code)
+std::string getErrorMessage(ErrorCode code)
 {
     switch (code) {
 #define DEFINE_ERROR(code, message)                                                                                    \

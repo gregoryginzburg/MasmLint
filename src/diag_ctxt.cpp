@@ -10,6 +10,7 @@ std::shared_ptr<Diagnostic> DiagCtxt::getLastDiagnostic()
 {
     if (diagnostics.empty()) {
         LOG_DETAILED_ERROR("No last diagnostics exists!");
+        return nullptr;
     }
     return diagnostics.back();
 }

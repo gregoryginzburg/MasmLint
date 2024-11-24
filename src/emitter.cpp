@@ -12,12 +12,12 @@ using json = nlohmann::json;
 
 #include <utf8proc.h>
 
-Emitter::Emitter(std::shared_ptr<SourceMap> sourceMap, std::ostream &outStream, bool useColor)
+Emitter::Emitter(const std::shared_ptr<SourceMap> &sourceMap, std::ostream &outStream, bool useColor)
     : sourceMap(sourceMap), out(outStream), useColor(useColor)
 {
 }
 
-void Emitter::emit(std::shared_ptr<Diagnostic> diag)
+void Emitter::emit(const std::shared_ptr<Diagnostic> &diag)
 {
     if (diag->isCancelled()) {
         return;
@@ -32,15 +32,15 @@ void Emitter::emit(std::shared_ptr<Diagnostic> diag)
     }
 }
 
-void Emitter::printHeader(std::shared_ptr<Diagnostic> diag)
+void Emitter::printHeader(const std::shared_ptr<Diagnostic> &diag)
 {
     auto levelStr = formatLevel(diag->getLevel());
     auto codeStr = formatErrorCode(diag->getLevel(), diag->getCode());
     auto message = format(fmt::emphasis::bold | fg(whiteColor), "{}", diag->getMessage());
     auto colon = format(fmt::emphasis::bold | fg(whiteColor), ":");
 
-    std::string result = fmt::format("{}{}: {}\n", levelStr, codeStr, message);
-    out.write(result.data(), result.size());
+    std::string result = fmt::format("{}{}{} {}\n", levelStr, codeStr, colon, message);
+    out.write(result.data(), static_cast<std::streamsize>(result.size()));
 }
 
 std::string Emitter::formatLevel(Diagnostic::Level level)
@@ -72,7 +72,7 @@ std::string Emitter::formatErrorCode(Diagnostic::Level level, ErrorCode code)
     return "unknown";
 }
 
-void Emitter::printDiagnosticBody(std::shared_ptr<Diagnostic> diag)
+void Emitter::printDiagnosticBody(const std::shared_ptr<Diagnostic> &diag)
 {
     // Collect all labels
     std::map<std::filesystem::path, std::map<size_t, std::vector<LabelType>>> labelsMapping;
@@ -81,7 +81,7 @@ void Emitter::printDiagnosticBody(std::shared_ptr<Diagnostic> diag)
     // primary label
     const auto &[primarySpan, primaryLabelMsg] = diag->getPrimaryLabel();
     std::filesystem::path primaryFilePath;
-    std::size_t primaryLineNumberZeroBased, primaryColumnNumberZeroBased;
+    std::size_t primaryLineNumberZeroBased = 0, primaryColumnNumberZeroBased = 0;
     sourceMap->spanToLocation(primarySpan, primaryFilePath, primaryLineNumberZeroBased, primaryColumnNumberZeroBased);
     labelsMapping[primaryFilePath][primaryLineNumberZeroBased] =
         std::vector<LabelType>(1, LabelType(primarySpan, primaryLabelMsg));
@@ -90,7 +90,7 @@ void Emitter::printDiagnosticBody(std::shared_ptr<Diagnostic> diag)
     // secondary labels
     for (const auto &[span, labelMsg] : diag->getSecondaryLabels()) {
         std::filesystem::path filePath;
-        std::size_t lineNumberZeroBased, columnNumberZeroBased;
+        std::size_t lineNumberZeroBased = 0, columnNumberZeroBased = 0;
         sourceMap->spanToLocation(span, filePath, lineNumberZeroBased, columnNumberZeroBased);
         if (labelsMapping.contains(filePath) && labelsMapping[filePath].contains(lineNumberZeroBased)) {
             labelsMapping[filePath][lineNumberZeroBased].emplace_back(span, labelMsg);
@@ -100,7 +100,7 @@ void Emitter::printDiagnosticBody(std::shared_ptr<Diagnostic> diag)
         maxLineNumber = std::max(maxLineNumber, lineNumberZeroBased + 1);
     }
 
-    spaceCount = calculateDisplayWidth(std::to_string(maxLineNumber)) + 1;
+    spaceCount = static_cast<size_t>(calculateDisplayWidth(std::to_string(maxLineNumber))) + 1;
     fmt::memory_buffer buffer;
     int primaryLineNumberWidth = calculateDisplayWidth(std::to_string(primaryLineNumberZeroBased + 1));
     // Print the location header
@@ -114,12 +114,12 @@ void Emitter::printDiagnosticBody(std::shared_ptr<Diagnostic> diag)
     // print primary string
     auto primarySourceFile = sourceMap->getSourceFile(primaryFilePath);
     std::string primaryLineContent = primarySourceFile->getLine(primaryLineNumberZeroBased);
-    fmt::format_to(std::back_inserter(buffer), "{}{} {} {}\n", std::string(spaceCount - primaryLineNumberWidth, ' '),
+    fmt::format_to(std::back_inserter(buffer), "{}{} {} {}\n",
+                   std::string(spaceCount - static_cast<size_t>(primaryLineNumberWidth), ' '),
                    format(fg(cyanColor), "{}", primaryLineNumberZeroBased + 1), format(fg(cyanColor), "|"),
                    primaryLineContent);
 
     // print labels in primary string
-    std::vector<LabelType> primarySecondaryLabels;
     printLabelsForLine(buffer, primaryLineContent, primaryLineNumberZeroBased, LabelType(primarySpan, primaryLabelMsg),
                        labelsMapping[primaryFilePath][primaryLineNumberZeroBased], diag->getLevel());
 
@@ -137,7 +137,8 @@ void Emitter::printDiagnosticBody(std::shared_ptr<Diagnostic> diag)
         // print string
         std::string lineContent = primarySourceFile->getLine(lineNumberZeroBased);
         int lineNumberWidth = calculateDisplayWidth(std::to_string(lineNumberZeroBased + 1));
-        fmt::format_to(std::back_inserter(buffer), "{}{} {} {}\n", std::string(spaceCount - lineNumberWidth, ' '),
+        fmt::format_to(std::back_inserter(buffer), "{}{} {} {}\n",
+                       std::string(spaceCount - static_cast<size_t>(lineNumberWidth), ' '),
                        format(fg(cyanColor), "{}", lineNumberZeroBased + 1), format(fg(cyanColor), "|"), lineContent);
         printLabelsForLine(buffer, lineContent, lineNumberZeroBased, std::nullopt,
                            labelsMapping[primaryFilePath][lineNumberZeroBased], diag->getLevel());
@@ -155,18 +156,19 @@ void Emitter::printDiagnosticBody(std::shared_ptr<Diagnostic> diag)
                        format(fg(redColor), "Labels in different files not implemented!"));
     }
 
-    out.write(buffer.data(), buffer.size());
+    out.write(buffer.data(), static_cast<std::streamsize>(buffer.size()));
 }
 
 int Emitter::calculateDisplayWidth(const std::string &text)
 {
     int width = 0;
     const char *str = text.c_str();
-    utf8proc_ssize_t len = text.size();
+    auto len = static_cast<utf8proc_ssize_t>(text.size());
     utf8proc_ssize_t idx = 0;
-    utf8proc_int32_t codepoint;
+    utf8proc_int32_t codepoint = 0;
     while (idx < len) {
-        utf8proc_ssize_t charLen = utf8proc_iterate((const utf8proc_uint8_t *)(str + idx), len - idx, &codepoint);
+        utf8proc_ssize_t charLen =
+            utf8proc_iterate(reinterpret_cast<const utf8proc_uint8_t *>(str + idx), len - idx, &codepoint);
         if (charLen <= 0) {
             LOG_DETAILED_ERROR("Invalid utf-8 formatting in calculateDisplayWidth");
             break;
@@ -182,11 +184,12 @@ int Emitter::calculateCodePoints(const std::string &text)
 {
     int codePoints = 0;
     const char *str = text.c_str();
-    utf8proc_ssize_t len = text.size();
+    auto len = static_cast<utf8proc_ssize_t>(text.size());
     utf8proc_ssize_t idx = 0;
-    utf8proc_int32_t codepoint;
+    utf8proc_int32_t codepoint = 0;
     while (idx < len) {
-        utf8proc_ssize_t charLen = utf8proc_iterate((const utf8proc_uint8_t *)(str + idx), len - idx, &codepoint);
+        utf8proc_ssize_t charLen =
+            utf8proc_iterate(reinterpret_cast<const utf8proc_uint8_t *>(str + idx), len - idx, &codepoint);
         if (charLen <= 0) {
             LOG_DETAILED_ERROR("Invalid utf-8 formatting in calculateCodePoints");
             break;
@@ -197,7 +200,7 @@ int Emitter::calculateCodePoints(const std::string &text)
     return codePoints;
 }
 
-void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, std::string lineContent, size_t lineNumberZeroBased,
+void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, const std::string &lineContent, size_t lineNumberZeroBased,
                                  const std::optional<LabelType> &primaryLabel, std::vector<LabelType> &labels,
                                  Diagnostic::Level level)
 {
@@ -209,16 +212,19 @@ void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, std::string lineCon
     case Diagnostic::Level::Warning:
         primaryColor = yellowColor;
         break;
+    case Diagnostic::Level::Note:
+        primaryColor = cyanColor;
+        break;
     }
 
     // Initialize a marker line
     // + 1 needed if we are underlining the '\n' (it's not included in the lineContent)
-    std::string markerLine(calculateDisplayWidth(lineContent) + 1, ' ');
+    std::string markerLine(static_cast<size_t>(calculateDisplayWidth(lineContent)) + 1, ' ');
 
     // Vector to hold messages that need to be printed under the marker line
     std::vector<std::tuple<size_t, std::string, bool>> labelMessagesToPrint;
     // Label Message to print on the same line
-    std::string labelMessageToAdd = "";
+    std::string labelMessageToAdd;
 
     // Sort in the descneding order
     std::sort(labels.begin(), labels.end(), [](auto a, auto b) { return a > b; });
@@ -226,7 +232,7 @@ void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, std::string lineCon
     // Apply labels to the marker line
     for (const auto &[span, labelMsg] : labels) {
         std::filesystem::path filePath;
-        std::size_t startLine, startColumn, endLine, endColumn;
+        std::size_t startLine = 0, startColumn = 0, endLine = 0, endColumn = 0;
         sourceMap->spanToStartPosition(span, filePath, startLine, startColumn);
         sourceMap->spanToEndPosition(span, filePath, endLine, endColumn);
 
@@ -236,8 +242,8 @@ void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, std::string lineCon
         }
 
         // Adjust for UTF-8 characters
-        size_t startPos = calculateDisplayWidth(lineContent.substr(0, startColumn));
-        size_t endPos = calculateDisplayWidth(lineContent.substr(0, endColumn));
+        auto startPos = static_cast<size_t>(calculateDisplayWidth(lineContent.substr(0, startColumn)));
+        auto endPos = static_cast<size_t>(calculateDisplayWidth(lineContent.substr(0, endColumn)));
 
         char markerChar = '-';
         bool isPrimaryLabel = primaryLabel && primaryLabel.value().first == span;
@@ -274,8 +280,7 @@ void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, std::string lineCon
 
     // Print the marker line with appropriate color
     std::string coloredMarkerLine;
-    for (size_t i = 0; i < markerLine.size(); ++i) {
-        char c = markerLine[i];
+    for (char c : markerLine) {
         if (c == '^') {
             // Color primary markers red
             coloredMarkerLine += format(fmt::emphasis::bold | fg(primaryColor), "{}", c);
@@ -303,7 +308,7 @@ void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, std::string lineCon
     // first print initial line of | | | ...
     {
         const auto &[currentStartPos, currentLabelMsg, currentIsPrimaryLabel] = labelMessagesToPrint[0];
-        size_t lineLength = currentStartPos + 1;
+        const size_t lineLength = currentStartPos + 1;
         std::string messageLine(lineLength, ' ');
 
         std::optional<size_t> primaryLabelIndex;
@@ -319,7 +324,7 @@ void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, std::string lineCon
 
         std::string coloredLine;
         for (size_t i = 0; i < messageLine.size(); ++i) {
-            char c = messageLine[i];
+            const char c = messageLine[i];
             if (c == '|') {
                 if (primaryLabelIndex && primaryLabelIndex == i) {
                     coloredLine += format(fg(primaryColor), "{}", "│");
@@ -375,19 +380,19 @@ void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, std::string lineCon
     }
 }
 
-void Emitter::printNote(std::shared_ptr<Diagnostic> diag)
+void Emitter::printNote(const std::shared_ptr<Diagnostic> &diag)
 {
-    if (!diag->getNoteMessage()) {
+    auto noteMessage = diag->getNoteMessage();
+    if (!noteMessage) {
         return;
     }
-    std::string result =
-        fmt::format("{} {} {}: {}\n", std::string(spaceCount, ' '), format(fg(cyanColor), "="),
-                    format(fg(whiteColor) | fmt::emphasis::bold, "note"), diag->getNoteMessage().value());
+    std::string result = fmt::format("{} {} {}: {}\n", std::string(spaceCount, ' '), format(fg(cyanColor), "="),
+                                     format(fg(whiteColor) | fmt::emphasis::bold, "note"), noteMessage.value());
 
-    out.write(result.data(), result.size());
+    out.write(result.data(), static_cast<std::streamsize>(result.size()));
 }
 
-void Emitter::printHelp(std::shared_ptr<Diagnostic> /*diag*/) {}
+void Emitter::printHelp(const std::shared_ptr<Diagnostic> & /*diag*/) {}
 
 void Emitter::emitJSON(const std::vector<std::shared_ptr<Diagnostic>> &diagnostics)
 {
@@ -401,8 +406,9 @@ void Emitter::emitJSON(const std::vector<std::shared_ptr<Diagnostic>> &diagnosti
                                : diag->getLevel() == Diagnostic::Level::Warning ? "Warning"
                                                                                 : "Info";
         diagJson["code"] = static_cast<int>(diag->getCode());
-        if (diag->getNoteMessage()) {
-            diagJson["note_message"] = diag->getNoteMessage().value();
+        auto noteMessage = diag->getNoteMessage();
+        if (noteMessage) {
+            diagJson["note_message"] = noteMessage.value();
         } else {
             diagJson["note_message"] = "";
         }
@@ -412,10 +418,10 @@ void Emitter::emitJSON(const std::vector<std::shared_ptr<Diagnostic>> &diagnosti
         nlohmann::json primaryLabelJson;
 
         std::filesystem::path filePath;
-        std::size_t lineStart, characterStart;
+        std::size_t lineStart = 0, characterStart = 0;
         sourceMap->spanToLocation(primaryLabel.first, filePath, lineStart, characterStart);
 
-        std::size_t lineEnd, characterEnd;
+        std::size_t lineEnd = 0, characterEnd = 0;
         sourceMap->spanToEndLocation(primaryLabel.first, filePath, lineEnd, characterEnd);
 
         primaryLabelJson["span"]["start"]["line"] = lineStart;
@@ -446,13 +452,13 @@ void Emitter::emitJSON(const std::vector<std::shared_ptr<Diagnostic>> &diagnosti
     }
 
     std::string result = output.dump(2);
-    out.write(result.data(), result.size());
+    out.write(result.data(), static_cast<std::streamsize>(result.size()));
 }
 
-void Emitter::spanToLineChar(const Span &span, int &startLine, int &startChar, int &endLine, int &endChar)
+void Emitter::spanToLineChar(const Span &span, int &startLine, int &startChar, int &endLine, int &endChar) const
 {
     std::filesystem::path filePath;
-    std::size_t lineNumberZeroBased, columnNumberZeroBased;
+    std::size_t lineNumberZeroBased = 0, columnNumberZeroBased = 0;
 
     sourceMap->spanToLocation(span, filePath, lineNumberZeroBased, columnNumberZeroBased);
     startLine = static_cast<int>(lineNumberZeroBased);

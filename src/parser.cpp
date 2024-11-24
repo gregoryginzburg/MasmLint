@@ -7,10 +7,9 @@
 
 // #include <fmt/core.h>
 
-Parser::Parser(std::shared_ptr<ParseSession> parseSession, const std::vector<Token> &tokens)
-    : parseSess(parseSession), tokens(tokens), currentIndex(0)
+Parser::Parser(const std::shared_ptr<ParseSession> &parseSession, const std::vector<Token> &tokens)
+    : parseSess(parseSession), tokens(tokens), currentToken(tokens[currentIndex])
 {
-    currentToken = tokens[currentIndex];
 }
 
 ASTPtr Parser::parse()
@@ -61,11 +60,11 @@ void Parser::advance()
     currentToken = tokens[++currentIndex];
 }
 
-bool Parser::match(TokenType type) { return currentToken.type == type; }
+bool Parser::match(TokenType type) const { return currentToken.type == type; }
 
-bool Parser::match(const std::string &value) { return stringToUpper(currentToken.lexeme) == value; }
+bool Parser::match(const std::string &value) const { return stringToUpper(currentToken.lexeme) == value; }
 
-bool Parser::match(TokenType type, const std::string &value)
+bool Parser::match(TokenType type, const std::string &value) const
 {
     return currentToken.type == type && stringToUpper(currentToken.lexeme) == value;
 }
@@ -133,7 +132,7 @@ ASTExpressionPtr Parser::parseUnaryExpression()
         advance();
     }
     ASTExpressionPtr term = parsePtrExpression();
-    for (Token op : std::ranges::reverse_view(operators)) {
+    for (const Token &op : std::ranges::reverse_view(operators)) {
         term = std::make_shared<UnaryOperator>(op, term);
     }
     return term;
@@ -207,7 +206,7 @@ ASTExpressionPtr Parser::parseHighPrecedenceUnaryExpression()
     }
 
     ASTExpressionPtr term = parsePrimaryExpression();
-    for (Token op : std::ranges::reverse_view(operators)) {
+    for (const Token &op : std::ranges::reverse_view(operators)) {
         term = std::make_shared<UnaryOperator>(op, term);
     }
     return term;

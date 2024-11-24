@@ -6,7 +6,7 @@
 
 class SourceFile {
 public:
-    SourceFile(const std::filesystem::path &path, const std::string &src, std::size_t startPos);
+    SourceFile(std::filesystem::path path, const std::string &src, std::size_t startPos);
 
     const std::filesystem::path &getPath() const;
     const std::string &getSource() const;
@@ -38,7 +38,7 @@ private:
 
 class SourceMap {
 public:
-    SourceMap() {};
+    SourceMap() = default;
 
     std::shared_ptr<SourceFile> newSourceFile(const std::filesystem::path &path, const std::string &src);
 

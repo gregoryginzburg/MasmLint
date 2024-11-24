@@ -5,7 +5,7 @@
 #include "diag_ctxt.h"
 #include "log.h"
 
-enum class ExpressionContext {
+enum class ExpressionContext : uint8_t {
     InstructionOperand,
     DataDefinition,
 };
@@ -17,44 +17,45 @@ public:
     void analyze();
 
 private:
-    void visit(ASTPtr node);
+    void visit(const ASTPtr &node);
 
     // ASTexpression nodes
-    void visitExpression(ASTExpressionPtr node, ExpressionContext context);
-    void visitBrackets(std::shared_ptr<Brackets> node, ExpressionContext context);
-    void visitSquareBrackets(std::shared_ptr<SquareBrackets> node, ExpressionContext context);
-    void visitImplicitPlusOperator(std::shared_ptr<ImplicitPlusOperator> node, ExpressionContext context);
-    void visitBinaryOperator(std::shared_ptr<BinaryOperator> node, ExpressionContext context);
-    void visitUnaryOperator(std::shared_ptr<UnaryOperator> node, ExpressionContext context);
-    void visitLeaf(std::shared_ptr<Leaf> node, ExpressionContext context);
-    void visitInvalidExpression(std::shared_ptr<InvalidExpression> node, ExpressionContext context);
+    void visitExpression(const ASTExpressionPtr &node, ExpressionContext context);
+    void visitBrackets(const std::shared_ptr<Brackets> &node, ExpressionContext context);
+    void visitSquareBrackets(const std::shared_ptr<SquareBrackets> &node, ExpressionContext context);
+    void visitImplicitPlusOperator(const std::shared_ptr<ImplicitPlusOperator> &node, ExpressionContext context);
+    void visitBinaryOperator(const std::shared_ptr<BinaryOperator> &node, ExpressionContext context);
+    void visitUnaryOperator(const std::shared_ptr<UnaryOperator> &node, ExpressionContext context);
+    void visitLeaf(const std::shared_ptr<Leaf> &node, ExpressionContext context);
+    void visitInvalidExpression(const std::shared_ptr<InvalidExpression> &node, ExpressionContext context);
 
     void reportNumberTooLarge(const Token &number);
     void reportStringTooLarge(const Token &string);
-    void reportUnaryOperatorIncorrectArgument(std::shared_ptr<UnaryOperator> node);
-    void reportDotOperatorIncorrectArgument(std::shared_ptr<BinaryOperator> node);
-    void reportPtrOperatorIncorrectArgument(std::shared_ptr<BinaryOperator> node);
-    void reportDivisionByZero(std::shared_ptr<BinaryOperator> node);
-    void reportInvalidScaleValue(std::shared_ptr<BinaryOperator> node);
-    void reportIncorrectIndexRegister(std::shared_ptr<Leaf> node);
-    void reportOtherBinaryOperatorIncorrectArgument(std::shared_ptr<BinaryOperator> node);
-    void reportInvalidAddressExpression(ASTExpressionPtr node);
-    void reportCantAddVariables(ASTExpressionPtr node, bool implicit);
-    void reportMoreThanTwoRegistersAfterAdd(ASTExpressionPtr node, bool implicit);
-    void reportMoreThanOneScaleAfterAdd(ASTExpressionPtr node, bool implicit);
-    void reportTwoEsp(ASTExpressionPtr node, bool implicit);
-    void reportNon32bitRegister(ASTExpressionPtr node, bool implicit);
-    void reportBinaryMinusOperatorIncorrectArgument(std::shared_ptr<BinaryOperator> node);
+    void reportUnaryOperatorIncorrectArgument(const std::shared_ptr<UnaryOperator> &node);
+    void reportDotOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node);
+    void reportPtrOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node);
+    void reportDivisionByZero(const std::shared_ptr<BinaryOperator> &node);
+    void reportInvalidScaleValue(const std::shared_ptr<BinaryOperator> &node);
+    void reportIncorrectIndexRegister(const std::shared_ptr<Leaf> &node);
+    void reportOtherBinaryOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node);
+    void reportInvalidAddressExpression(const ASTExpressionPtr &node);
+    void reportCantAddVariables(const ASTExpressionPtr &node, bool implicit);
+    void reportMoreThanTwoRegistersAfterAdd(const ASTExpressionPtr &node, bool implicit);
+    void reportMoreThanOneScaleAfterAdd(const ASTExpressionPtr &node, bool implicit);
+    void reportTwoEsp(const ASTExpressionPtr &node, bool implicit);
+    void reportNon32bitRegister(const ASTExpressionPtr &node, bool implicit);
+    void reportBinaryMinusOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node);
 
-    void warnTypeReturnsZero(std::shared_ptr<UnaryOperator> node);
+    void warnTypeReturnsZero(const std::shared_ptr<UnaryOperator> &node);
 
-    static void findRelocatableVariables(ASTExpressionPtr node, std::optional<Token> &firstVar,
+    static void findRelocatableVariables(const ASTExpressionPtr &node, std::optional<Token> &firstVar,
                                          std::optional<Token> &secondVar);
 
-    static void findInvalidExpressionCause(ASTExpressionPtr node, ASTExpressionPtr &errorNode);
+    static void findInvalidExpressionCause(const ASTExpressionPtr &node, ASTExpressionPtr &errorNode);
 
-    ASTPtr ast;
     std::shared_ptr<ParseSession> parseSess;
+    ASTPtr ast;
+
     bool panicLine = false;
     int expressionDepth = 0;
 
@@ -91,7 +92,6 @@ inline std::optional<int32_t> parseNumber(const std::string &input)
         base = 10;
         break;
     default:
-        base = 10;
         break;
     }
 
@@ -102,7 +102,7 @@ inline std::optional<int32_t> parseNumber(const std::string &input)
     }
 
     // Convert the string to a number
-    char *end;
+    char *end = nullptr;
     int64_t result = std::strtoll(numberPart.c_str(), &end, base);
 
     // Check for conversion errors

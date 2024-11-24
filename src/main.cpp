@@ -43,7 +43,7 @@ int main(int argc, char *argv[])
         }
     }
     // TODO: Remove in release
-    std::filesystem::path new_path = "C:\\Users\\grigo\\Documents\\MasmLint";
+    std::filesystem::path new_path = R"(C:\Users\grigo\Documents\MasmLint)";
     std::filesystem::current_path(new_path);
 
     auto parseSess = std::make_shared<ParseSession>();

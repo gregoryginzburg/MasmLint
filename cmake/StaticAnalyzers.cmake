@@ -68,6 +68,7 @@ macro(ML_ENABLE_CPPCHECK)
             --suppress=functionStatic
             --suppress=unusedPrivateFunction
             --suppress=unusedStructMember
+            --suppress=useStlAlgorithm
             # if warnings as errors (--error-exitcode=2)
             ${CMAKE_CXX_CPPCHECK}
             # always set globally

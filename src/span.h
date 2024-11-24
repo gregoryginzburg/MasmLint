@@ -12,12 +12,12 @@ struct SyntaxContextData {
 
     void popMacro();
 
-    const std::string currentMacro() const;
+    std::string currentMacro() const;
 };
 
 struct Span {
     Span() : lo(0), hi(0), context(nullptr) {};
-    Span(std::size_t start, std::size_t end, std::shared_ptr<SyntaxContextData> ctxt)
+    Span(std::size_t start, std::size_t end, const std::shared_ptr<SyntaxContextData> &ctxt)
         : lo(start), hi(end), context(ctxt) {};
 
     bool contains(std::size_t pos) const;

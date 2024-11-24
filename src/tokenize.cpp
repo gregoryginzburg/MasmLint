@@ -41,8 +41,9 @@ std::vector<Token> Tokenizer::tokenize()
     while (pos < length) {
         skipWhitespace();
 
-        if (pos >= length)
+        if (pos >= length) {
             break;
+        }
 
         if (src[pos] == '\n') {
             tokens.emplace_back(Token{TokenType::EndOfLine, "", Span(pos, pos + 1, context)});
@@ -88,9 +89,7 @@ Token Tokenizer::getNextToken()
 
     if (isValidNumberStart(currentChar)) {
         return getNumberToken();
-    } else if (isValidIdentifierStart(currentChar)) {
-        return getIdentifierOrKeywordToken();
-    } else if (currentChar == '.' && isDotName()) {
+    } else if (isValidIdentifierStart(currentChar) || (currentChar == '.' && isDotName())) {
         return getIdentifierOrKeywordToken();
     } else if (currentChar == '"' || currentChar == '\'') {
         return getStringLiteralToken();
@@ -114,8 +113,9 @@ Token Tokenizer::getNextToken()
 
 bool Tokenizer::isDotName()
 {
-    if (pos + 1 >= src.size())
+    if (pos + 1 >= src.size()) {
         return false;
+    }
 
     size_t newPos = pos + 1;
     while (newPos < src.size() && isValidIdentifierChar(src[newPos])) {
@@ -124,10 +124,7 @@ bool Tokenizer::isDotName()
 
     std::string lexeme = src.substr(pos, newPos - pos);
     std::string lexemeUpper = stringToUpper(lexeme);
-    if (directives.count(lexemeUpper)) {
-        return true;
-    }
-    return false;
+    return directives.contains(lexemeUpper);
 
     // char nextChar = src[pos + 1];
 
@@ -175,15 +172,15 @@ Token Tokenizer::getIdentifierOrKeywordToken()
 
     Span tokenSpan(start, pos, nullptr);
 
-    if (directives.count(lexemeUpper)) {
+    if (directives.contains(lexemeUpper)) {
         return Token{TokenType::Directive, lexeme, tokenSpan};
-    } else if (instructions.count(lexemeUpper)) {
+    } else if (instructions.contains(lexemeUpper)) {
         return Token{TokenType::Instruction, lexeme, tokenSpan};
-    } else if (registers.count(lexemeUpper)) {
+    } else if (registers.contains(lexemeUpper)) {
         return Token{TokenType::Register, lexeme, tokenSpan};
-    } else if (operators.count(lexemeUpper)) {
+    } else if (operators.contains(lexemeUpper)) {
         return Token{TokenType::Operator, lexeme, tokenSpan};
-    } else if (types.count(lexemeUpper)) {
+    } else if (types.contains(lexemeUpper)) {
         return Token{TokenType::Type, lexeme, tokenSpan};
     } else {
         return Token{TokenType::Identifier, lexeme, tokenSpan};
@@ -246,7 +243,6 @@ bool Tokenizer::isValidNumber(const std::string &lexeme)
     default:
         // No valid suffix; include the last character
         digits = lexeme;
-        suffix = '\0';
         break;
     }
 
@@ -367,8 +363,9 @@ bool Tokenizer::isValidIdentifierChar(char c) { return isalnum(c) || c == '_' ||
 
 bool Tokenizer::isValidIdentifier(const std::string &lexeme)
 {
-    if (lexeme.empty())
+    if (lexeme.empty()) {
         return false;
+    }
 
     if (!isValidIdentifierStart(lexeme[0])) {
         return false;

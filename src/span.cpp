@@ -10,7 +10,7 @@ void SyntaxContextData::popMacro()
     }
 }
 
-const std::string SyntaxContextData::currentMacro() const { return macroStack.empty() ? "" : macroStack.back(); }
+std::string SyntaxContextData::currentMacro() const { return macroStack.empty() ? "" : macroStack.back(); }
 
 bool Span::contains(std::size_t pos) const { return lo <= pos && pos < hi; }
 
@@ -18,17 +18,17 @@ bool Span::overlaps(const Span &other) const { return lo < other.hi && other.lo 
 
 Span Span::merge(const Span &first, const Span &second)
 {
-    std::size_t new_lo = std::min(first.lo, second.lo);
-    std::size_t new_hi = std::max(first.hi, second.hi);
+    const std::size_t new_lo = std::min(first.lo, second.lo);
+    const std::size_t new_hi = std::max(first.hi, second.hi);
 
     std::shared_ptr<SyntaxContextData> new_context = first.context;
 
     if (first.context != second.context) {
         LOG_DETAILED_ERROR("Can't merge spans with different contexts!");
-        return Span(0, 0, nullptr);
+        return {0, 0, nullptr};
     }
 
-    return Span(new_lo, new_hi, new_context);
+    return {new_lo, new_hi, new_context};
 }
 
 bool Span::operator==(const Span &other) const { return lo == other.lo && hi == other.hi && context == other.context; }
@@ -37,10 +37,12 @@ bool Span::operator!=(const Span &other) const { return !(*this == other); }
 
 bool Span::operator<(const Span &other) const
 {
-    if (lo != other.lo)
+    if (lo != other.lo) {
         return lo < other.lo;
-    if (hi != other.hi)
+    }
+    if (hi != other.hi) {
         return hi < other.hi;
+    }
     return true;
 }
 

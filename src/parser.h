@@ -11,23 +11,23 @@
 
 class Parser {
 public:
-    Parser(std::shared_ptr<ParseSession> parseSession, const std::vector<Token> &tokens);
+    Parser(const std::shared_ptr<ParseSession> &parseSession, const std::vector<Token> &tokens);
     ASTPtr parse();
 
 private:
     std::shared_ptr<ParseSession> parseSess;
-
-    int currentIndex;
-    Token currentToken;
     const std::vector<Token> &tokens;
+    size_t currentIndex = 0;
+    Token currentToken;
+
     bool panicLine = false;
 
     std::stack<Token> expressionDelimitersStack;
 
     void advance();
-    bool match(TokenType type);
-    bool match(const std::string &value);
-    bool match(TokenType type, const std::string &value);
+    bool match(TokenType type) const;
+    bool match(const std::string &value) const;
+    bool match(TokenType type, const std::string &value) const;
     std::optional<Token> consume(TokenType type);
     std::optional<Token> consume(TokenType type, const std::string &value);
 

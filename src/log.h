@@ -31,12 +31,13 @@
 #include <fmt/color.h>
 
 #if defined(__GNUC__) || defined(__clang__)
-    #define PRETTY_FUNCTION __PRETTY_FUNCTION__
+#    define PRETTY_FUNCTION __PRETTY_FUNCTION__
 #elif defined(_MSC_VER)
-    #define PRETTY_FUNCTION __FUNCSIG__
+#    define PRETTY_FUNCTION __FUNCSIG__
 #else
-    #define PRETTY_FUNCTION __func__
+#    define PRETTY_FUNCTION __func__
 #endif
 
-#define LOG_DETAILED_ERROR(...) \
-    fmt::print(stderr, "{} {} ({}:{}): {}\n", fmt::format(fg(fmt::color::red), "[ERROR]"), __FILE__, __LINE__, PRETTY_FUNCTION, fmt::format(__VA_ARGS__));
+#define LOG_DETAILED_ERROR(...)                                                                                        \
+    fmt::print(stderr, "{} {} ({}:{}): {}\n", fmt::format(fg(fmt::color::red), "[ERROR]"), __FILE__, __LINE__,         \
+               PRETTY_FUNCTION, fmt::format(__VA_ARGS__));

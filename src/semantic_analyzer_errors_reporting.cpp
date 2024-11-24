@@ -4,7 +4,7 @@
 
 // TODO: think more about naming types for users
 // dont rely on this in code
-std::string getOperandType(ASTExpressionPtr node)
+std::string getOperandType(const ASTExpressionPtr &node)
 {
     std::shared_ptr<Leaf> leaf;
     if ((leaf = std::dynamic_pointer_cast<Leaf>(node))) {
@@ -16,6 +16,8 @@ std::string getOperandType(ASTExpressionPtr node)
             return "constant";
         case TokenType::Type:
             return "builtin type";
+        default:
+            return "error";
         }
     }
 
@@ -65,7 +67,7 @@ void SemanticAnalyzer::reportStringTooLarge(const Token &string)
     parseSess->dcx->addDiagnostic(diag);
 }
 
-void SemanticAnalyzer::reportUnaryOperatorIncorrectArgument(std::shared_ptr<UnaryOperator> node)
+void SemanticAnalyzer::reportUnaryOperatorIncorrectArgument(const std::shared_ptr<UnaryOperator> &node)
 {
     if (panicLine) {
         return;
@@ -76,7 +78,7 @@ void SemanticAnalyzer::reportUnaryOperatorIncorrectArgument(std::shared_ptr<Unar
                     stringToUpper(node->op.lexeme));
 
     std::string op = stringToUpper(node->op.lexeme);
-    std::string expectedStr = "";
+    std::string expectedStr;
     if (op == "LENGTH" || op == "LENGTHOF" || op == "SIZE" || op == "SIZEOF") {
         expectedStr = "expected `identifier`";
     } else if (op == "WIDTH" || op == "MASK") {
@@ -97,7 +99,7 @@ void SemanticAnalyzer::reportUnaryOperatorIncorrectArgument(std::shared_ptr<Unar
     parseSess->dcx->addDiagnostic(diag);
 }
 
-void SemanticAnalyzer::reportDotOperatorIncorrectArgument(std::shared_ptr<BinaryOperator> node)
+void SemanticAnalyzer::reportDotOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node)
 {
     if (panicLine) {
         return;
@@ -124,7 +126,7 @@ void SemanticAnalyzer::reportDotOperatorIncorrectArgument(std::shared_ptr<Binary
     parseSess->dcx->addDiagnostic(diag);
 }
 
-void SemanticAnalyzer::reportPtrOperatorIncorrectArgument(std::shared_ptr<BinaryOperator> node)
+void SemanticAnalyzer::reportPtrOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node)
 {
     if (panicLine) {
         return;
@@ -154,7 +156,7 @@ void SemanticAnalyzer::reportPtrOperatorIncorrectArgument(std::shared_ptr<Binary
     parseSess->dcx->addDiagnostic(diag);
 }
 
-void SemanticAnalyzer::reportDivisionByZero(std::shared_ptr<BinaryOperator> node)
+void SemanticAnalyzer::reportDivisionByZero(const std::shared_ptr<BinaryOperator> &node)
 {
     if (panicLine) {
         return;
@@ -163,7 +165,6 @@ void SemanticAnalyzer::reportDivisionByZero(std::shared_ptr<BinaryOperator> node
 
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::DIVISION_BY_ZERO_IN_EXPRESSION);
 
-    auto left = node->left;
     auto right = node->right;
 
     diag.addPrimaryLabel(node->op.span, "");
@@ -173,7 +174,7 @@ void SemanticAnalyzer::reportDivisionByZero(std::shared_ptr<BinaryOperator> node
     parseSess->dcx->addDiagnostic(diag);
 }
 
-void SemanticAnalyzer::reportInvalidScaleValue(std::shared_ptr<BinaryOperator> node)
+void SemanticAnalyzer::reportInvalidScaleValue(const std::shared_ptr<BinaryOperator> &node)
 {
     if (panicLine) {
         return;
@@ -198,7 +199,7 @@ void SemanticAnalyzer::reportInvalidScaleValue(std::shared_ptr<BinaryOperator> n
     parseSess->dcx->addDiagnostic(diag);
 }
 
-void SemanticAnalyzer::reportIncorrectIndexRegister(std::shared_ptr<Leaf> node)
+void SemanticAnalyzer::reportIncorrectIndexRegister(const std::shared_ptr<Leaf> &node)
 {
     if (panicLine) {
         return;
@@ -211,7 +212,7 @@ void SemanticAnalyzer::reportIncorrectIndexRegister(std::shared_ptr<Leaf> node)
     parseSess->dcx->addDiagnostic(diag);
 }
 
-void SemanticAnalyzer::reportOtherBinaryOperatorIncorrectArgument(std::shared_ptr<BinaryOperator> node)
+void SemanticAnalyzer::reportOtherBinaryOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node)
 {
 
     if (panicLine) {
@@ -248,7 +249,7 @@ void SemanticAnalyzer::reportOtherBinaryOperatorIncorrectArgument(std::shared_pt
     parseSess->dcx->addDiagnostic(diag);
 }
 
-void SemanticAnalyzer::reportInvalidAddressExpression(ASTExpressionPtr node)
+void SemanticAnalyzer::reportInvalidAddressExpression(const ASTExpressionPtr &node)
 {
     if (panicLine) {
         return;
@@ -269,14 +270,14 @@ void SemanticAnalyzer::reportInvalidAddressExpression(ASTExpressionPtr node)
                                  "can't have registers inside expressions"); // TODO: change label string
 
         } else if (auto implicitPlus = std::dynamic_pointer_cast<ImplicitPlusOperator>(errorNode)) {
-            diag.addPrimaryLabel(getExpressionSpan(implicitPlus), "can't implicitly add registers");
+            diag.addPrimaryLabel(getExpressionSpan(implicitPlus), "can't have registers inside expressions");
         }
     }
 
     parseSess->dcx->addDiagnostic(diag);
 }
 
-void SemanticAnalyzer::findInvalidExpressionCause(ASTExpressionPtr node, ASTExpressionPtr &errorNode)
+void SemanticAnalyzer::findInvalidExpressionCause(const ASTExpressionPtr &node, ASTExpressionPtr &errorNode)
 {
     if (node->type == OperandType::UnfinishedMemoryOperand) {
         errorNode = node;
@@ -315,7 +316,7 @@ void SemanticAnalyzer::findInvalidExpressionCause(ASTExpressionPtr node, ASTExpr
     }
 }
 
-void SemanticAnalyzer::reportCantAddVariables(ASTExpressionPtr node, bool implicit)
+void SemanticAnalyzer::reportCantAddVariables(const ASTExpressionPtr &node, bool implicit)
 {
     if (panicLine) {
         return;
@@ -347,7 +348,7 @@ void SemanticAnalyzer::reportCantAddVariables(ASTExpressionPtr node, bool implic
     parseSess->dcx->addDiagnostic(diag);
 }
 
-void SemanticAnalyzer::findRelocatableVariables(ASTExpressionPtr node, std::optional<Token> &firstVar,
+void SemanticAnalyzer::findRelocatableVariables(const ASTExpressionPtr &node, std::optional<Token> &firstVar,
                                                 std::optional<Token> &secondVar)
 {
     if (auto binaryOp = std::dynamic_pointer_cast<BinaryOperator>(node)) {
@@ -390,7 +391,7 @@ void SemanticAnalyzer::findRelocatableVariables(ASTExpressionPtr node, std::opti
     }
 }
 
-void SemanticAnalyzer::reportMoreThanTwoRegistersAfterAdd(ASTExpressionPtr node, bool implicit)
+void SemanticAnalyzer::reportMoreThanTwoRegistersAfterAdd(const ASTExpressionPtr &node, bool implicit)
 {
     if (panicLine) {
         return;
@@ -437,7 +438,7 @@ void SemanticAnalyzer::reportMoreThanTwoRegistersAfterAdd(ASTExpressionPtr node,
     parseSess->dcx->addDiagnostic(diag);
 }
 
-void SemanticAnalyzer::reportMoreThanOneScaleAfterAdd(ASTExpressionPtr node, bool implicit)
+void SemanticAnalyzer::reportMoreThanOneScaleAfterAdd(const ASTExpressionPtr &node, bool implicit)
 {
     if (panicLine) {
         return;
@@ -491,7 +492,7 @@ void SemanticAnalyzer::reportMoreThanOneScaleAfterAdd(ASTExpressionPtr node, boo
     parseSess->dcx->addDiagnostic(diag);
 }
 
-void SemanticAnalyzer::reportTwoEsp(ASTExpressionPtr node, bool implicit)
+void SemanticAnalyzer::reportTwoEsp(const ASTExpressionPtr &node, bool implicit)
 {
     if (panicLine) {
         return;
@@ -544,7 +545,7 @@ void SemanticAnalyzer::reportTwoEsp(ASTExpressionPtr node, bool implicit)
     parseSess->dcx->addDiagnostic(diag);
 }
 
-void SemanticAnalyzer::reportNon32bitRegister(ASTExpressionPtr node, bool implicit)
+void SemanticAnalyzer::reportNon32bitRegister(const ASTExpressionPtr &node, bool implicit)
 {
     if (panicLine) {
         return;
@@ -601,7 +602,7 @@ void SemanticAnalyzer::reportNon32bitRegister(ASTExpressionPtr node, bool implic
     parseSess->dcx->addDiagnostic(diag);
 }
 
-void SemanticAnalyzer::reportBinaryMinusOperatorIncorrectArgument(std::shared_ptr<BinaryOperator> node)
+void SemanticAnalyzer::reportBinaryMinusOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node)
 {
     if (panicLine) {
         return;
@@ -621,7 +622,7 @@ void SemanticAnalyzer::reportBinaryMinusOperatorIncorrectArgument(std::shared_pt
     parseSess->dcx->addDiagnostic(diag);
 }
 
-void SemanticAnalyzer::warnTypeReturnsZero(std::shared_ptr<UnaryOperator> node)
+void SemanticAnalyzer::warnTypeReturnsZero(const std::shared_ptr<UnaryOperator> &node)
 {
     // TODO: why underlines every line without this
     // if (panicLine) {

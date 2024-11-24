@@ -5,8 +5,8 @@
 #include <fstream>
 #include <filesystem>
 
-SourceFile::SourceFile(const std::filesystem::path &path, const std::string &src, std::size_t startPos)
-    : path(path), src(src), startPos(startPos), endPos(startPos + src.size())
+SourceFile::SourceFile(std::filesystem::path path, const std::string &src, std::size_t startPos)
+    : path(std::move(path)), src(src), startPos(startPos), endPos(startPos + src.size())
 {
     // Initialize lineStarts
     lineStarts.push_back(0);
@@ -33,7 +33,7 @@ std::size_t SourceFile::getLineNumber(std::size_t pos) const
     }
     std::size_t localPos = pos - startPos;
     auto it = std::upper_bound(lineStarts.begin(), lineStarts.end(), localPos);
-    return (it - lineStarts.begin()) - 1;
+    return static_cast<size_t>((it - lineStarts.begin())) - 1;
 }
 
 // lineNumber is zero based
@@ -44,7 +44,7 @@ std::string SourceFile::getLine(std::size_t lineNumber) const
         return "";
     }
     std::size_t start = lineStarts[lineNumber];
-    std::size_t end;
+    std::size_t end = 0;
     if (lineNumber + 1 < lineStarts.size()) {
         end = lineStarts[lineNumber + 1];
     } else {
@@ -73,15 +73,15 @@ std::size_t SourceFile::countCodePoints(const std::string &str, std::size_t star
     std::size_t codePointCount = 0;
     std::size_t i = startByte;
     while (i < endByte) {
-        unsigned char c = static_cast<unsigned char>(str[i]);
+        auto c = static_cast<unsigned char>(str[i]);
         std::size_t charSize = 1;
-        if ((c & 0x80) == 0x00) {
+        if ((c & 0x80U) == 0x00) {
             charSize = 1; // ASCII character
-        } else if ((c & 0xE0) == 0xC0) {
+        } else if ((c & 0xE0U) == 0xC0) {
             charSize = 2; // 2-byte sequence
-        } else if ((c & 0xF0) == 0xE0) {
+        } else if ((c & 0xF0U) == 0xE0) {
             charSize = 3; // 3-byte sequence
-        } else if ((c & 0xF8) == 0xF0) {
+        } else if ((c & 0xF8U) == 0xF0) {
             charSize = 4; // 4-byte sequence
         } else {
             // Invalid UTF-8 start byte
@@ -197,12 +197,12 @@ void SourceMap::spanToLocation(const Span &span, std::filesystem::path &outPath,
 }
 
 void SourceMap::spanToEndLocation(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
-                       std::size_t &outColumn) const
+                                  std::size_t &outColumn) const
 {
     auto file = lookupSourceFile(span.hi - 1);
     if (file) {
         outPath = file->getPath();
-        outLine = file->getLineNumber(span.hi - 1);     // Zero-based
+        outLine = file->getLineNumber(span.hi - 1);         // Zero-based
         outColumn = file->getColumnNumber(span.hi - 1) + 1; // Zero-based
     } else {
         outPath.clear();

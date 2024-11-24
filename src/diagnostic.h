@@ -9,11 +9,11 @@
 #include "span.h"
 #include "error_codes.h"
 
-const std::string getErrorMessage(ErrorCode code);
+std::string getErrorMessage(ErrorCode code);
 
 class Diagnostic {
 public:
-    enum class Level { Error, Warning, Note };
+    enum class Level : std::uint8_t { Error, Warning, Note };
 
     template <typename... Args>
     Diagnostic(Level level, ErrorCode code, Args &&...args)
@@ -36,7 +36,7 @@ public:
     const std::optional<std::string> &getHelpMessage() const;
 
     void cancel();
-    bool isCancelled();
+    bool isCancelled() const;
 
 private:
     Level level;

@@ -11,16 +11,16 @@ std::map<std::string, int> SemanticAnalyzer::registerSizes = {
 std::map<int, std::string> SemanticAnalyzer::sizeValueToStr = {{1, "BYTE"}, {2, "WORD"}, {4, "DWORD"}};
 
 SemanticAnalyzer::SemanticAnalyzer(std::shared_ptr<ParseSession> parseSession, ASTPtr ast)
-    : parseSess(parseSession), ast(ast)
+    : parseSess(std::move(parseSession)), ast(std::move(ast))
 {
 }
 
 void SemanticAnalyzer::analyze() { visit(ast); }
 
-void SemanticAnalyzer::visit(ASTPtr node)
+void SemanticAnalyzer::visit(const ASTPtr &node)
 {
     if (auto program = std::dynamic_pointer_cast<Program>(node)) {
-        for (auto expr : program->expressions) {
+        for (const auto &expr : program->expressions) {
             panicLine = false;
             expressionDepth = 0;
             visitExpression(expr, ExpressionContext::InstructionOperand);
@@ -31,7 +31,7 @@ void SemanticAnalyzer::visit(ASTPtr node)
     }
 }
 
-void SemanticAnalyzer::visitExpression(ASTExpressionPtr node, ExpressionContext context)
+void SemanticAnalyzer::visitExpression(const ASTExpressionPtr &node, ExpressionContext context)
 {
     expressionDepth++;
     if (auto brackets = std::dynamic_pointer_cast<Brackets>(node)) {
@@ -54,7 +54,7 @@ void SemanticAnalyzer::visitExpression(ASTExpressionPtr node, ExpressionContext 
     expressionDepth--;
 }
 
-void SemanticAnalyzer::visitBrackets(std::shared_ptr<Brackets> node, ExpressionContext context)
+void SemanticAnalyzer::visitBrackets(const std::shared_ptr<Brackets> &node, ExpressionContext context)
 {
     visitExpression(node->operand, context);
 
@@ -66,7 +66,7 @@ void SemanticAnalyzer::visitBrackets(std::shared_ptr<Brackets> node, ExpressionC
     node->registers = operand->registers;
 }
 
-void SemanticAnalyzer::visitSquareBrackets(std::shared_ptr<SquareBrackets> node, ExpressionContext context)
+void SemanticAnalyzer::visitSquareBrackets(const std::shared_ptr<SquareBrackets> &node, ExpressionContext context)
 {
     visitExpression(node->operand, context);
 
@@ -79,10 +79,9 @@ void SemanticAnalyzer::visitSquareBrackets(std::shared_ptr<SquareBrackets> node,
         // dont want to call this (reportInvalidAddressExpression())
         bool implicit = false;
         ASTExpressionPtr expr;
-        std::shared_ptr<ImplicitPlusOperator> implicitPlus;
-        if (expr = std::dynamic_pointer_cast<BinaryOperator>(operand)) {
+        if ((expr = std::dynamic_pointer_cast<BinaryOperator>(operand))) {
             implicit = false;
-        } else if (expr = std::dynamic_pointer_cast<ImplicitPlusOperator>(operand)) {
+        } else if ((expr = std::dynamic_pointer_cast<ImplicitPlusOperator>(operand))) {
             implicit = true;
         } else {
             LOG_DETAILED_ERROR("Unexpected operand type!\n");
@@ -123,7 +122,8 @@ void SemanticAnalyzer::visitSquareBrackets(std::shared_ptr<SquareBrackets> node,
     node->registers = operand->registers;
 }
 
-void SemanticAnalyzer::visitImplicitPlusOperator(std::shared_ptr<ImplicitPlusOperator> node, ExpressionContext context)
+void SemanticAnalyzer::visitImplicitPlusOperator(const std::shared_ptr<ImplicitPlusOperator> &node,
+                                                 ExpressionContext context)
 {
     visitExpression(node->left, context);
     visitExpression(node->right, context);
@@ -190,10 +190,9 @@ void SemanticAnalyzer::visitImplicitPlusOperator(std::shared_ptr<ImplicitPlusOpe
         node->size = left->size;
     }
     node->registers = newRegisters;
-    return;
 }
 
-void SemanticAnalyzer::visitBinaryOperator(std::shared_ptr<BinaryOperator> node, ExpressionContext context)
+void SemanticAnalyzer::visitBinaryOperator(const std::shared_ptr<BinaryOperator> &node, ExpressionContext context)
 {
     visitExpression(node->left, context);
     visitExpression(node->right, context);
@@ -272,9 +271,9 @@ void SemanticAnalyzer::visitBinaryOperator(std::shared_ptr<BinaryOperator> node,
         }
         // handle eax * 4
         if (op == "*") {
-            if (left->constantValue && right->type == OperandType::RegisterOperand ||
-                right->constantValue && left->type == OperandType::RegisterOperand) {
-                int32_t value;
+            if ((left->constantValue && right->type == OperandType::RegisterOperand) ||
+                (right->constantValue && left->type == OperandType::RegisterOperand)) {
+                int32_t value = 0;
                 std::shared_ptr<Leaf> leafNode;
                 if (left->constantValue) {
                     value = left->constantValue.value();
@@ -461,7 +460,7 @@ void SemanticAnalyzer::visitBinaryOperator(std::shared_ptr<BinaryOperator> node,
     }
 }
 
-void SemanticAnalyzer::visitUnaryOperator(std::shared_ptr<UnaryOperator> node, ExpressionContext context)
+void SemanticAnalyzer::visitUnaryOperator(const std::shared_ptr<UnaryOperator> &node, ExpressionContext context)
 {
     visitExpression(node->operand, context);
 
@@ -579,7 +578,7 @@ void SemanticAnalyzer::visitUnaryOperator(std::shared_ptr<UnaryOperator> node, E
         if (op == "-") {
             node->constantValue = -operand->constantValue.value();
         } else if (op == "+") {
-            node->constantValue = operand->constantValue.value();
+            node->constantValue = operand->constantValue;
         }
         node->isRelocatable = false;
         node->type = OperandType::ImmediateOperand;
@@ -590,7 +589,7 @@ void SemanticAnalyzer::visitUnaryOperator(std::shared_ptr<UnaryOperator> node, E
     }
 }
 
-void SemanticAnalyzer::visitLeaf(std::shared_ptr<Leaf> node, ExpressionContext context)
+void SemanticAnalyzer::visitLeaf(const std::shared_ptr<Leaf> &node, ExpressionContext context)
 {
     Token token = node->token;
 
@@ -654,7 +653,7 @@ void SemanticAnalyzer::visitLeaf(std::shared_ptr<Leaf> node, ExpressionContext c
     }
 }
 
-void SemanticAnalyzer::visitInvalidExpression(std::shared_ptr<InvalidExpression> node,
+void SemanticAnalyzer::visitInvalidExpression(const std::shared_ptr<InvalidExpression> &node,
                                               [[maybe_unused]] ExpressionContext context)
 {
     panicLine = true;

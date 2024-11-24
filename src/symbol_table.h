@@ -5,9 +5,9 @@
 
 struct Symbol {
     std::string name;
-    enum class Type { Label, Variable, Macro, Segment };
-    Type type;
-    int lineNumber;
+    enum class Type : std::uint8_t { Label, Variable, Macro, Segment };
+    Type type{};
+    int lineNumber = -1;
     std::string fileName;
 };
 
