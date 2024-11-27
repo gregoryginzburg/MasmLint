@@ -1,6 +1,6 @@
 #include "semantic_analyzer.h"
 #include "log.h"
-#include "tokenize.h"
+#include "token.h"
 
 // TODO: think more about naming types for users
 // dont rely on this in code
@@ -279,6 +279,9 @@ void SemanticAnalyzer::reportInvalidAddressExpression(const ExpressionPtr &node)
 
 void SemanticAnalyzer::findInvalidExpressionCause(const ExpressionPtr &node, ExpressionPtr &errorNode)
 {
+    if (node->diagnostic) {
+        return;
+    }
     if (node->type == OperandType::UnfinishedMemoryOperand) {
         errorNode = node;
     }
@@ -307,8 +310,6 @@ void SemanticAnalyzer::findInvalidExpressionCause(const ExpressionPtr &node, Exp
             findInvalidExpressionCause(implicitPlus->right, errorNode);
         }
     } else if (auto leaf = std::dynamic_pointer_cast<Leaf>(node)) {
-        return;
-    } else if (auto invalidExpr = std::dynamic_pointer_cast<InvalidExpression>(node)) {
         return;
     } else {
         LOG_DETAILED_ERROR("Unknown Expression Node!\n");
@@ -351,6 +352,9 @@ void SemanticAnalyzer::reportCantAddVariables(const ExpressionPtr &node, bool im
 void SemanticAnalyzer::findRelocatableVariables(const ExpressionPtr &node, std::optional<Token> &firstVar,
                                                 std::optional<Token> &secondVar)
 {
+    if (node->diagnostic) {
+        return;
+    }
     if (auto binaryOp = std::dynamic_pointer_cast<BinaryOperator>(node)) {
         if (binaryOp->left->isRelocatable) {
             findRelocatableVariables(binaryOp->left, firstVar, secondVar);
@@ -383,8 +387,6 @@ void SemanticAnalyzer::findRelocatableVariables(const ExpressionPtr &node, std::
         } else if (!secondVar) {
             secondVar = leaf->token;
         }
-    } else if (auto invalidExpr = std::dynamic_pointer_cast<InvalidExpression>(node)) {
-        return;
     } else {
         LOG_DETAILED_ERROR("Unknown Expression Node!\n");
         return;

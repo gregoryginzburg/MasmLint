@@ -4,12 +4,12 @@
 #include <unordered_map>
 #include <memory>
 
+#include "token.h"
+
 struct Symbol {
-    std::string name;
+    Token token;
     enum class Type : std::uint8_t { Label, Variable, Macro, Segment };
     Type type{};
-    int lineNumber = -1;
-    std::string fileName;
 };
 
 class SymbolTable {
@@ -20,3 +20,5 @@ public:
 private:
     std::unordered_map<std::string, Symbol> symbols;
 };
+
+

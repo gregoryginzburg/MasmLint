@@ -4,6 +4,7 @@
 #include "symbol_table.h"
 #include "diag_ctxt.h"
 #include "log.h"
+#include "session.h"
 
 enum class ExpressionContext : uint8_t {
     InstructionOperand,
@@ -19,15 +20,17 @@ public:
 private:
     void visit(const ASTPtr &node);
 
+    void visitStatement(const std::shared_ptr<Statement> statement);
+
     // ASTexpression nodes
     void visitExpression(const ExpressionPtr &node, ExpressionContext context);
+    void visitExpressionHelper(const ExpressionPtr &node, ExpressionContext context);
     void visitBrackets(const std::shared_ptr<Brackets> &node, ExpressionContext context);
     void visitSquareBrackets(const std::shared_ptr<SquareBrackets> &node, ExpressionContext context);
     void visitImplicitPlusOperator(const std::shared_ptr<ImplicitPlusOperator> &node, ExpressionContext context);
     void visitBinaryOperator(const std::shared_ptr<BinaryOperator> &node, ExpressionContext context);
     void visitUnaryOperator(const std::shared_ptr<UnaryOperator> &node, ExpressionContext context);
     void visitLeaf(const std::shared_ptr<Leaf> &node, ExpressionContext context);
-    void visitInvalidExpression(const std::shared_ptr<InvalidExpression> &node, ExpressionContext context);
 
     void reportNumberTooLarge(const Token &number);
     void reportStringTooLarge(const Token &string);

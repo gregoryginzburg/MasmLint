@@ -1,13 +1,15 @@
 #pragma once
 
 #include <stack>
+#include <unordered_set>
 
-#include "tokenize.h"
 #include "symbol_table.h"
 #include "diag_ctxt.h"
 #include "preprocessor.h"
 #include "session.h"
 #include "ast.h"
+
+enum class TokenType : uint8_t;
 
 class Parser {
 public:
@@ -20,27 +22,41 @@ private:
     size_t currentIndex = 0;
     Token currentToken;
 
-    bool panicLine = false;
+    std::optional<std::string> currentSegment;
 
     std::stack<Token> expressionDelimitersStack;
+    std::stack<Token> dataInitializerDelimitersStack;
 
     void advance();
+    void synchronize();
     bool match(TokenType type) const;
     bool match(const std::string &value) const;
     bool match(TokenType type, const std::string &value) const;
+    bool match(const std::unordered_set<std::string> &values) const;
     std::optional<Token> consume(TokenType type);
-    std::optional<Token> consume(TokenType type, const std::string &value);
+    std::optional<Token> consume(const std::string &value);
+    bool lookaheadMatch(size_t n, const std::string &value) const;
+    bool lookaheadMatch(size_t n, const std::unordered_set<std::string> &values) const;
+    bool lookaheadMatch(size_t n, TokenType type) const;
 
-    std::shared_ptr<Directive> parseSegDir();
-    std::shared_ptr<Directive> parseDataDir();
-    std::shared_ptr<Directive> parseStructDir();
-    std::shared_ptr<Directive> parseRecordDir();
-    std::shared_ptr<Directive> parseEquDir();
-    std::shared_ptr<Directive> parseEqualDir();
-    std::shared_ptr<Directive> parseProcDir();
+    std::shared_ptr<Statement> parseStatement();
+
+    std::shared_ptr<SegDir> parseSegDir();
+    std::shared_ptr<DataDir> parseDataDir();
+    std::shared_ptr<StructDir> parseStructDir();
+    std::shared_ptr<RecordDir> parseRecordDir();
+    std::shared_ptr<EquDir> parseEquDir();
+    std::shared_ptr<EqualDir> parseEqualDir();
+    std::shared_ptr<ProcDir> parseProcDir();
+    std::shared_ptr<EndDir> parseEndDir();
 
     std::shared_ptr<Instruction> parseInstruction();
     std::shared_ptr<LabelDef> parseLabelDef();
+
+    std::shared_ptr<DataItem> parseDataItem();
+    std::shared_ptr<InitValue> parseInitValue();
+    std::shared_ptr<InitValue> parseInitValueHelper();
+    std::shared_ptr<InitializerList> parseInitializerList();
 
     ExpressionPtr parseExpression();
     ExpressionPtr parseExpressionHelper();
@@ -49,11 +65,38 @@ private:
     ExpressionPtr parsePtrExpression();
     ExpressionPtr parseMemberAccessAndIndexingExpression();
     ExpressionPtr parseHighPrecedenceUnaryExpression();
-    ExpressionPtr parseIndexSequence();
     ExpressionPtr parsePrimaryExpression();
 
+    // Program
+    std::shared_ptr<Diagnostic> reportExpectedEndOfLine(const Token &token);
+    std::shared_ptr<Diagnostic> reportExpectedEndDir(const Token &token);
+
+    // Statement
+    std::shared_ptr<Diagnostic> reportMustBeInSegmentBlock(const Token &token);
+
+    // SegDir
+    std::shared_ptr<Diagnostic> reportExpectedSegDir(const Token &token);
+    // DataDir
+    std::shared_ptr<Diagnostic> reportExpectedIdentifierInDataDir(const Token &token);
+
+    // Instruction
+    std::shared_ptr<Diagnostic> reportExpectedInstruction(const Token &token);
+    std::shared_ptr<Diagnostic> reportExpectedCommaOrEndOfLine(const Token &token);
+
+    // LabelDef
+    std::shared_ptr<Diagnostic> reportExpectedIdentifierInLabel(const Token &token);
+    std::shared_ptr<Diagnostic> reportExpectedColonInLabel(const Token &token);
+
+    // DataItem
+
+    // InitValue
+    std::shared_ptr<Diagnostic> reportUnclosedDelimiterInDataInitializer(const Token &token);
+    std::shared_ptr<Diagnostic> reportExpectedCommaOrClosingDelimiter(const Token &token);
+    std::shared_ptr<Diagnostic> reportExpectedOpenBracket(const Token &token);
+
+    // Expression
     std::shared_ptr<Diagnostic> reportUnclosedDelimiterError(const Token &closingDelimiter);
     std::shared_ptr<Diagnostic> reportExpectedExpression(const Token &token);
     std::shared_ptr<Diagnostic> reportExpectedOperatorOrClosingDelimiter(const Token &token);
-    std::shared_ptr<Diagnostic> reportExpectedIdentifier(const Token &token);
+    std::shared_ptr<Diagnostic> reportExpectedIdentifierInExpression(const Token &token);
 };

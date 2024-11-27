@@ -1,6 +1,7 @@
 #include "symbol_table.h"
+#include "token.h"
 
-void SymbolTable::addSymbol(const Symbol &symbol) { symbols[symbol.name] = symbol; }
+void SymbolTable::addSymbol(const Symbol &symbol) { symbols[symbol.token.lexeme] = symbol; }
 
 std::unique_ptr<Symbol> SymbolTable::findSymbol(const std::string &name)
 {

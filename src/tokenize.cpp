@@ -15,9 +15,10 @@ static const std::unordered_set<std::string> directives = {"INCLUDE", "EQU",    
 
 static const std::unordered_set<std::string> reservedWords = {"DUP"};
 
+// delete DUP from here?
 static const std::unordered_set<std::string> operators = {"+",      "-",        "*",     "/",    ".",     "MOD",
                                                           "SHL",    "SHR",      "PTR",   "TYPE", "SIZE",  "SIZEOF",
-                                                          "LENGTH", "LENGTHOF", "WIDTH", "MASK", "OFFSET"};
+                                                          "LENGTH", "LENGTHOF", "WIDTH", "MASK", "OFFSET", "DUP"};
 
 static const std::unordered_set<std::string> types = {"BYTE", "WORD", "DWORD", "QWORD"};
 
@@ -32,6 +33,8 @@ static const std::unordered_set<std::string> instructions = {
 static const std::unordered_set<std::string> registers = {"AL", "AX",  "EAX", "BL",  "BX",  "EBX", "CL",
                                                           "CX", "ECX", "DL",  "DX",  "EDX", "SI",  "ESI",
                                                           "DI", "EDI", "BP",  "EBP", "SP",  "ESP"};
+
+
 
 std::vector<Token> Tokenizer::tokenize()
 {

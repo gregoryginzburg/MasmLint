@@ -1,7 +1,7 @@
 #pragma once
 
 #include "diag_ctxt.h"
-#include "tokenize.h"
+#include "token.h"
 #include "session.h"
 #include <string>
 #include <vector>

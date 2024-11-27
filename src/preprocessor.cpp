@@ -1,5 +1,5 @@
 #include "preprocessor.h"
-#include "tokenize.h"
+#include "token.h"
 #include <sstream>
 #include <algorithm>
 #include <stdexcept>

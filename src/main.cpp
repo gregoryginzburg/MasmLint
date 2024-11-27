@@ -6,6 +6,7 @@
 #include "error_codes.h"
 #include "ast.h"
 #include "semantic_analyzer.h"
+#include "tokenize.h"
 
 #include <iostream>
 #include <memory>
@@ -74,6 +75,7 @@ int main(int argc, char *argv[])
         ASTPtr ast = parser.parse();
 
         SemanticAnalyzer semanticAnalyzer(parseSess, ast);
+        // add step for creating a symbol table
         semanticAnalyzer.analyze();
 
         if (!jsonOutput) {

@@ -20,10 +20,24 @@ void SemanticAnalyzer::analyze() { visit(ast); }
 void SemanticAnalyzer::visit(const ASTPtr &node)
 {
     if (auto program = std::dynamic_pointer_cast<Program>(node)) {
+        for (const auto &statement : program->statements) {
+            visitStatement(statement);
+        }
     }
 }
 
+void SemanticAnalyzer::visitStatement(const std::shared_ptr<Statement> statement)
+{
+    // before line - panicLine = false - сделать хелперы
+}
+
 void SemanticAnalyzer::visitExpression(const ExpressionPtr &node, ExpressionContext context)
+{
+    expressionDepth = 0;
+    visitExpressionHelper(node, context);
+}
+
+void SemanticAnalyzer::visitExpressionHelper(const ExpressionPtr &node, ExpressionContext context)
 {
     expressionDepth++;
     if (auto brackets = std::dynamic_pointer_cast<Brackets>(node)) {
@@ -38,8 +52,6 @@ void SemanticAnalyzer::visitExpression(const ExpressionPtr &node, ExpressionCont
         visitUnaryOperator(unaryOp, context);
     } else if (auto leaf = std::dynamic_pointer_cast<Leaf>(node)) {
         visitLeaf(leaf, context);
-    } else if (auto invalidExpr = std::dynamic_pointer_cast<InvalidExpression>(node)) {
-        visitInvalidExpression(invalidExpr, context);
     } else {
         LOG_DETAILED_ERROR("Unknown expression ptr node");
     }
@@ -48,7 +60,7 @@ void SemanticAnalyzer::visitExpression(const ExpressionPtr &node, ExpressionCont
 
 void SemanticAnalyzer::visitBrackets(const std::shared_ptr<Brackets> &node, ExpressionContext context)
 {
-    visitExpression(node->operand, context);
+    visitExpressionHelper(node->operand, context);
 
     auto operand = node->operand;
     node->constantValue = operand->constantValue;
@@ -60,7 +72,7 @@ void SemanticAnalyzer::visitBrackets(const std::shared_ptr<Brackets> &node, Expr
 
 void SemanticAnalyzer::visitSquareBrackets(const std::shared_ptr<SquareBrackets> &node, ExpressionContext context)
 {
-    visitExpression(node->operand, context);
+    visitExpressionHelper(node->operand, context);
 
     auto operand = node->operand;
     node->constantValue = operand->constantValue;
@@ -117,8 +129,8 @@ void SemanticAnalyzer::visitSquareBrackets(const std::shared_ptr<SquareBrackets>
 void SemanticAnalyzer::visitImplicitPlusOperator(const std::shared_ptr<ImplicitPlusOperator> &node,
                                                  ExpressionContext context)
 {
-    visitExpression(node->left, context);
-    visitExpression(node->right, context);
+    visitExpressionHelper(node->left, context);
+    visitExpressionHelper(node->right, context);
 
     auto left = node->left;
     auto right = node->right;
@@ -186,8 +198,8 @@ void SemanticAnalyzer::visitImplicitPlusOperator(const std::shared_ptr<ImplicitP
 
 void SemanticAnalyzer::visitBinaryOperator(const std::shared_ptr<BinaryOperator> &node, ExpressionContext context)
 {
-    visitExpression(node->left, context);
-    visitExpression(node->right, context);
+    visitExpressionHelper(node->left, context);
+    visitExpressionHelper(node->right, context);
 
     std::string op = stringToUpper(node->op.lexeme);
     auto left = node->left;
@@ -454,7 +466,7 @@ void SemanticAnalyzer::visitBinaryOperator(const std::shared_ptr<BinaryOperator>
 
 void SemanticAnalyzer::visitUnaryOperator(const std::shared_ptr<UnaryOperator> &node, ExpressionContext context)
 {
-    visitExpression(node->operand, context);
+    visitExpressionHelper(node->operand, context);
 
     std::string op = stringToUpper(node->op.lexeme);
     auto operand = node->operand;
@@ -643,11 +655,4 @@ void SemanticAnalyzer::visitLeaf(const std::shared_ptr<Leaf> &node, ExpressionCo
     } else {
         LOG_DETAILED_ERROR("Unkown leaf token!");
     }
-}
-
-void SemanticAnalyzer::visitInvalidExpression(const std::shared_ptr<InvalidExpression> &node,
-                                              [[maybe_unused]] ExpressionContext context)
-{
-    panicLine = true;
-    node->type = OperandType::InvalidOperand;
 }

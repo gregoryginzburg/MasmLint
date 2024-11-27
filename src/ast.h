@@ -1,18 +1,37 @@
 #pragma once
 
-#include "tokenize.h"
+#include "token.h"
 #include "log.h"
+#include "diagnostic.h"
 #include <memory>
 #include <optional>
 #include <map>
+#include <iostream>
 
 class AST;
 class Expression;
 class Statement;
 class EndDir;
 class LabelDef;
+class Directive;
+class InitializerList;
 using ASTPtr = std::shared_ptr<AST>;
 using ExpressionPtr = std::shared_ptr<Expression>;
+
+#define INVALID(node) (node->diagnostic)
+#define INVALID_EXPRESSION(diag) (std::make_shared<Expression>(diag))
+
+#define INVALID_STATEMENT(diag) (std::make_shared<Statement>(diag))
+
+#define INVALID_SEG_DIR(diag) (std::make_shared<SegDir>(diag))
+#define INVALID_DATA_DIR(diag) (std::make_shared<DataDir>(diag))
+
+#define INVALID_INSTRUCTION(diag) (std::make_shared<Instruction>(diag))
+#define INVALID_LABEL_DEF(diag) (std::make_shared<LabelDef>(diag))
+
+#define INVALID_DATA_ITEM(diag) (std::make_shared<DataItem>(diag))
+#define INVALID_INIT_VALUE(diag) (std::make_shared<InitValue>(diag))
+#define INVALID_INITIALIZER_LIST(diag) (std::make_shared<InitializerList>(diag))
 
 class AST {
 public:
@@ -25,38 +44,43 @@ public:
 
     AST(AST &&) = default;
     AST &operator=(AST &&) = default;
+
+    std::optional<std::shared_ptr<Diagnostic>> diagnostic;
 };
 
 class Program : public AST {
 public:
-    Program(const std::vector<std::shared_ptr<Statement>> &sentences, std::shared_ptr<EndDir> endDir)
+    Program(const std::vector<std::shared_ptr<Statement>> &sentences, std::shared_ptr<Directive> endDir)
         : statements(sentences), endDir(endDir)
     {
     }
     std::vector<std::shared_ptr<Statement>> statements;
-    std::shared_ptr<EndDir> endDir;
+    std::shared_ptr<Directive> endDir;
 };
 
-class Statement : public AST {};
+class Statement : public AST {
+public:
+    Statement() = default;
+    Statement(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
+    Statement(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
+};
 
 // Init values
-class InitValue : public AST {};
+class InitValue : public AST {
+public:
+    InitValue() = default;
+    InitValue(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
+};
 
 class DupOperator : public InitValue {
 public:
-    DupOperator(std::shared_ptr<ExpressionPtr> repeatCount, Token op, std::vector<std::shared_ptr<InitValue>> operands)
+    DupOperator(ExpressionPtr repeatCount, Token op, std::shared_ptr<InitializerList> operands)
         : repeatCount(std::move(repeatCount)), op(std::move(op)), operands(std::move(operands))
     {
     }
-    std::shared_ptr<ExpressionPtr> repeatCount;
+    ExpressionPtr repeatCount;
     Token op;
-    std::vector<std::shared_ptr<InitValue>> operands;
-};
-
-class StringInitValue : public InitValue {
-public:
-    StringInitValue(Token token) : token(std::move(token)) {}
-    Token token;
+    std::shared_ptr<InitializerList> operands;
 };
 
 class QuestionMarkInitValue : public InitValue {
@@ -65,34 +89,45 @@ public:
     Token token;
 };
 
-class AddressExprInitValue : public InitValue {
+class ExpressionInitValue : public InitValue {
 public:
-    AddressExprInitValue(ExpressionPtr expr) : expr(std::move(expr)) {}
+    ExpressionInitValue(ExpressionPtr expr) : expr(std::move(expr)) {}
     ExpressionPtr expr;
 };
 
-class StructInitValue {
+class StructOrRecordInitValue : public InitValue {
 public:
-    StructInitValue(std::vector<std::shared_ptr<InitValue>> fields) : fields(std::move(fields)) {}
-    std::vector<std::shared_ptr<InitValue>> fields;
+    StructOrRecordInitValue(Token leftBracket, Token rightBracket, std::shared_ptr<InitializerList> fields)
+        : fields(std::move(fields)), leftBracket(std::move(leftBracket)), rightBracket(std::move(rightBracket))
+    {
+    }
+    Token leftBracket;
+    Token rightBracket;
+    std::shared_ptr<InitializerList> fields;
 };
 
-class RecordInitValue {
+class InitializerList : public InitValue {
 public:
-    RecordInitValue(std::vector<std::shared_ptr<InitValue>> fields) : fields(std::move(fields)) {}
+    InitializerList(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
+    InitializerList(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
+    InitializerList(std::vector<std::shared_ptr<InitValue>> fields) : fields(std::move(fields)) {}
     std::vector<std::shared_ptr<InitValue>> fields;
 };
 
 // Define data (data items)
-class DataItem : public AST {};
+class DataItem : public AST {
+public:
+    DataItem() = default;
+    DataItem(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
+};
 
 class BuiltinInstance : public DataItem {
 public:
     Token dataTypeToken;
-    std::vector<std::shared_ptr<InitValue>> initValues;
+    std::shared_ptr<InitValue> initValues;
 
-    BuiltinInstance(Token dataTypeToken, const std::vector<std::shared_ptr<InitValue>> &initValues)
-        : dataTypeToken(std::move(dataTypeToken)), initValues(initValues)
+    BuiltinInstance(Token dataTypeToken, std::shared_ptr<InitValue> initValues)
+        : dataTypeToken(std::move(dataTypeToken)), initValues(std::move(initValues))
     {
     }
 };
@@ -100,10 +135,10 @@ public:
 class RecordInstance : public DataItem {
 public:
     Token idToken;
-    std::vector<std::shared_ptr<InitValue>> initValues;
+    std::shared_ptr<InitValue> initValues;
 
-    RecordInstance(Token idToken, const std::vector<std::shared_ptr<InitValue>> &initValues)
-        : idToken(std::move(idToken)), initValues(initValues)
+    RecordInstance(Token idToken, std::shared_ptr<InitValue> initValues)
+        : idToken(std::move(idToken)), initValues(std::move(initValues))
     {
     }
 };
@@ -111,10 +146,10 @@ public:
 class StructInstance : public DataItem {
 public:
     Token idToken;
-    std::vector<std::shared_ptr<InitValue>> initValues;
+    std::shared_ptr<InitValue> initValues;
 
-    StructInstance(Token idToken, const std::vector<std::shared_ptr<InitValue>> &initValues)
-        : idToken(std::move(idToken)), initValues(initValues)
+    StructInstance(Token idToken, std::shared_ptr<InitValue> initValues)
+        : idToken(std::move(idToken)), initValues(std::move(initValues))
     {
     }
 };
@@ -127,6 +162,8 @@ public:
     Token directiveToken;
     std::optional<ExpressionPtr> constExpr;
 
+    SegDir(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
+    SegDir(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
     SegDir(Token directiveToken, std::optional<ExpressionPtr> constExpr = std::nullopt)
         : directiveToken(std::move(directiveToken)), constExpr(std::move(constExpr))
     {
@@ -136,11 +173,12 @@ public:
 class DataDir : public Directive {
 public:
     std::optional<Token> idToken;
-    Token directiveToken;
     std::shared_ptr<DataItem> dataItem;
 
-    DataDir(std::optional<Token> idToken, Token directiveToken, std::shared_ptr<DataItem> dataItem)
-        : idToken(std::move(idToken)), directiveToken(std::move(directiveToken)), dataItem(std::move(dataItem))
+    DataDir(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
+    DataDir(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
+    DataDir(std::optional<Token> idToken, std::shared_ptr<DataItem> dataItem)
+        : idToken(std::move(idToken)), dataItem(std::move(dataItem))
     {
     }
 };
@@ -207,11 +245,14 @@ public:
 // Instructions
 class Instruction : public Statement {
 public:
-    std::shared_ptr<LabelDef> label;
+    std::optional<std::shared_ptr<LabelDef>> label;
     Token mnemonicToken;
     std::vector<ExpressionPtr> operands;
 
-    Instruction(std::shared_ptr<LabelDef> label, Token mnemonicToken, const std::vector<ExpressionPtr> &operands)
+    Instruction(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
+    Instruction(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
+    Instruction(std::optional<std::shared_ptr<LabelDef>> label, Token mnemonicToken,
+                const std::vector<ExpressionPtr> &operands)
         : label(label), mnemonicToken(std::move(mnemonicToken)), operands(operands)
     {
     }
@@ -221,6 +262,7 @@ class LabelDef : public Statement {
 public:
     Token idToken;
 
+    LabelDef(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
     LabelDef(Token idToken) : idToken(std::move(idToken)) {}
 };
 
@@ -242,6 +284,8 @@ struct OperandSize {
 
 class Expression : public AST {
 public:
+    Expression() = default;
+    Expression(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
     // expression attributes for semantic analysis
     std::optional<int32_t> constantValue;
     bool isRelocatable = false;
@@ -309,98 +353,235 @@ public:
     Token token;
 };
 
-class InvalidExpression : public Expression {
-public:
-    explicit InvalidExpression(std::shared_ptr<Diagnostic> diag) : diag(std::move(diag)) {}
-    std::shared_ptr<Diagnostic> diag;
-};
-
 inline void printAST(const ASTPtr &node, size_t indent)
 {
     if (!node) {
         return;
     }
 
-    if (indent == 2) {
-        auto expr = std::dynamic_pointer_cast<Expression>(node);
-        auto constantValue = expr->constantValue;
-        if (constantValue) {
-            std::cout << "constantValue: " << constantValue.value() << "\n";
-        } else {
-            std::cout << "constantValue: nullopt\n";
+    // Create indentation string
+    std::string indentation(indent, ' ');
+
+    if (INVALID(node)) {
+        std::cout << indentation << "Invalid Node: ";
+        std::cout << node->diagnostic.value()->getMessage() << "\n";
+        return;
+    }
+
+    if (auto program = std::dynamic_pointer_cast<Program>(node)) {
+        std::cout << indentation << "Program\n";
+        std::cout << indentation << "Statements:\n";
+        for (const auto &stmt : program->statements) {
+            printAST(stmt, indent + 2);
         }
+        if (program->endDir) {
+            std::cout << indentation << "End Directive:\n";
+            printAST(program->endDir, indent + 2);
+        }
+    } else if (auto instruction = std::dynamic_pointer_cast<Instruction>(node)) {
+        std::cout << indentation << "Instruction\n";
+        if (instruction->label) {
+            std::cout << indentation << "Label:\n";
+            printAST(instruction->label.value(), indent + 2);
+        }
+        std::cout << indentation << "Mnemonic: " << instruction->mnemonicToken.lexeme << "\n";
+        std::cout << indentation << "Operands:\n";
+        for (const auto &operand : instruction->operands) {
+            printAST(operand, indent + 2);
+        }
+    } else if (auto labelDef = std::dynamic_pointer_cast<LabelDef>(node)) {
+        std::cout << indentation << "Label Definition: " << labelDef->idToken.lexeme << "\n";
+    } else if (auto directive = std::dynamic_pointer_cast<Directive>(node)) {
+        if (auto segDir = std::dynamic_pointer_cast<SegDir>(directive)) {
+            std::cout << indentation << "Segment Directive\n";
+            std::cout << indentation << "Directive Token: " << segDir->directiveToken.lexeme << "\n";
+            if (segDir->constExpr) {
+                std::cout << indentation << "Constant Expression:\n";
+                printAST(*segDir->constExpr, indent + 2);
+            }
+        } else if (auto dataDir = std::dynamic_pointer_cast<DataDir>(directive)) {
+            std::cout << indentation << "Data Directive\n";
+            if (dataDir->idToken) {
+                std::cout << indentation << "Identifier: " << dataDir->idToken->lexeme << "\n";
+            }
+            std::cout << indentation << "Data Item:\n";
+            printAST(dataDir->dataItem, indent + 2);
+        } else if (auto structDir = std::dynamic_pointer_cast<StructDir>(directive)) {
+            std::cout << indentation << "Struct Directive\n";
+            std::cout << indentation << "First Identifier: " << structDir->firstIdToken.lexeme << "\n";
+            std::cout << indentation << "Directive Token: " << structDir->directiveToken.lexeme << "\n";
+            std::cout << indentation << "Fields:\n";
+            for (const auto &field : structDir->fields) {
+                printAST(field, indent + 2);
+            }
+            std::cout << indentation << "Second Identifier: " << structDir->secondIdToken.lexeme << "\n";
+            std::cout << indentation << "Ends Directive Token: " << structDir->endsDirToken.lexeme << "\n";
+        } else if (auto recordDir = std::dynamic_pointer_cast<RecordDir>(directive)) {
+            std::cout << indentation << "Record Directive\n";
+            // TODO: Implement handling for RecordDir
+            std::cout << indentation << "Record Directive handling not implemented\n";
+        } else if (auto equDir = std::dynamic_pointer_cast<EquDir>(directive)) {
+            std::cout << indentation << "Equ Directive\n";
+            std::cout << indentation << "Identifier: " << equDir->idToken.lexeme << "\n";
+            std::cout << indentation << "Directive Token: " << equDir->directiveToken.lexeme << "\n";
+            std::cout << indentation << "Value:\n";
+            printAST(equDir->value, indent + 2);
+        } else if (auto equalDir = std::dynamic_pointer_cast<EqualDir>(directive)) {
+            std::cout << indentation << "Equal Directive\n";
+            std::cout << indentation << "Identifier: " << equalDir->idToken.lexeme << "\n";
+            std::cout << indentation << "Directive Token: " << equalDir->directiveToken.lexeme << "\n";
+            std::cout << indentation << "Value:\n";
+            printAST(equalDir->value, indent + 2);
+        } else if (auto procDir = std::dynamic_pointer_cast<ProcDir>(directive)) {
+            std::cout << indentation << "Proc Directive\n";
+            // TODO: Implement handling for ProcDir
+            std::cout << indentation << "Proc Directive handling not implemented\n";
+        } else if (auto endDir = std::dynamic_pointer_cast<EndDir>(directive)) {
+            std::cout << indentation << "End Directive\n";
+            std::cout << indentation << "End Token: " << endDir->endToken.lexeme << "\n";
+            if (endDir->addressExpr) {
+                std::cout << indentation << "Address Expression:\n";
+                printAST(*endDir->addressExpr, indent + 2);
+            }
+        } else {
+            std::cout << indentation << "Unhandled Directive Type\n";
+        }
+    } else if (auto dataItem = std::dynamic_pointer_cast<DataItem>(node)) {
+        if (auto builtinInstance = std::dynamic_pointer_cast<BuiltinInstance>(dataItem)) {
+            std::cout << indentation << "Builtin Instance\n";
+            std::cout << indentation << "Data Type Token: " << builtinInstance->dataTypeToken.lexeme << "\n";
+            std::cout << indentation << "Init Values:\n";
+            printAST(builtinInstance->initValues, indent + 2);
+        } else if (auto recordInstance = std::dynamic_pointer_cast<RecordInstance>(dataItem)) {
+            std::cout << indentation << "Record Instance\n";
+            std::cout << indentation << "Identifier Token: " << recordInstance->idToken.lexeme << "\n";
+            std::cout << indentation << "Init Values:\n";
+            printAST(recordInstance->initValues, indent + 2);
 
-        std::cout << "isRelocatable: " << (expr->isRelocatable ? "true" : "false") << "\n";
+        } else if (auto structInstance = std::dynamic_pointer_cast<StructInstance>(dataItem)) {
+            std::cout << indentation << "Struct Instance\n";
+            std::cout << indentation << "Identifier Token: " << structInstance->idToken.lexeme << "\n";
+            std::cout << indentation << "Init Values:\n";
+            printAST(structInstance->initValues, indent + 2);
+        } else {
+            std::cout << indentation << "Unhandled DataItem Type\n";
+        }
+    } else if (auto initValue = std::dynamic_pointer_cast<InitValue>(node)) {
+        if (auto dupOperator = std::dynamic_pointer_cast<DupOperator>(initValue)) {
+            std::cout << indentation << "Dup Operator\n";
+            std::cout << indentation << "Repeat Count:\n";
+            if (dupOperator->repeatCount) {
+                printAST(dupOperator->repeatCount, indent + 2);
+            }
+            std::cout << indentation << "Operator: " << dupOperator->op.lexeme << "\n";
+            std::cout << indentation << "Operands:\n";
+            for (const auto &operand : dupOperator->operands->fields) {
+                printAST(operand, indent + 2);
+            }
+        } else if (auto questionMarkInitValue = std::dynamic_pointer_cast<QuestionMarkInitValue>(initValue)) {
+            std::cout << indentation << "Question Mark Init Value: " << questionMarkInitValue->token.lexeme << "\n";
+        } else if (auto addressExprInitValue = std::dynamic_pointer_cast<ExpressionInitValue>(initValue)) {
+            std::cout << indentation << "Expression Init Value:\n";
+            printAST(addressExprInitValue->expr, indent + 2);
+        } else if (auto structOrRecord = std::dynamic_pointer_cast<StructOrRecordInitValue>(initValue)) {
+            std::cout << indentation << "StructOrRecordInitValue: " << "\n";
+            printAST(structOrRecord->fields, indent + 2);
 
-        std::cout << "registers:\n";
-        for (const auto &[key, value] : expr->registers) {
-            std::cout << key.lexeme;
-            if (value) {
-                std::cout << *value << "\n";
+        } else if (auto initList = std::dynamic_pointer_cast<InitializerList>(initValue)) {
+            std::cout << indentation << "Initializer list: " << "\n";
+            for (const auto &operand : initList->fields) {
+                printAST(operand, indent + 2);
+            }
+        } else {
+            std::cout << indentation << "Unhandled InitValue Type\n";
+        }
+    } else if (auto expression = std::dynamic_pointer_cast<Expression>(node)) {
+        if (indent == 2) {
+            auto constantValue = expression->constantValue;
+            if (constantValue) {
+                std::cout << "constantValue: " << constantValue.value() << "\n";
             } else {
-                std::cout << "nullopt\n";
+                std::cout << "constantValue: nullopt\n";
+            }
+
+            std::cout << "isRelocatable: " << (expression->isRelocatable ? "true" : "false") << "\n";
+
+            std::cout << "registers:\n";
+            for (const auto &[key, value] : expression->registers) {
+                std::cout << key.lexeme << ": ";
+                if (value) {
+                    std::cout << *value << "\n";
+                } else {
+                    std::cout << "nullopt\n";
+                }
+            }
+
+            std::cout << "type: ";
+            switch (expression->type) {
+            case OperandType::ImmediateOperand:
+                std::cout << "ImmediateOperand\n";
+                break;
+            case OperandType::RegisterOperand:
+                std::cout << "RegisterOperand\n";
+                break;
+            case OperandType::MemoryOperand:
+                std::cout << "MemoryOperand\n";
+                break;
+            case OperandType::UnfinishedMemoryOperand:
+                std::cout << "UnfinishedMemoryOperand\n";
+                break;
+            case OperandType::InvalidOperand:
+                std::cout << "InvalidOperand\n";
+                break;
+            }
+
+            auto size = expression->size;
+            if (size) {
+                std::cout << "size: " << size.value().symbol << "\n";
+            } else {
+                std::cout << "size: nullopt\n";
             }
         }
 
-        if (expr->type == OperandType::ImmediateOperand) {
-            std::cout << "type: " << "ImmediateOperand" << "\n";
-        } else if (expr->type == OperandType::RegisterOperand) {
-            std::cout << "type: " << "RegisterOperand" << "\n";
-        } else if (expr->type == OperandType::MemoryOperand) {
-            std::cout << "type: " << "MemoryOperand" << "\n";
-        } else if (expr->type == OperandType::InvalidOperand) {
-            std::cout << "type: " << "InvalidOperand" << "\n";
-        }
-        auto size = expr->size;
-        if (size) {
-            std::cout << "size: " << size.value().symbol << "\n";
+        if (auto binaryOp = std::dynamic_pointer_cast<BinaryOperator>(expression)) {
+            std::cout << indentation << "Binary Operator (" << binaryOp->op.lexeme << ")\n";
+            std::cout << indentation << "Left:\n";
+            printAST(binaryOp->left, indent + 2);
+            std::cout << indentation << "Right:\n";
+            printAST(binaryOp->right, indent + 2);
+        } else if (auto unaryOp = std::dynamic_pointer_cast<UnaryOperator>(expression)) {
+            std::cout << indentation << "Unary Operator (" << unaryOp->op.lexeme << ")\n";
+            std::cout << indentation << "Operand:\n";
+            printAST(unaryOp->operand, indent + 2);
+        } else if (auto brackets = std::dynamic_pointer_cast<Brackets>(expression)) {
+            std::cout << indentation << "Brackets\n";
+            std::cout << indentation << "Operand:\n";
+            printAST(brackets->operand, indent + 2);
+        } else if (auto squareBrackets = std::dynamic_pointer_cast<SquareBrackets>(expression)) {
+            std::cout << indentation << "Square Brackets\n";
+            std::cout << indentation << "Operand:\n";
+            printAST(squareBrackets->operand, indent + 2);
+        } else if (auto implicitPlus = std::dynamic_pointer_cast<ImplicitPlusOperator>(expression)) {
+            std::cout << indentation << "Implicit Plus Operator\n";
+            std::cout << indentation << "Left:\n";
+            printAST(implicitPlus->left, indent + 2);
+            std::cout << indentation << "Right:\n";
+            printAST(implicitPlus->right, indent + 2);
+        } else if (auto leaf = std::dynamic_pointer_cast<Leaf>(expression)) {
+            std::cout << indentation << "Leaf (" << leaf->token.lexeme << ")\n";
         } else {
-            std::cout << "size: nullopt\n";
+            std::cout << indentation << "Unhandled Expression Type\n";
         }
-    }
-
-    // Create indentation string
-    std::string indentation(indent, ' ');
-    if (auto program = std::dynamic_pointer_cast<Program>(node)) {
-        for (const auto &expr : program->statements) {
-            std::cout << "Expr:\n";
-            printAST(expr, indent + 2);
-        }
-    } else if (auto binaryOp = std::dynamic_pointer_cast<BinaryOperator>(node)) {
-        std::cout << indentation << "BinaryOperator (" << binaryOp->op.lexeme << ")\n";
-        std::cout << indentation << "Left:\n";
-        printAST(binaryOp->left, indent + 2);
-        std::cout << indentation << "Right:\n";
-        printAST(binaryOp->right, indent + 2);
-    } else if (auto unaryOp = std::dynamic_pointer_cast<UnaryOperator>(node)) {
-        std::cout << indentation << "UnaryOperator (" << unaryOp->op.lexeme << ")\n";
-        std::cout << indentation << "Operand:\n";
-        printAST(unaryOp->operand, indent + 2);
-    } else if (auto brackets = std::dynamic_pointer_cast<Brackets>(node)) {
-        std::cout << indentation << "Brackets\n";
-        std::cout << indentation << "Operand:\n";
-        printAST(brackets->operand, indent + 2);
-    } else if (auto squareBrackets = std::dynamic_pointer_cast<SquareBrackets>(node)) {
-        std::cout << indentation << "SquareBrackets\n";
-        std::cout << indentation << "Operand:\n";
-        printAST(squareBrackets->operand, indent + 2);
-    } else if (auto implicitPlus = std::dynamic_pointer_cast<ImplicitPlusOperator>(node)) {
-        std::cout << indentation << "ImplicitPlusOperator\n";
-        std::cout << indentation << "Left:\n";
-        printAST(implicitPlus->left, indent + 2);
-        std::cout << indentation << "Right:\n";
-        printAST(implicitPlus->right, indent + 2);
-    } else if (auto leaf = std::dynamic_pointer_cast<Leaf>(node)) {
-        std::cout << indentation << "Leaf (" << leaf->token.lexeme << ")\n";
-    } else if (auto invalidExpr = std::dynamic_pointer_cast<InvalidExpression>(node)) {
-        std::cout << indentation << "Invalid Expression (" << invalidExpr->diag->getMessage() << ")\n";
     } else {
-        LOG_DETAILED_ERROR("Unknown AST Node\n");
+        std::cout << indentation << "Unhandled AST Node Type\n";
     }
 }
 
 inline Span getExpressionSpan(const ExpressionPtr &node)
 {
+    if (node->diagnostic) {
+        return {0, 0, nullptr};
+    }
     if (auto binaryOp = std::dynamic_pointer_cast<BinaryOperator>(node)) {
         return Span::merge(getExpressionSpan(binaryOp->left), getExpressionSpan(binaryOp->right));
     } else if (auto unaryOp = std::dynamic_pointer_cast<UnaryOperator>(node)) {
@@ -413,8 +594,6 @@ inline Span getExpressionSpan(const ExpressionPtr &node)
         return Span::merge(getExpressionSpan(implicitPlus->left), getExpressionSpan(implicitPlus->right));
     } else if (auto leaf = std::dynamic_pointer_cast<Leaf>(node)) {
         return leaf->token.span;
-    } else if (auto invalidExpr = std::dynamic_pointer_cast<InvalidExpression>(node)) {
-        return {0, 0, nullptr};
     } else {
         LOG_DETAILED_ERROR("Unknown Expression Node!\n");
         return {0, 0, nullptr};

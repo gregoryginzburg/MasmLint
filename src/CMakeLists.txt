@@ -29,11 +29,11 @@ set(HEADERS_LIST
     diagnostic.h
     emitter.h
     diag_ctxt.h
-    diagnostic_messages.def
     error_codes.h
     tokenize.h
     ast.h
     semantic_analyzer.h
+    token.h
 )
 
 add_library(masmlint_lib ${SOURCES_LIST} ${HEADERS_LIST})
