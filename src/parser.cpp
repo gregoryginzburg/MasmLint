@@ -88,6 +88,20 @@ bool Parser::lookaheadMatch(size_t n, const std::unordered_set<std::string> &val
     }
 }
 
+bool Parser::lookaheadNextLineMatch(const std::string &value) const
+{
+    size_t tempIndex = currentIndex;
+
+    while (tempIndex < tokens.size() && tokens[tempIndex].type != TokenType::EndOfLine) {
+        ++tempIndex;
+    }
+    if (tempIndex + 1 < tokens.size()) {
+        return stringToUpper(tokens[tempIndex + 1].lexeme) == value;
+    } else {
+        return stringToUpper(tokens.back().lexeme) == value;
+    }
+}
+
 bool Parser::lookaheadMatch(size_t n, TokenType type) const
 {
     if (currentIndex + n < tokens.size()) {
@@ -122,9 +136,7 @@ ASTPtr Parser::parse()
             if (match(TokenType::EndOfLine)) {
                 consume(TokenType::EndOfLine);
             }
-            if (statement) {
-                statements.push_back(statement);
-            }
+            statements.push_back(statement);
         } else {
             // empty line
             if (match(TokenType::EndOfLine)) {
@@ -151,15 +163,28 @@ std::shared_ptr<Statement> Parser::parseStatement()
         }
         return parseSegDir();
     }
+    if (match("STRUC")) {
+        auto diag = reportExpectedIdentifierBeforeStruc(currentToken);
+        return INVALID_STATEMENT(diag);
+    } else if (match("RECORD")) {
+
+    } else if (match("PROC")) {
+
+    } else if (match("EQU")) {
+
+    } else if (match("=")) {
+    }
 
     if (lookaheadMatch(1, "STRUC")) {
         return parseStructDir();
-    } else if (lookaheadMatch(1, "RECORD")) {
-        return parseRecordDir();
-    } else if (lookaheadMatch(1, "EQU")) {
-        return parseEquDir();
-    } else if (lookaheadMatch(1, "=")) {
-        return parseEqualDir();
+        // } else if (lookaheadMatch(1, "RECORD")) {
+        //     return parseRecordDir();
+        // } else if (lookaheadMatch(1, "PROC")) {
+        //     return parseProcDir();
+        // } else if (lookaheadMatch(1, "EQU")) {
+        //     return parseEquDir();
+        // } else if (lookaheadMatch(1, "=")) {
+        //     return parseEqualDir();
     } else {
         if (currentSegment) {
             if (currentSegment.value() == ".DATA") {
@@ -174,7 +199,12 @@ std::shared_ptr<Statement> Parser::parseStatement()
             }
         } else {
             // TODO: change?
-            auto diag = reportMustBeInSegmentBlock(currentToken);
+            Token firstToken = currentToken;
+            while (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
+                advance();
+            }
+            Token lastToken = currentToken;
+            auto diag = reportMustBeInSegmentBlock(firstToken, lastToken);
             return INVALID_STATEMENT(diag);
         }
     }
@@ -210,8 +240,8 @@ std::shared_ptr<DataDir> Parser::parseDataDir()
             auto diag = reportExpectedIdentifierInDataDir(currentToken);
             return INVALID_DATA_DIR(diag);
         }
+        consume(TokenType::Identifier);
     }
-    consume(TokenType::Identifier);
     std::shared_ptr<DataItem> dataItem = parseDataItem();
     if (INVALID(dataItem)) {
         return INVALID_DATA_DIR(dataItem->diagnostic);
@@ -225,51 +255,85 @@ std::shared_ptr<StructDir> Parser::parseStructDir()
     Token directiveToken, endsDirToken;
     std::vector<std::shared_ptr<DataDir>> fields;
     if (!match(TokenType::Identifier)) {
-        // report error
-        return nullptr;
+        auto diag = reportExpectedIdentifierInStrucDir(currentToken); // TODO in parseStatement check for this too
+        return INVALID_STRUCT_DIR(diag);
     }
     firstIdToken = currentToken;
     consume(TokenType::Identifier);
     if (!match("STRUC")) {
-        // report error
-        return nullptr;
+        auto diag = reportExpectedStruc(currentToken);
+        return INVALID_STRUCT_DIR(diag);
     }
     directiveToken = currentToken;
     consume("STRUC");
     if (!match(TokenType::EndOfLine)) {
-        // report error
-        return nullptr;
+        auto diag = reportExpectedEndOfLine(currentToken);
+        return INVALID_STRUCT_DIR(diag);
     }
-    // consume(TokenType::EndOfLine);
+    consume(TokenType::EndOfLine);
 
-    // while (!lookaheadMatch(1, "ENDS") && !match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
-    //     std::shared_ptr<DataDir> dataDir = parseDataDir();
+    while (!match("ENDS") && !lookaheadMatch(1, "ENDS") && !match(TokenType::EndOfFile)) {
+        if (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
+            std::shared_ptr<DataDir> dataDir;
+            dataDir = parseDataDir();
+            if (INVALID(dataDir)) {
+                synchronize();
+            } else {
+                // remove and handle everyhting in parseStatement()?
+                if (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
+                    reportExpectedEndOfLine(currentToken);
+                    synchronize();
+                    // continue parsing after synchronize
+                }
+            }
 
-    //     // parse endofline or endoffile
-    //     if (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
-    //         // reportError() - unexpteced
-    //         continue;
-    //     }
-    //     // Can't consume endoffile
-    //     if (match(TokenType::EndOfLine)) {
-    //         consume(TokenType::EndOfLine);
-    //     }
-    //     if (statement) {
-    //         statements.push_back(statement);
-    //     }
-    // }
-    // // parse EndDir
-    // if (match("END")) {
-    //     endDir = parseEndDir();
-    // } else {
-    //     // reportError()
-    // }
-    return nullptr;
+            // Can't consume endoffile
+            if (match(TokenType::EndOfLine)) {
+                consume(TokenType::EndOfLine);
+            }
+
+            fields.push_back(dataDir);
+
+        } else {
+            // empty line
+            if (match(TokenType::EndOfLine)) {
+                consume(TokenType::EndOfLine);
+            }
+        }
+    }
+    if (match("ENDS")) {
+        auto diag = reportMissingIdentifierBeforeEnds(currentToken);
+        return INVALID_STRUCT_DIR(diag);
+    }
+
+    // parse ENDS
+    if (!match(TokenType::Identifier)) {
+        auto diag = reportExpectedEndsDirective(currentToken);
+        return INVALID_STRUCT_DIR(diag);
+    }
+    if (stringToUpper(currentToken.lexeme) != stringToUpper(firstIdToken.lexeme)) {
+        auto diag = reportExpectedDifferentIdentifierInStructDir(currentToken, firstIdToken);
+        return INVALID_STRUCT_DIR(diag);
+    }
+    secondIdToken = currentToken;
+    consume(TokenType::Identifier);
+    if (!match("ENDS")) {
+        auto diag = reportExpectedEnds(currentToken);
+        return INVALID_STRUCT_DIR(diag);
+    }
+    endsDirToken = currentToken;
+    consume("ENDS");
+    return std::make_shared<StructDir>(firstIdToken, directiveToken, fields, secondIdToken, endsDirToken);
 }
+
 std::shared_ptr<RecordDir> Parser::parseRecordDir() { return nullptr; }
-std::shared_ptr<EquDir> Parser::parseEquDir() { return nullptr; }
-std::shared_ptr<EqualDir> Parser::parseEqualDir() { return nullptr; }
+
 std::shared_ptr<ProcDir> Parser::parseProcDir() { return nullptr; }
+
+std::shared_ptr<EquDir> Parser::parseEquDir() { return nullptr; }
+
+std::shared_ptr<EqualDir> Parser::parseEqualDir() { return nullptr; }
+
 std::shared_ptr<EndDir> Parser::parseEndDir() { return nullptr; }
 
 std::shared_ptr<Instruction> Parser::parseInstruction()
@@ -336,29 +400,24 @@ std::shared_ptr<LabelDef> Parser::parseLabelDef()
 std::shared_ptr<DataItem> Parser::parseDataItem()
 {
     if (!match(TokenType::Identifier) && !match(dataDirectives)) {
-        // report expected data definition directive
+        auto diag = reportExpectedVariableNameOrDataDirective(currentToken);
+        return INVALID_DATA_ITEM(diag);
     }
-    // TODO: check that identifier has been declared and that it's a type
-    if (match(dataDirectives)) {
-        Token dataTypeToken = currentToken;
-        advance();
-        std::shared_ptr<InitValue> initValue = parseInitValue();
-        if (INVALID(initValue)) {
-            return INVALID_DATA_ITEM(initValue->diagnostic);
-        }
-        return std::make_shared<BuiltinInstance>(dataTypeToken, initValue);
-    } else if (false) {
-        // TODO: determine whether is's a struct or record
-        return nullptr;
-    } else {
-        return nullptr;
+
+    // TODO: determine whether is's a struct or record
+    Token dataTypeToken = currentToken;
+    advance();
+    std::shared_ptr<InitValue> initValue = parseInitValue();
+    if (INVALID(initValue)) {
+        return INVALID_DATA_ITEM(initValue->diagnostic);
     }
+    return std::make_shared<BuiltinInstance>(dataTypeToken, initValue);
 }
 
 std::shared_ptr<InitValue> Parser::parseInitValue()
 {
     dataInitializerDelimitersStack = {};
-    std::shared_ptr<InitValue> initValue = parseInitValueHelper();
+    std::shared_ptr<InitValue> initValue = parseInitializerList();
     if (INVALID(initValue)) {
         return initValue;
     }
@@ -369,7 +428,7 @@ std::shared_ptr<InitValue> Parser::parseInitValue()
     return initValue;
 }
 
-std::shared_ptr<InitValue> Parser::parseInitValueHelper()
+std::shared_ptr<InitValue> Parser::parseSingleInitValue()
 {
     if (match("<")) {
         Token leftBracket = currentToken;
@@ -441,14 +500,14 @@ std::shared_ptr<InitValue> Parser::parseInitValueHelper()
 std::shared_ptr<InitializerList> Parser::parseInitializerList()
 {
     std::vector<std::shared_ptr<InitValue>> fields;
-    std::shared_ptr<InitValue> initValue = parseInitValueHelper();
+    std::shared_ptr<InitValue> initValue = parseSingleInitValue();
     if (INVALID(initValue)) {
         return INVALID_INITIALIZER_LIST(initValue->diagnostic);
     }
     fields.push_back(initValue);
     while (match(",")) {
         advance();
-        initValue = parseInitValueHelper();
+        initValue = parseSingleInitValue();
         if (INVALID(initValue)) {
             return INVALID_INITIALIZER_LIST(initValue->diagnostic);
         }

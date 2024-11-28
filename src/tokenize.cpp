@@ -9,37 +9,34 @@
 #include <unordered_set>
 #include <string>
 
-static const std::unordered_set<std::string> directives = {"INCLUDE", "EQU",    "DB",     "DW",    "DD",   "DQ",
-                                                           "END",     ".STACK", ".DATA",  ".CODE", "PROC", "ENDP",
-                                                           "STRUC",   "ENDS",   "RECORD", "="};
+static const std::unordered_set<std::string> directives = {"INCLUDE", "EQU",   "=",      "DB",    "DW",    "DD",
+                                                           "DQ",      "END",   ".STACK", ".DATA", ".CODE", "PROC",
+                                                           "ENDP",    "STRUC", "ENDS",   "RECORD"};
 
 static const std::unordered_set<std::string> reservedWords = {"DUP"};
 
 // delete DUP from here?
-static const std::unordered_set<std::string> operators = {"+",      "-",        "*",     "/",    ".",     "MOD",
-                                                          "SHL",    "SHR",      "PTR",   "TYPE", "SIZE",  "SIZEOF",
+static const std::unordered_set<std::string> operators = {"+",      "-",        "*",     "/",    ".",      "MOD",
+                                                          "SHL",    "SHR",      "PTR",   "TYPE", "SIZE",   "SIZEOF",
                                                           "LENGTH", "LENGTHOF", "WIDTH", "MASK", "OFFSET", "DUP"};
 
 static const std::unordered_set<std::string> types = {"BYTE", "WORD", "DWORD", "QWORD"};
 
 static const std::unordered_set<std::string> instructions = {
-    "MOV",   "XCHG",  "MOVZX", "MOVSX", "DIV",   "IDIV",  "MUL",   "IMUL",  "ADD",   "ADC",   "INC",   "SUB",
-    "SBB",   "DEC",   "NEG",   "JE",    "JNE",   "JA",    "JAE",   "JB",    "JBE",   "JL",    "JLE",   "JG",
-    "JGE",   "JC",    "JNC",   "JZ",    "JNZ",   "JMP",   "CALL",  "RET",   "SHL",   "SHR",   "ROL",   "RCL",
-    "ROR",   "RCR",   "AND",   "OR",    "XOR",   "REP",   "REPE",  "REPNE", "MOVSB", "MOVSW", "MOVSD", "LODSB",
-    "LODSW", "LODSD", "STOSB", "STOSW", "STOSD", "SCASB", "SCASW", "SCASD", "CMPSB", "CMPSW", "CMPSD",
-};
+    "MOV",   "XCHG",  "MOVZX", "MOVSX", "DIV",    "IDIV",    "MUL",    "IMUL",  "ADD",   "ADC",   "INC",   "SUB",
+    "SBB",   "DEC",   "NEG",   "JE",    "JNE",    "JA",      "JAE",    "JB",    "JBE",   "JL",    "JLE",   "JG",
+    "JGE",   "JC",    "JNC",   "JZ",    "JNZ",    "JMP",     "CALL",   "RET",   "SHL",   "SHR",   "ROL",   "RCL",
+    "ROR",   "RCR",   "AND",   "OR",    "XOR",    "REP",     "REPE",   "REPNE", "MOVSB", "MOVSW", "MOVSD", "LODSB",
+    "LODSW", "LODSD", "STOSB", "STOSW", "STOSD",  "SCASB",   "SCASW",  "SCASD", "CMPSB", "CMPSW", "CMPSD", "INCHAR",
+    "ININT", "EXIT",  "OUTI",  "OUTU",  "OUTSTR", "OUTCHAR", "NEWLINE"};
 
 static const std::unordered_set<std::string> registers = {"AL", "AX",  "EAX", "BL",  "BX",  "EBX", "CL",
                                                           "CX", "ECX", "DL",  "DX",  "EDX", "SI",  "ESI",
                                                           "DI", "EDI", "BP",  "EBP", "SP",  "ESP"};
 
-
-
 std::vector<Token> Tokenizer::tokenize()
 {
     size_t length = src.size();
-    std::shared_ptr<SyntaxContextData> context = std::make_shared<SyntaxContextData>();
 
     while (pos < length) {
         skipWhitespace();
@@ -49,7 +46,7 @@ std::vector<Token> Tokenizer::tokenize()
         }
 
         if (src[pos] == '\n') {
-            tokens.emplace_back(Token{TokenType::EndOfLine, "", Span(pos, pos + 1, context)});
+            tokens.emplace_back(Token{TokenType::EndOfLine, "", Span(pos, pos + 1, nullptr)});
             ++pos;
             continue; // Skip calling getNextToken() after processing '\n'
         }
@@ -66,7 +63,7 @@ std::vector<Token> Tokenizer::tokenize()
 
     // because files always ends with a '\n', we can make EndOfFile span equal to the last '\n'
     // to be able to underline EndOfFile correctly
-    tokens.emplace_back(Token{TokenType::EndOfFile, "", Span(pos - 1, pos, context)});
+    tokens.emplace_back(Token{TokenType::EndOfFile, "", Span(pos - 1, pos, nullptr)});
 
     // TODO: remove testing code
     // Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_NUMBER_FORMAT);

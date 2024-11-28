@@ -26,13 +26,32 @@ DEFINE_ERROR(MUST_BE_IN_SEGMENT_BLOCK,
 // SegDir
 DEFINE_ERROR(EXPECTED_SEG_DIR, "Expected `.CODE` or `.DATA` or `.STACK` directive")
 
+// DataDir
+// EXPECTED_IDENTIFIER_IN_DATA_DIR = EXPECTED_IDENTIFIER
+
+// StructDir
+// EXPECTED_IDENTIFIER_IN_STRUCT_DIR = EXPECTED_IDENTIFIER
+DEFINE_ERROR(EXPECTED_IDENTIFIER_BEFORE_STRUC, "Expected a name before `STRUC` directive")
+DEFINE_ERROR(EXPECTED_STRUC, "Expected `STRUC`")
+DEFINE_ERROR(EXPECTED_DIFFERENT_IDENTIFIER_STRUCT_DIR, "`STRUC` names dont't match")
+DEFINE_ERROR(EXPECTED_ENDS, "All `STRUC` definitions must end with the `ENDS` directive")
+DEFINE_ERROR(MISSING_IDENTIFIER_BEFORE_ENDS, "Before `ENDS` directive a `STRUC` name must be specified")
+DEFINE_ERROR(EXPECTED_ENDS_DIRECTIVE, "`STRUC` definition must end with the `ENDS` directive")
+
 // Instruction
 DEFINE_ERROR(EXPECTED_INSTRUCTION, "Expected instruction name")
 DEFINE_ERROR(EXPECTED_COMMA_OR_END_OF_LINE, "Expected `,` or `\\n`")
+
 // LabelDef
+// EXPECTED_IDENTIFIER_IN_LABEL = EXPECTED_IDENTIFIER
 DEFINE_ERROR(EXPECTED_COLON, "Expected `:`, found `{}`")
 
-// Data item
+// DataItem
+DEFINE_ERROR(EXPECTED_VARIABLE_NAME_OR_DATA_DIRECTIVE,
+             "Expected variable name or data directive (`DB`, `DW`, `DD`, 'DQ`)")
+
+// InitValue
+// UNCLOSED_DELIMITER_IN_INIT_VALUE = UNCLOSED_DELIMITER
 DEFINE_ERROR(EXCPECTED_COMMA_OR_CLOSING_DELIMITER, "Expected `,` or `>` or `)`")
 DEFINE_ERROR(EXPECTED_OPEN_BRACKET, "Expected `(`")
 
@@ -45,6 +64,7 @@ DEFINE_ERROR(EXPECTED_IDENTIFIER, "Expected identifier, found `{}`")
 
 // Semantic errors
 // Expression errors
+DEFINE_ERROR(REGISTER_NOT_ALLOWED, "Register is not allowed outside of instruction operands")
 DEFINE_ERROR(CONSTANT_TOO_LARGE, "Constant too large")
 DEFINE_ERROR(UNARY_OPERATOR_INCORRECT_ARGUMENT, "Incorrect argument in the unary operator `{}`")
 DEFINE_ERROR(DOT_OPERATOR_INCORRECT_ARGUMENT, "Incorrect argument in the binary operator `.`")
@@ -61,6 +81,8 @@ DEFINE_ERROR(MORE_THAN_ONE_SCALE,
 DEFINE_ERROR(TWO_ESP_REGISTERS, "Can't have 2 ESP registers in an address expression with modificators")
 DEFINE_ERROR(NON_32BIT_REGISTER, "Can't have a non 32 bit register in an address expression with modificators")
 DEFINE_ERROR(BINARY_MINUS_OPERATOR_INCORRECT_ARGUMENT, "Incorrect argument in the binary operator `-`")
+DEFINE_ERROR(NON_REGISTER_IN_SQUARE_BRACKETS,
+             "Can only have a register with an optional scale and an optional constant expression inside `[]`")
 
 // Warnings
 // Expression warnings

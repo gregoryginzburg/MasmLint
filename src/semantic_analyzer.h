@@ -20,7 +20,21 @@ public:
 private:
     void visit(const ASTPtr &node);
 
-    void visitStatement(const std::shared_ptr<Statement> statement);
+    void visitStatement(const std::shared_ptr<Statement> &statement);
+    void visitInstruction(const std::shared_ptr<Instruction> &instruction);
+    void visitDirective(const std::shared_ptr<Directive> &directive);
+    void visitLabelDef(const std::shared_ptr<LabelDef> &labelDef);
+
+    void visitSegDir(const std::shared_ptr<SegDir> &segDir);
+    void visitDataDir(const std::shared_ptr<DataDir> &dataDir);
+    void visitStructDir(const std::shared_ptr<StructDir> &structDir);
+    void visitEquDir(const std::shared_ptr<EquDir> &equDir);
+    void visitEqualDir(const std::shared_ptr<EqualDir> &equalDir);
+    void visitEndDir(const std::shared_ptr<EndDir> &endDir);
+
+    void visitDataItem(const std::shared_ptr<DataItem> &dataItem);
+    void visitInitValue(const std::shared_ptr<InitValue> &initValue, const std::string &dataType);
+    void visitInitializerList(const std::shared_ptr<InitializerList> &initList, const std::string &dataType);
 
     // ASTexpression nodes
     void visitExpression(const ExpressionPtr &node, ExpressionContext context);
@@ -32,6 +46,7 @@ private:
     void visitUnaryOperator(const std::shared_ptr<UnaryOperator> &node, ExpressionContext context);
     void visitLeaf(const std::shared_ptr<Leaf> &node, ExpressionContext context);
 
+    void reportRegisterNotAllowed(const Token &reg);
     void reportNumberTooLarge(const Token &number);
     void reportStringTooLarge(const Token &string);
     void reportUnaryOperatorIncorrectArgument(const std::shared_ptr<UnaryOperator> &node);
@@ -48,6 +63,7 @@ private:
     void reportTwoEsp(const ExpressionPtr &node, bool implicit);
     void reportNon32bitRegister(const ExpressionPtr &node, bool implicit);
     void reportBinaryMinusOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node);
+    void reportNonRegisterInSquareBrackets(const std::shared_ptr<BinaryOperator> &node);
 
     void warnTypeReturnsZero(const std::shared_ptr<UnaryOperator> &node);
 

@@ -38,6 +38,7 @@ private:
     bool lookaheadMatch(size_t n, const std::string &value) const;
     bool lookaheadMatch(size_t n, const std::unordered_set<std::string> &values) const;
     bool lookaheadMatch(size_t n, TokenType type) const;
+    bool lookaheadNextLineMatch(const std::string &value) const;
 
     std::shared_ptr<Statement> parseStatement();
 
@@ -55,7 +56,7 @@ private:
 
     std::shared_ptr<DataItem> parseDataItem();
     std::shared_ptr<InitValue> parseInitValue();
-    std::shared_ptr<InitValue> parseInitValueHelper();
+    std::shared_ptr<InitValue> parseSingleInitValue();
     std::shared_ptr<InitializerList> parseInitializerList();
 
     ExpressionPtr parseExpression();
@@ -72,12 +73,20 @@ private:
     std::shared_ptr<Diagnostic> reportExpectedEndDir(const Token &token);
 
     // Statement
-    std::shared_ptr<Diagnostic> reportMustBeInSegmentBlock(const Token &token);
+    std::shared_ptr<Diagnostic> reportMustBeInSegmentBlock(const Token &firstToken, const Token &lastToken);
 
     // SegDir
     std::shared_ptr<Diagnostic> reportExpectedSegDir(const Token &token);
     // DataDir
     std::shared_ptr<Diagnostic> reportExpectedIdentifierInDataDir(const Token &token);
+    // StructDir
+    std::shared_ptr<Diagnostic> reportExpectedIdentifierBeforeStruc(const Token &token);
+    std::shared_ptr<Diagnostic> reportExpectedIdentifierInStrucDir(const Token& token);
+    std::shared_ptr<Diagnostic> reportExpectedStruc(const Token &token);
+    std::shared_ptr<Diagnostic> reportExpectedDifferentIdentifierInStructDir(const Token &found, const Token& expected);
+    std::shared_ptr<Diagnostic> reportExpectedEnds(const Token &token);
+    std::shared_ptr<Diagnostic> reportMissingIdentifierBeforeEnds(const Token &token);
+    std::shared_ptr<Diagnostic> reportExpectedEndsDirective(const Token &token);
 
     // Instruction
     std::shared_ptr<Diagnostic> reportExpectedInstruction(const Token &token);
@@ -88,6 +97,7 @@ private:
     std::shared_ptr<Diagnostic> reportExpectedColonInLabel(const Token &token);
 
     // DataItem
+    std::shared_ptr<Diagnostic> reportExpectedVariableNameOrDataDirective(const Token &token);
 
     // InitValue
     std::shared_ptr<Diagnostic> reportUnclosedDelimiterInDataInitializer(const Token &token);

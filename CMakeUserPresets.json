@@ -15,7 +15,7 @@
         "ML_ENABLE_COMPILER_WARNINGS": true,
         "ML_ENABLE_CLANG_TIDY": true,
         "ML_ENABLE_CPPCHECK": true,
-        "ML_ENABLE_SANITIZER_ADDRESS": true
+        "ML_ENABLE_SANITIZER_ADDRESS": false
       }
     },
     {
@@ -26,7 +26,10 @@
         "gcc"
       ],
       "description": "Linux builds with GCC",
-      "generator": "Ninja Multi-Config"
+      "generator": "Ninja Multi-Config",
+      "cacheVariables": {
+        "ML_ENABLE_SANITIZER_ADDRESS": true
+      }
     },
     {
       "name": "linux-clang",
@@ -36,7 +39,10 @@
         "clang"
       ],
       "description": "Linux builds with Clang",
-      "generator": "Ninja Multi-Config"
+      "generator": "Ninja Multi-Config",
+      "cacheVariables": {
+        "ML_ENABLE_SANITIZER_ADDRESS": true
+      }
     },
     {
       "name": "windows-msvc",
@@ -56,10 +62,7 @@
         "clang"
       ],
       "description": "Windows builds with Clang",
-      "generator": "Ninja Multi-Config",
-      "cacheVariables": {
-        "ML_ENABLE_SANITIZER_ADDRESS": false
-      }
+      "generator": "Ninja Multi-Config"
     }
   ],
   "buildPresets": [

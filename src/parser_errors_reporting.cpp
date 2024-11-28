@@ -22,10 +22,11 @@ std::shared_ptr<Diagnostic> Parser::reportExpectedEndDir(const Token &token)
 }
 
 // Statement
-std::shared_ptr<Diagnostic> Parser::reportMustBeInSegmentBlock(const Token &token)
+std::shared_ptr<Diagnostic> Parser::reportMustBeInSegmentBlock(const Token &firstToken, const Token &lastToken)
 {
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::MUST_BE_IN_SEGMENT_BLOCK, token.lexeme);
-    diag.addPrimaryLabel(token.span, "");
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::MUST_BE_IN_SEGMENT_BLOCK);
+    Span span = Span::merge(firstToken.span, lastToken.span);
+    diag.addPrimaryLabel(span, "");
     parseSess->dcx->addDiagnostic(diag);
 
     return parseSess->dcx->getLastDiagnostic();
@@ -54,6 +55,76 @@ std::shared_ptr<Diagnostic> Parser::reportExpectedIdentifierInDataDir(const Toke
     }
 
     parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+// StructDir
+std::shared_ptr<Diagnostic> Parser::reportExpectedIdentifierBeforeStruc(const Token &token)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_IDENTIFIER_BEFORE_STRUC);
+    diag.addPrimaryLabel(token.span, "");
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+std::shared_ptr<Diagnostic> Parser::reportExpectedIdentifierInStrucDir(const Token &token)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_IDENTIFIER, token.lexeme);
+
+    if (isReservedWord(token)) {
+        diag.addPrimaryLabel(token.span, fmt::format("`{}` is a reserved word", token.lexeme));
+
+    } else {
+        diag.addPrimaryLabel(token.span, "");
+    }
+
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+std::shared_ptr<Diagnostic> Parser::reportExpectedStruc(const Token &token)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_STRUC);
+    diag.addPrimaryLabel(token.span, "");
+    parseSess->dcx->addDiagnostic(diag);
+
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+std::shared_ptr<Diagnostic> Parser::reportExpectedDifferentIdentifierInStructDir(const Token &found,
+                                                                                 const Token &expected)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_DIFFERENT_IDENTIFIER_STRUCT_DIR);
+    diag.addPrimaryLabel(found.span, fmt::format("expected `{}`", expected.lexeme));
+    parseSess->dcx->addDiagnostic(diag);
+
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+std::shared_ptr<Diagnostic> Parser::reportExpectedEnds(const Token &token)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_ENDS);
+    diag.addPrimaryLabel(token.span, "");
+    parseSess->dcx->addDiagnostic(diag);
+
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+std::shared_ptr<Diagnostic> Parser::reportMissingIdentifierBeforeEnds(const Token &token)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::MISSING_IDENTIFIER_BEFORE_ENDS);
+    diag.addPrimaryLabel(token.span, "");
+    parseSess->dcx->addDiagnostic(diag);
+
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+std::shared_ptr<Diagnostic> Parser::reportExpectedEndsDirective(const Token &token)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_ENDS_DIRECTIVE, token.lexeme);
+    diag.addPrimaryLabel(token.span, "");
+    parseSess->dcx->addDiagnostic(diag);
+
     return parseSess->dcx->getLastDiagnostic();
 }
 
@@ -107,6 +178,14 @@ std::shared_ptr<Diagnostic> Parser::reportExpectedColonInLabel(const Token &toke
 }
 
 // DataItem
+std::shared_ptr<Diagnostic> Parser::reportExpectedVariableNameOrDataDirective(const Token &token)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_VARIABLE_NAME_OR_DATA_DIRECTIVE, token.lexeme);
+    diag.addPrimaryLabel(token.span, "");
+    parseSess->dcx->addDiagnostic(diag);
+
+    return parseSess->dcx->getLastDiagnostic();
+}
 
 // InitValue
 std::shared_ptr<Diagnostic> Parser::reportUnclosedDelimiterInDataInitializer(const Token &token)

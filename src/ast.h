@@ -25,6 +25,7 @@ using ExpressionPtr = std::shared_ptr<Expression>;
 
 #define INVALID_SEG_DIR(diag) (std::make_shared<SegDir>(diag))
 #define INVALID_DATA_DIR(diag) (std::make_shared<DataDir>(diag))
+#define INVALID_STRUCT_DIR(diag) (std::make_shared<StructDir>(diag))
 
 #define INVALID_INSTRUCTION(diag) (std::make_shared<Instruction>(diag))
 #define INVALID_LABEL_DEF(diag) (std::make_shared<LabelDef>(diag))
@@ -191,6 +192,8 @@ public:
     Token secondIdToken;
     Token endsDirToken;
 
+    StructDir(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
+    StructDir(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
     StructDir(Token firstIdToken, Token directiveToken, const std::vector<std::shared_ptr<DataDir>> &fields,
               Token secondIdToken, Token endsDirToken)
         : firstIdToken(std::move(firstIdToken)), directiveToken(std::move(directiveToken)), fields(fields),

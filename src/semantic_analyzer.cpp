@@ -23,12 +23,159 @@ void SemanticAnalyzer::visit(const ASTPtr &node)
         for (const auto &statement : program->statements) {
             visitStatement(statement);
         }
+        if (program->endDir) {
+            visitDirective(program->endDir);
+        }
+    } else {
+        LOG_DETAILED_ERROR("Unknown AST node type in visit.");
     }
 }
 
-void SemanticAnalyzer::visitStatement(const std::shared_ptr<Statement> statement)
+void SemanticAnalyzer::visitStatement(const std::shared_ptr<Statement> &statement)
 {
-    // before line - panicLine = false - сделать хелперы
+    panicLine = false;
+    if (INVALID(statement)) {
+        return;
+    }
+    if (auto instruction = std::dynamic_pointer_cast<Instruction>(statement)) {
+        visitInstruction(instruction);
+    } else if (auto directive = std::dynamic_pointer_cast<Directive>(statement)) {
+        visitDirective(directive);
+    } else if (auto labelDef = std::dynamic_pointer_cast<LabelDef>(statement)) {
+        visitLabelDef(labelDef);
+    } else {
+        LOG_DETAILED_ERROR("Unknown statement type.");
+    }
+}
+
+void SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &instruction)
+{
+    if (instruction->label) {
+        visitLabelDef(instruction->label.value());
+    }
+    for (const auto &operand : instruction->operands) {
+        visitExpression(operand, ExpressionContext::InstructionOperand);
+        if (operand->type == OperandType::UnfinishedMemoryOperand) {
+            reportInvalidAddressExpression(operand);
+        }
+    }
+
+    // TODO: Perform operand type checking and instruction validation
+}
+
+void SemanticAnalyzer::visitDirective(const std::shared_ptr<Directive> &directive)
+{
+    if (auto segDir = std::dynamic_pointer_cast<SegDir>(directive)) {
+        visitSegDir(segDir);
+    } else if (auto dataDir = std::dynamic_pointer_cast<DataDir>(directive)) {
+        visitDataDir(dataDir);
+    } else if (auto structDir = std::dynamic_pointer_cast<StructDir>(directive)) {
+        visitStructDir(structDir);
+    } else if (auto equDir = std::dynamic_pointer_cast<EquDir>(directive)) {
+        visitEquDir(equDir);
+    } else if (auto equalDir = std::dynamic_pointer_cast<EqualDir>(directive)) {
+        visitEqualDir(equalDir);
+    } else if (auto endDir = std::dynamic_pointer_cast<EndDir>(directive)) {
+        visitEndDir(endDir);
+    } else {
+        LOG_DETAILED_ERROR("Unknown directive type.");
+    }
+}
+
+void SemanticAnalyzer::visitLabelDef(const std::shared_ptr<LabelDef> & /*labelDef*/)
+{
+    // Check if the label is already defined
+}
+
+void SemanticAnalyzer::visitSegDir(const std::shared_ptr<SegDir> &segDir)
+{
+    if (segDir->constExpr) {
+        visitExpression(segDir->constExpr.value(), ExpressionContext::DataDefinition);
+    }
+}
+
+void SemanticAnalyzer::visitDataDir(const std::shared_ptr<DataDir> &dataDir)
+{
+    visitDataItem(dataDir->dataItem);
+}
+
+void SemanticAnalyzer::visitStructDir(const std::shared_ptr<StructDir> &structDir)
+{
+    for (const auto &field : structDir->fields) {
+        if (INVALID(field)) {
+            continue;
+        }
+        panicLine = false;
+        visitDataDir(field);
+    }
+}
+
+void SemanticAnalyzer::visitEquDir(const std::shared_ptr<EquDir> &equDir)
+{
+    visitExpression(equDir->value, ExpressionContext::DataDefinition);
+}
+
+void SemanticAnalyzer::visitEqualDir(const std::shared_ptr<EqualDir> &equalDir)
+{
+    visitExpression(equalDir->value, ExpressionContext::DataDefinition);
+}
+
+void SemanticAnalyzer::visitEndDir(const std::shared_ptr<EndDir> &endDir)
+{
+    if (endDir->addressExpr) {
+        visitExpression(endDir->addressExpr.value(), ExpressionContext::DataDefinition);
+    }
+}
+
+void SemanticAnalyzer::visitDataItem(const std::shared_ptr<DataItem> &dataItem)
+{
+    if (auto builtinInstance = std::dynamic_pointer_cast<BuiltinInstance>(dataItem)) {
+        Token dataTypeToken = builtinInstance->dataTypeToken;
+        std::string dataType = stringToUpper(dataTypeToken.lexeme);
+
+        // Visit initialization values
+        visitInitValue(builtinInstance->initValues, dataType);
+
+    } else if (auto recordInstance = std::dynamic_pointer_cast<RecordInstance>(dataItem)) {
+        // TODO: Implement record instance processing
+        LOG_DETAILED_ERROR("Record instances are not yet implemented.");
+    } else if (auto structInstance = std::dynamic_pointer_cast<StructInstance>(dataItem)) {
+        // TODO: Implement struct instance processing
+        LOG_DETAILED_ERROR("Struct instances are not yet implemented.");
+    } else {
+        LOG_DETAILED_ERROR("Unknown data item type.");
+    }
+}
+
+void SemanticAnalyzer::visitInitValue(const std::shared_ptr<InitValue> &initValue, const std::string &dataType)
+{
+    if (auto dupOperator = std::dynamic_pointer_cast<DupOperator>(initValue)) {
+        // Process DUP operator
+        visitExpression(dupOperator->repeatCount, ExpressionContext::DataDefinition);
+
+        // Visit operands
+        visitInitValue(dupOperator->operands, dataType);
+
+    } else if (auto questionMarkInitValue = std::dynamic_pointer_cast<QuestionMarkInitValue>(initValue)) {
+        // Uninitialized data; no action needed
+
+    } else if (auto expressionInitValue = std::dynamic_pointer_cast<ExpressionInitValue>(initValue)) {
+        // Process expression init value
+        visitExpression(expressionInitValue->expr, ExpressionContext::DataDefinition);
+
+        // TODO: Implement type checking between expression and data type
+
+    } else if (auto structOrRecordInitValue = std::dynamic_pointer_cast<StructOrRecordInitValue>(initValue)) {
+        // Process struct or record initialization
+        visitInitValue(structOrRecordInitValue->fields, dataType);
+
+    } else if (auto initList = std::dynamic_pointer_cast<InitializerList>(initValue)) {
+        for (const auto &init : initList->fields) {
+            visitInitValue(init, dataType);
+        }
+    } else {
+        LOG_DETAILED_ERROR("Unknown initialization value type.");
+    }
 }
 
 void SemanticAnalyzer::visitExpression(const ExpressionPtr &node, ExpressionContext context)
@@ -83,10 +230,47 @@ void SemanticAnalyzer::visitSquareBrackets(const std::shared_ptr<SquareBrackets>
         // dont want to call this (reportInvalidAddressExpression())
         bool implicit = false;
         ExpressionPtr expr;
-        if ((expr = std::dynamic_pointer_cast<BinaryOperator>(operand))) {
+        std::shared_ptr<BinaryOperator> binOp;
+        std::shared_ptr<ImplicitPlusOperator> implicitPlusOp;
+        if ((binOp = std::dynamic_pointer_cast<BinaryOperator>(operand))) {
             implicit = false;
-        } else if ((expr = std::dynamic_pointer_cast<ImplicitPlusOperator>(operand))) {
-            implicit = true;
+            // Check that we have [eax * 5] in []
+            if (binOp->op.lexeme == "+") {
+                bool firstIsRegisterWithOptionalScale = binOp->left->type == OperandType::RegisterOperand;
+                if (auto binOpLeft = std::dynamic_pointer_cast<BinaryOperator>(binOp->left)) {
+                    if (binOpLeft->op.lexeme == "*" && (binOpLeft->left->type == OperandType::RegisterOperand ||
+                                                        binOpLeft->right->type == OperandType::RegisterOperand)) {
+                        firstIsRegisterWithOptionalScale = true;
+                    }
+                }
+                bool firstIsConstant = bool(binOp->left->constantValue);
+                bool secondIsRegisterWithOptionalScale = binOp->right->type == OperandType::RegisterOperand;
+                if (auto binOpRight = std::dynamic_pointer_cast<BinaryOperator>(binOp->right)) {
+                    if (binOpRight->op.lexeme == "*" && (binOpRight->left->type == OperandType::RegisterOperand ||
+                                                         binOpRight->right->type == OperandType::RegisterOperand)) {
+                        secondIsRegisterWithOptionalScale = true;
+                    }
+                }
+                bool secondIsConstant = bool(binOp->right->constantValue);
+                if ((firstIsConstant && secondIsRegisterWithOptionalScale) ||
+                    (firstIsRegisterWithOptionalScale && secondIsConstant)) {
+                    // allowed
+                } else {
+                    node->type = OperandType::InvalidOperand;
+                    reportNonRegisterInSquareBrackets(binOp);
+                    return;
+                }
+            } else if (binOp->op.lexeme != "*") {
+                node->type = OperandType::InvalidOperand;
+                reportNonRegisterInSquareBrackets(binOp);
+                return;
+            }
+            expr = binOp;
+        } else if ((implicitPlusOp = std::dynamic_pointer_cast<ImplicitPlusOperator>(operand))) {
+            // report error, beacuse can't have [[eax][ebx]]
+            node->type = OperandType::InvalidOperand;
+            reportNonRegisterInSquareBrackets(binOp);
+            return;
         } else {
             LOG_DETAILED_ERROR("Unexpected operand type!\n");
         }
@@ -113,6 +297,17 @@ void SemanticAnalyzer::visitSquareBrackets(const std::shared_ptr<SquareBrackets>
         }
         node->type = OperandType::MemoryOperand;
     } else if (operand->type == OperandType::RegisterOperand) {
+        bool non32bitRegister = false;
+        for (const auto &[regToken, scale] : operand->registers) {
+            if (registerSizes[stringToUpper(regToken.lexeme)] != 4) {
+                non32bitRegister = true;
+            }
+        }
+        if (non32bitRegister) {
+            node->type = OperandType::InvalidOperand;
+            reportNon32bitRegister(operand, true);
+            return;
+        }
         node->type = OperandType::MemoryOperand;
     } else {
         node->type = operand->type;
@@ -165,7 +360,30 @@ void SemanticAnalyzer::visitImplicitPlusOperator(const std::shared_ptr<ImplicitP
     }
 
     // check we only have 32 bit regsiters, and dont have 2 esp
-    // checking for this is delayed until operator []
+    // in implicit plus - need to check immediately
+    // to detect [esp][esp]
+    // for esp + esp - want to have error - can't have regsiters in expressions
+    bool non32bitRegister = false;
+    int espCount = 0;
+    for (const auto &[regToken, scale] : newRegisters) {
+        if (registerSizes[stringToUpper(regToken.lexeme)] != 4) {
+            non32bitRegister = true;
+        }
+        if (stringToUpper(regToken.lexeme) == "ESP") {
+            espCount += 1;
+        }
+    }
+
+    if (non32bitRegister) {
+        node->type = OperandType::InvalidOperand;
+        reportNon32bitRegister(node, true);
+        return;
+    }
+    if (espCount == 2) {
+        node->type = OperandType::InvalidOperand;
+        reportTwoEsp(node, true);
+        return;
+    }
 
     if (left->constantValue && right->constantValue) {
         node->constantValue = left->constantValue.value() + right->constantValue.value();
@@ -632,7 +850,11 @@ void SemanticAnalyzer::visitLeaf(const std::shared_ptr<Leaf> &node, ExpressionCo
         node->type = OperandType::ImmediateOperand;
         node->registers = {};
     } else if (token.type == TokenType::Register) {
-        // TODO if context == DataDefinition - report error
+        if (context == ExpressionContext::DataDefinition) {
+            node->type = OperandType::InvalidOperand;
+            reportRegisterNotAllowed(token);
+            return;
+        }
         node->constantValue = std::nullopt;
         node->isRelocatable = false;
         int value = registerSizes[stringToUpper(token.lexeme)];

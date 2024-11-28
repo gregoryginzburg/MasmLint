@@ -41,6 +41,18 @@ std::string getOperandType(const ExpressionPtr &node)
     }
 }
 
+void SemanticAnalyzer::reportRegisterNotAllowed(const Token &reg)
+{
+    if (panicLine) {
+        return;
+    }
+    panicLine = true;
+
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::REGISTER_NOT_ALLOWED);
+    diag.addPrimaryLabel(reg.span, "");
+    parseSess->dcx->addDiagnostic(diag);
+}
+
 void SemanticAnalyzer::reportNumberTooLarge(const Token &number)
 {
     if (panicLine) {
@@ -556,6 +568,13 @@ void SemanticAnalyzer::reportNon32bitRegister(const ExpressionPtr &node, bool im
 
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::NON_32BIT_REGISTER);
 
+    if (auto reg = std::dynamic_pointer_cast<Leaf>(node)) {
+        int size = registerSizes[stringToUpper(reg->token.lexeme)];
+        diag.addPrimaryLabel(reg->token.span, fmt::format("this is a {} byte register", size));
+        parseSess->dcx->addDiagnostic(diag);
+        return;
+    }
+
     if (implicit) {
         auto implicitOp = std::dynamic_pointer_cast<ImplicitPlusOperator>(node);
         bool first = true;
@@ -621,6 +640,19 @@ void SemanticAnalyzer::reportBinaryMinusOperatorIncorrectArgument(const std::sha
     diag.addSecondaryLabel(getExpressionSpan(left), fmt::format("help: this has type `{}`", getOperandType(left)));
     diag.addSecondaryLabel(getExpressionSpan(right), fmt::format("help: this has type `{}`", getOperandType(right)));
 
+    parseSess->dcx->addDiagnostic(diag);
+}
+
+void SemanticAnalyzer::reportNonRegisterInSquareBrackets(const std::shared_ptr<BinaryOperator> &node)
+{
+
+    if (panicLine) {
+        return;
+    }
+    panicLine = true;
+
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::NON_REGISTER_IN_SQUARE_BRACKETS);
+    diag.addPrimaryLabel(getExpressionSpan(node), "");
     parseSess->dcx->addDiagnostic(diag);
 }
 
