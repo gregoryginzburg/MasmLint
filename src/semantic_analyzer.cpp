@@ -818,6 +818,7 @@ void SemanticAnalyzer::visitLeaf(const std::shared_ptr<Leaf> &node, ExpressionCo
     if (token.type == TokenType::Identifier) {
         // TODO: check if symbol is defined
         node->constantValue = std::nullopt;
+        // TODO: if symbol is struct fields -> then it's not relocatable (fixed a bug in finding 2 variables that are added in [erx].a.b[evx])
         node->isRelocatable = true;
         node->size = OperandSize("DWORD", 4); // TODO: get size from symbol table
         node->type = OperandType::MemoryOperand;

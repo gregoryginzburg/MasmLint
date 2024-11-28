@@ -368,6 +368,12 @@ void SemanticAnalyzer::findRelocatableVariables(const ExpressionPtr &node, std::
         return;
     }
     if (auto binaryOp = std::dynamic_pointer_cast<BinaryOperator>(node)) {
+        if (binaryOp->op.lexeme == ".") {
+            if (binaryOp->left->isRelocatable) {
+                findRelocatableVariables(binaryOp->left, firstVar, secondVar);
+                return;
+            }
+        }
         if (binaryOp->left->isRelocatable) {
             findRelocatableVariables(binaryOp->left, firstVar, secondVar);
         }
