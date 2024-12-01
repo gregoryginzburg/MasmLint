@@ -9,9 +9,10 @@
 #include <unordered_set>
 #include <string>
 
-static const std::unordered_set<std::string> directives = {"INCLUDE", "EQU",   "=",      "DB",    "DW",    "DD",
-                                                           "DQ",      "END",   ".STACK", ".DATA", ".CODE", "PROC",
-                                                           "ENDP",    "STRUC", "ENDS",   "RECORD"};
+static const std::unordered_set<std::string> directives = {
+    "=",     ".CODE",  ".DATA", ".STACK", "DB",    "DW",    "DD",   "DQ",    "ELSE",   "ELSEIF", "END",
+    "ENDIF", "ENDM",   "ENDP",  "ENDS",   "EQU",   "FOR",   "FORC", "IF",    "IFE",    "IFB",    "IFNB",
+    "IFDIF", "IFDIFI", "IFIDN", "IFIDNI", "LOCAL", "MACRO", "PROC", "STRUC", "RECORD", "REPEAT", "INCLUDE"};
 
 static const std::unordered_set<std::string> reservedWords = {"DUP"};
 
@@ -23,12 +24,11 @@ static const std::unordered_set<std::string> operators = {"+",      "-",        
 static const std::unordered_set<std::string> types = {"BYTE", "WORD", "DWORD", "QWORD"};
 
 static const std::unordered_set<std::string> instructions = {
-    "MOV",   "XCHG",  "MOVZX", "MOVSX", "DIV",    "IDIV",    "MUL",    "IMUL",  "ADD",   "ADC",   "INC",   "SUB",
-    "SBB",   "DEC",   "NEG",   "JE",    "JNE",    "JA",      "JAE",    "JB",    "JBE",   "JL",    "JLE",   "JG",
-    "JGE",   "JC",    "JNC",   "JZ",    "JNZ",    "JMP",     "CALL",   "RET",   "SHL",   "SHR",   "ROL",   "RCL",
-    "ROR",   "RCR",   "AND",   "OR",    "XOR",    "REP",     "REPE",   "REPNE", "MOVSB", "MOVSW", "MOVSD", "LODSB",
-    "LODSW", "LODSD", "STOSB", "STOSW", "STOSD",  "SCASB",   "SCASW",  "SCASD", "CMPSB", "CMPSW", "CMPSD", "INCHAR",
-    "ININT", "EXIT",  "OUTI",  "OUTU",  "OUTSTR", "OUTCHAR", "NEWLINE"};
+    "ADC",   "ADD",  "AND",    "CALL",  "CBW",  "CDQ",  "CMP",   "CWD",    "DEC",     "DIV",    "IDIV", "IMUL", "INC",
+    "JA",    "JAE",  "JB",     "JBE",   "JC",   "JE",   "JECXZ", "JG",     "JGE",     "JL",     "JLE",  "JMP",  "JNC",
+    "JNE",   "JNZ",  "JZ",     "LEA",   "LOOP", "MOV",  "MOVSX", "MOVZX",  "MUL",     "NEG",    "NOT",  "OR",   "POP",
+    "POPFD", "PUSH", "PUSHFD", "RCL",   "RCR",  "RET",  "ROL",   "ROR",    "SBB",     "SHL",    "SHR",  "SUB",  "TEST",
+    "XCHG",  "XOR",  "INCHAR", "ININT", "EXIT", "OUTI", "OUTU",  "OUTSTR", "OUTCHAR", "NEWLINE"};
 
 static const std::unordered_set<std::string> registers = {"AL", "AX",  "EAX", "BL",  "BX",  "EBX", "CL",
                                                           "CX", "ECX", "DL",  "DX",  "EDX", "SI",  "ESI",

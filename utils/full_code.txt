@@ -39,6 +39,7 @@ using ExpressionPtr = std::shared_ptr<Expression>;
 
 #define INVALID_SEG_DIR(diag) (std::make_shared<SegDir>(diag))
 #define INVALID_DATA_DIR(diag) (std::make_shared<DataDir>(diag))
+#define INVALID_STRUCT_DIR(diag) (std::make_shared<StructDir>(diag))
 
 #define INVALID_INSTRUCTION(diag) (std::make_shared<Instruction>(diag))
 #define INVALID_LABEL_DEF(diag) (std::make_shared<LabelDef>(diag))
@@ -205,6 +206,8 @@ public:
     Token secondIdToken;
     Token endsDirToken;
 
+    StructDir(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
+    StructDir(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
     StructDir(Token firstIdToken, Token directiveToken, const std::vector<std::shared_ptr<DataDir>> &fields,
               Token secondIdToken, Token endsDirToken)
         : firstIdToken(std::move(firstIdToken)), directiveToken(std::move(directiveToken)), fields(fields),
@@ -1575,6 +1578,20 @@ bool Parser::lookaheadMatch(size_t n, const std::unordered_set<std::string> &val
     }
 }
 
+bool Parser::lookaheadNextLineMatch(const std::string &value) const
+{
+    size_t tempIndex = currentIndex;
+
+    while (tempIndex < tokens.size() && tokens[tempIndex].type != TokenType::EndOfLine) {
+        ++tempIndex;
+    }
+    if (tempIndex + 1 < tokens.size()) {
+        return stringToUpper(tokens[tempIndex + 1].lexeme) == value;
+    } else {
+        return stringToUpper(tokens.back().lexeme) == value;
+    }
+}
+
 bool Parser::lookaheadMatch(size_t n, TokenType type) const
 {
     if (currentIndex + n < tokens.size()) {
@@ -1609,9 +1626,7 @@ ASTPtr Parser::parse()
             if (match(TokenType::EndOfLine)) {
                 consume(TokenType::EndOfLine);
             }
-            if (statement) {
-                statements.push_back(statement);
-            }
+            statements.push_back(statement);
         } else {
             // empty line
             if (match(TokenType::EndOfLine)) {
@@ -1638,15 +1653,28 @@ std::shared_ptr<Statement> Parser::parseStatement()
         }
         return parseSegDir();
     }
+    if (match("STRUC")) {
+        auto diag = reportExpectedIdentifierBeforeStruc(currentToken);
+        return INVALID_STATEMENT(diag);
+    } else if (match("RECORD")) {
+
+    } else if (match("PROC")) {
+
+    } else if (match("EQU")) {
+
+    } else if (match("=")) {
+    }
 
     if (lookaheadMatch(1, "STRUC")) {
         return parseStructDir();
-    } else if (lookaheadMatch(1, "RECORD")) {
-        return parseRecordDir();
-    } else if (lookaheadMatch(1, "EQU")) {
-        return parseEquDir();
-    } else if (lookaheadMatch(1, "=")) {
-        return parseEqualDir();
+        // } else if (lookaheadMatch(1, "RECORD")) {
+        //     return parseRecordDir();
+        // } else if (lookaheadMatch(1, "PROC")) {
+        //     return parseProcDir();
+        // } else if (lookaheadMatch(1, "EQU")) {
+        //     return parseEquDir();
+        // } else if (lookaheadMatch(1, "=")) {
+        //     return parseEqualDir();
     } else {
         if (currentSegment) {
             if (currentSegment.value() == ".DATA") {
@@ -1661,7 +1689,12 @@ std::shared_ptr<Statement> Parser::parseStatement()
             }
         } else {
             // TODO: change?
-            auto diag = reportMustBeInSegmentBlock(currentToken);
+            Token firstToken = currentToken;
+            while (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
+                advance();
+            }
+            Token lastToken = currentToken;
+            auto diag = reportMustBeInSegmentBlock(firstToken, lastToken);
             return INVALID_STATEMENT(diag);
         }
     }
@@ -1697,8 +1730,8 @@ std::shared_ptr<DataDir> Parser::parseDataDir()
             auto diag = reportExpectedIdentifierInDataDir(currentToken);
             return INVALID_DATA_DIR(diag);
         }
+        consume(TokenType::Identifier);
     }
-    consume(TokenType::Identifier);
     std::shared_ptr<DataItem> dataItem = parseDataItem();
     if (INVALID(dataItem)) {
         return INVALID_DATA_DIR(dataItem->diagnostic);
@@ -1712,51 +1745,85 @@ std::shared_ptr<StructDir> Parser::parseStructDir()
     Token directiveToken, endsDirToken;
     std::vector<std::shared_ptr<DataDir>> fields;
     if (!match(TokenType::Identifier)) {
-        // report error
-        return nullptr;
+        auto diag = reportExpectedIdentifierInStrucDir(currentToken); // TODO in parseStatement check for this too
+        return INVALID_STRUCT_DIR(diag);
     }
     firstIdToken = currentToken;
     consume(TokenType::Identifier);
     if (!match("STRUC")) {
-        // report error
-        return nullptr;
+        auto diag = reportExpectedStruc(currentToken);
+        return INVALID_STRUCT_DIR(diag);
     }
     directiveToken = currentToken;
     consume("STRUC");
     if (!match(TokenType::EndOfLine)) {
-        // report error
-        return nullptr;
+        auto diag = reportExpectedEndOfLine(currentToken);
+        return INVALID_STRUCT_DIR(diag);
     }
-    // consume(TokenType::EndOfLine);
+    consume(TokenType::EndOfLine);
 
-    // while (!lookaheadMatch(1, "ENDS") && !match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
-    //     std::shared_ptr<DataDir> dataDir = parseDataDir();
+    while (!match("ENDS") && !lookaheadMatch(1, "ENDS") && !match(TokenType::EndOfFile)) {
+        if (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
+            std::shared_ptr<DataDir> dataDir;
+            dataDir = parseDataDir();
+            if (INVALID(dataDir)) {
+                synchronize();
+            } else {
+                // remove and handle everyhting in parseStatement()?
+                if (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
+                    reportExpectedEndOfLine(currentToken);
+                    synchronize();
+                    // continue parsing after synchronize
+                }
+            }
 
-    //     // parse endofline or endoffile
-    //     if (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
-    //         // reportError() - unexpteced
-    //         continue;
-    //     }
-    //     // Can't consume endoffile
-    //     if (match(TokenType::EndOfLine)) {
-    //         consume(TokenType::EndOfLine);
-    //     }
-    //     if (statement) {
-    //         statements.push_back(statement);
-    //     }
-    // }
-    // // parse EndDir
-    // if (match("END")) {
-    //     endDir = parseEndDir();
-    // } else {
-    //     // reportError()
-    // }
-    return nullptr;
+            // Can't consume endoffile
+            if (match(TokenType::EndOfLine)) {
+                consume(TokenType::EndOfLine);
+            }
+
+            fields.push_back(dataDir);
+
+        } else {
+            // empty line
+            if (match(TokenType::EndOfLine)) {
+                consume(TokenType::EndOfLine);
+            }
+        }
+    }
+    if (match("ENDS")) {
+        auto diag = reportMissingIdentifierBeforeEnds(currentToken);
+        return INVALID_STRUCT_DIR(diag);
+    }
+
+    // parse ENDS
+    if (!match(TokenType::Identifier)) {
+        auto diag = reportExpectedEndsDirective(currentToken);
+        return INVALID_STRUCT_DIR(diag);
+    }
+    if (stringToUpper(currentToken.lexeme) != stringToUpper(firstIdToken.lexeme)) {
+        auto diag = reportExpectedDifferentIdentifierInStructDir(currentToken, firstIdToken);
+        return INVALID_STRUCT_DIR(diag);
+    }
+    secondIdToken = currentToken;
+    consume(TokenType::Identifier);
+    if (!match("ENDS")) {
+        auto diag = reportExpectedEnds(currentToken);
+        return INVALID_STRUCT_DIR(diag);
+    }
+    endsDirToken = currentToken;
+    consume("ENDS");
+    return std::make_shared<StructDir>(firstIdToken, directiveToken, fields, secondIdToken, endsDirToken);
 }
+
 std::shared_ptr<RecordDir> Parser::parseRecordDir() { return nullptr; }
-std::shared_ptr<EquDir> Parser::parseEquDir() { return nullptr; }
-std::shared_ptr<EqualDir> Parser::parseEqualDir() { return nullptr; }
+
 std::shared_ptr<ProcDir> Parser::parseProcDir() { return nullptr; }
+
+std::shared_ptr<EquDir> Parser::parseEquDir() { return nullptr; }
+
+std::shared_ptr<EqualDir> Parser::parseEqualDir() { return nullptr; }
+
 std::shared_ptr<EndDir> Parser::parseEndDir() { return nullptr; }
 
 std::shared_ptr<Instruction> Parser::parseInstruction()
@@ -1823,29 +1890,24 @@ std::shared_ptr<LabelDef> Parser::parseLabelDef()
 std::shared_ptr<DataItem> Parser::parseDataItem()
 {
     if (!match(TokenType::Identifier) && !match(dataDirectives)) {
-        // report expected data definition directive
+        auto diag = reportExpectedVariableNameOrDataDirective(currentToken);
+        return INVALID_DATA_ITEM(diag);
     }
-    // TODO: check that identifier has been declared and that it's a type
-    if (match(dataDirectives)) {
-        Token dataTypeToken = currentToken;
-        advance();
-        std::shared_ptr<InitValue> initValue = parseInitValue();
-        if (INVALID(initValue)) {
-            return INVALID_DATA_ITEM(initValue->diagnostic);
-        }
-        return std::make_shared<BuiltinInstance>(dataTypeToken, initValue);
-    } else if (false) {
-        // TODO: determine whether is's a struct or record
-        return nullptr;
-    } else {
-        return nullptr;
+
+    // TODO: determine whether is's a struct or record
+    Token dataTypeToken = currentToken;
+    advance();
+    std::shared_ptr<InitValue> initValue = parseInitValue();
+    if (INVALID(initValue)) {
+        return INVALID_DATA_ITEM(initValue->diagnostic);
     }
+    return std::make_shared<BuiltinInstance>(dataTypeToken, initValue);
 }
 
 std::shared_ptr<InitValue> Parser::parseInitValue()
 {
     dataInitializerDelimitersStack = {};
-    std::shared_ptr<InitValue> initValue = parseInitValueHelper();
+    std::shared_ptr<InitValue> initValue = parseInitializerList();
     if (INVALID(initValue)) {
         return initValue;
     }
@@ -1856,7 +1918,7 @@ std::shared_ptr<InitValue> Parser::parseInitValue()
     return initValue;
 }
 
-std::shared_ptr<InitValue> Parser::parseInitValueHelper()
+std::shared_ptr<InitValue> Parser::parseSingleInitValue()
 {
     if (match("<")) {
         Token leftBracket = currentToken;
@@ -1928,14 +1990,14 @@ std::shared_ptr<InitValue> Parser::parseInitValueHelper()
 std::shared_ptr<InitializerList> Parser::parseInitializerList()
 {
     std::vector<std::shared_ptr<InitValue>> fields;
-    std::shared_ptr<InitValue> initValue = parseInitValueHelper();
+    std::shared_ptr<InitValue> initValue = parseSingleInitValue();
     if (INVALID(initValue)) {
         return INVALID_INITIALIZER_LIST(initValue->diagnostic);
     }
     fields.push_back(initValue);
     while (match(",")) {
         advance();
-        initValue = parseInitValueHelper();
+        initValue = parseSingleInitValue();
         if (INVALID(initValue)) {
             return INVALID_INITIALIZER_LIST(initValue->diagnostic);
         }
@@ -2207,6 +2269,7 @@ private:
     bool lookaheadMatch(size_t n, const std::string &value) const;
     bool lookaheadMatch(size_t n, const std::unordered_set<std::string> &values) const;
     bool lookaheadMatch(size_t n, TokenType type) const;
+    bool lookaheadNextLineMatch(const std::string &value) const;
 
     std::shared_ptr<Statement> parseStatement();
 
@@ -2224,7 +2287,7 @@ private:
 
     std::shared_ptr<DataItem> parseDataItem();
     std::shared_ptr<InitValue> parseInitValue();
-    std::shared_ptr<InitValue> parseInitValueHelper();
+    std::shared_ptr<InitValue> parseSingleInitValue();
     std::shared_ptr<InitializerList> parseInitializerList();
 
     ExpressionPtr parseExpression();
@@ -2241,12 +2304,20 @@ private:
     std::shared_ptr<Diagnostic> reportExpectedEndDir(const Token &token);
 
     // Statement
-    std::shared_ptr<Diagnostic> reportMustBeInSegmentBlock(const Token &token);
+    std::shared_ptr<Diagnostic> reportMustBeInSegmentBlock(const Token &firstToken, const Token &lastToken);
 
     // SegDir
     std::shared_ptr<Diagnostic> reportExpectedSegDir(const Token &token);
     // DataDir
     std::shared_ptr<Diagnostic> reportExpectedIdentifierInDataDir(const Token &token);
+    // StructDir
+    std::shared_ptr<Diagnostic> reportExpectedIdentifierBeforeStruc(const Token &token);
+    std::shared_ptr<Diagnostic> reportExpectedIdentifierInStrucDir(const Token& token);
+    std::shared_ptr<Diagnostic> reportExpectedStruc(const Token &token);
+    std::shared_ptr<Diagnostic> reportExpectedDifferentIdentifierInStructDir(const Token &found, const Token& expected);
+    std::shared_ptr<Diagnostic> reportExpectedEnds(const Token &token);
+    std::shared_ptr<Diagnostic> reportMissingIdentifierBeforeEnds(const Token &token);
+    std::shared_ptr<Diagnostic> reportExpectedEndsDirective(const Token &token);
 
     // Instruction
     std::shared_ptr<Diagnostic> reportExpectedInstruction(const Token &token);
@@ -2257,6 +2328,7 @@ private:
     std::shared_ptr<Diagnostic> reportExpectedColonInLabel(const Token &token);
 
     // DataItem
+    std::shared_ptr<Diagnostic> reportExpectedVariableNameOrDataDirective(const Token &token);
 
     // InitValue
     std::shared_ptr<Diagnostic> reportUnclosedDelimiterInDataInitializer(const Token &token);
@@ -2295,10 +2367,11 @@ std::shared_ptr<Diagnostic> Parser::reportExpectedEndDir(const Token &token)
 }
 
 // Statement
-std::shared_ptr<Diagnostic> Parser::reportMustBeInSegmentBlock(const Token &token)
+std::shared_ptr<Diagnostic> Parser::reportMustBeInSegmentBlock(const Token &firstToken, const Token &lastToken)
 {
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::MUST_BE_IN_SEGMENT_BLOCK, token.lexeme);
-    diag.addPrimaryLabel(token.span, "");
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::MUST_BE_IN_SEGMENT_BLOCK);
+    Span span = Span::merge(firstToken.span, lastToken.span);
+    diag.addPrimaryLabel(span, "");
     parseSess->dcx->addDiagnostic(diag);
 
     return parseSess->dcx->getLastDiagnostic();
@@ -2327,6 +2400,76 @@ std::shared_ptr<Diagnostic> Parser::reportExpectedIdentifierInDataDir(const Toke
     }
 
     parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+// StructDir
+std::shared_ptr<Diagnostic> Parser::reportExpectedIdentifierBeforeStruc(const Token &token)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_IDENTIFIER_BEFORE_STRUC);
+    diag.addPrimaryLabel(token.span, "");
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+std::shared_ptr<Diagnostic> Parser::reportExpectedIdentifierInStrucDir(const Token &token)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_IDENTIFIER, token.lexeme);
+
+    if (isReservedWord(token)) {
+        diag.addPrimaryLabel(token.span, fmt::format("`{}` is a reserved word", token.lexeme));
+
+    } else {
+        diag.addPrimaryLabel(token.span, "");
+    }
+
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+std::shared_ptr<Diagnostic> Parser::reportExpectedStruc(const Token &token)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_STRUC);
+    diag.addPrimaryLabel(token.span, "");
+    parseSess->dcx->addDiagnostic(diag);
+
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+std::shared_ptr<Diagnostic> Parser::reportExpectedDifferentIdentifierInStructDir(const Token &found,
+                                                                                 const Token &expected)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_DIFFERENT_IDENTIFIER_STRUCT_DIR);
+    diag.addPrimaryLabel(found.span, fmt::format("expected `{}`", expected.lexeme));
+    parseSess->dcx->addDiagnostic(diag);
+
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+std::shared_ptr<Diagnostic> Parser::reportExpectedEnds(const Token &token)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_ENDS);
+    diag.addPrimaryLabel(token.span, "");
+    parseSess->dcx->addDiagnostic(diag);
+
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+std::shared_ptr<Diagnostic> Parser::reportMissingIdentifierBeforeEnds(const Token &token)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::MISSING_IDENTIFIER_BEFORE_ENDS);
+    diag.addPrimaryLabel(token.span, "");
+    parseSess->dcx->addDiagnostic(diag);
+
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+std::shared_ptr<Diagnostic> Parser::reportExpectedEndsDirective(const Token &token)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_ENDS_DIRECTIVE, token.lexeme);
+    diag.addPrimaryLabel(token.span, "");
+    parseSess->dcx->addDiagnostic(diag);
+
     return parseSess->dcx->getLastDiagnostic();
 }
 
@@ -2380,6 +2523,14 @@ std::shared_ptr<Diagnostic> Parser::reportExpectedColonInLabel(const Token &toke
 }
 
 // DataItem
+std::shared_ptr<Diagnostic> Parser::reportExpectedVariableNameOrDataDirective(const Token &token)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_VARIABLE_NAME_OR_DATA_DIRECTIVE, token.lexeme);
+    diag.addPrimaryLabel(token.span, "");
+    parseSess->dcx->addDiagnostic(diag);
+
+    return parseSess->dcx->getLastDiagnostic();
+}
 
 // InitValue
 std::shared_ptr<Diagnostic> Parser::reportUnclosedDelimiterInDataInitializer(const Token &token)
@@ -2521,6 +2672,888 @@ private:
 
 File semantic_analyzer.cpp:
 
+// File: semantic_analyzer.cpp
+#include "semantic_analyzer.h"
+#include "log.h"
+#include <set>
+
+std::map<std::string, int> SemanticAnalyzer::registerSizes = {
+    {"AL", 1}, {"AX", 2},  {"EAX", 4}, {"BL", 1},  {"BX", 2},  {"EBX", 4}, {"CL", 1},
+    {"CX", 2}, {"ECX", 4}, {"DL", 1},  {"DX", 2},  {"EDX", 4}, {"SI", 2},  {"ESI", 4},
+    {"DI", 2}, {"EDI", 4}, {"BP", 2},  {"EBP", 4}, {"SP", 2},  {"ESP", 4}};
+
+std::map<int, std::string> SemanticAnalyzer::sizeValueToStr = {{1, "BYTE"}, {2, "WORD"}, {4, "DWORD"}};
+
+SemanticAnalyzer::SemanticAnalyzer(std::shared_ptr<ParseSession> parseSession, ASTPtr ast)
+    : parseSess(std::move(parseSession)), ast(std::move(ast))
+{
+}
+
+void SemanticAnalyzer::analyze() { visit(ast); }
+
+void SemanticAnalyzer::visit(const ASTPtr &node)
+{
+    if (auto program = std::dynamic_pointer_cast<Program>(node)) {
+        for (const auto &statement : program->statements) {
+            visitStatement(statement);
+        }
+        if (program->endDir) {
+            visitDirective(program->endDir);
+        }
+    } else {
+        LOG_DETAILED_ERROR("Unknown AST node type in visit.");
+    }
+}
+
+void SemanticAnalyzer::visitStatement(const std::shared_ptr<Statement> &statement)
+{
+    panicLine = false;
+    if (INVALID(statement)) {
+        return;
+    }
+    if (auto instruction = std::dynamic_pointer_cast<Instruction>(statement)) {
+        visitInstruction(instruction);
+    } else if (auto directive = std::dynamic_pointer_cast<Directive>(statement)) {
+        visitDirective(directive);
+    } else if (auto labelDef = std::dynamic_pointer_cast<LabelDef>(statement)) {
+        visitLabelDef(labelDef);
+    } else {
+        LOG_DETAILED_ERROR("Unknown statement type.");
+    }
+}
+
+void SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &instruction)
+{
+    if (instruction->label) {
+        visitLabelDef(instruction->label.value());
+    }
+    for (const auto &operand : instruction->operands) {
+        visitExpression(operand, ExpressionContext::InstructionOperand);
+        if (operand->type == OperandType::UnfinishedMemoryOperand) {
+            reportInvalidAddressExpression(operand);
+        }
+    }
+
+    // TODO: Perform operand type checking and instruction validation
+}
+
+void SemanticAnalyzer::visitDirective(const std::shared_ptr<Directive> &directive)
+{
+    if (auto segDir = std::dynamic_pointer_cast<SegDir>(directive)) {
+        visitSegDir(segDir);
+    } else if (auto dataDir = std::dynamic_pointer_cast<DataDir>(directive)) {
+        visitDataDir(dataDir);
+    } else if (auto structDir = std::dynamic_pointer_cast<StructDir>(directive)) {
+        visitStructDir(structDir);
+    } else if (auto equDir = std::dynamic_pointer_cast<EquDir>(directive)) {
+        visitEquDir(equDir);
+    } else if (auto equalDir = std::dynamic_pointer_cast<EqualDir>(directive)) {
+        visitEqualDir(equalDir);
+    } else if (auto endDir = std::dynamic_pointer_cast<EndDir>(directive)) {
+        visitEndDir(endDir);
+    } else {
+        LOG_DETAILED_ERROR("Unknown directive type.");
+    }
+}
+
+void SemanticAnalyzer::visitLabelDef(const std::shared_ptr<LabelDef> & /*labelDef*/)
+{
+    // Check if the label is already defined
+}
+
+void SemanticAnalyzer::visitSegDir(const std::shared_ptr<SegDir> &segDir)
+{
+    if (segDir->constExpr) {
+        visitExpression(segDir->constExpr.value(), ExpressionContext::DataDefinition);
+    }
+}
+
+void SemanticAnalyzer::visitDataDir(const std::shared_ptr<DataDir> &dataDir)
+{
+    visitDataItem(dataDir->dataItem);
+}
+
+void SemanticAnalyzer::visitStructDir(const std::shared_ptr<StructDir> &structDir)
+{
+    for (const auto &field : structDir->fields) {
+        if (INVALID(field)) {
+            continue;
+        }
+        panicLine = false;
+        visitDataDir(field);
+    }
+}
+
+void SemanticAnalyzer::visitEquDir(const std::shared_ptr<EquDir> &equDir)
+{
+    visitExpression(equDir->value, ExpressionContext::DataDefinition);
+}
+
+void SemanticAnalyzer::visitEqualDir(const std::shared_ptr<EqualDir> &equalDir)
+{
+    visitExpression(equalDir->value, ExpressionContext::DataDefinition);
+}
+
+void SemanticAnalyzer::visitEndDir(const std::shared_ptr<EndDir> &endDir)
+{
+    if (endDir->addressExpr) {
+        visitExpression(endDir->addressExpr.value(), ExpressionContext::DataDefinition);
+    }
+}
+
+void SemanticAnalyzer::visitDataItem(const std::shared_ptr<DataItem> &dataItem)
+{
+    if (auto builtinInstance = std::dynamic_pointer_cast<BuiltinInstance>(dataItem)) {
+        Token dataTypeToken = builtinInstance->dataTypeToken;
+        std::string dataType = stringToUpper(dataTypeToken.lexeme);
+
+        // Visit initialization values
+        visitInitValue(builtinInstance->initValues, dataType);
+
+    } else if (auto recordInstance = std::dynamic_pointer_cast<RecordInstance>(dataItem)) {
+        // TODO: Implement record instance processing
+        LOG_DETAILED_ERROR("Record instances are not yet implemented.");
+    } else if (auto structInstance = std::dynamic_pointer_cast<StructInstance>(dataItem)) {
+        // TODO: Implement struct instance processing
+        LOG_DETAILED_ERROR("Struct instances are not yet implemented.");
+    } else {
+        LOG_DETAILED_ERROR("Unknown data item type.");
+    }
+}
+
+void SemanticAnalyzer::visitInitValue(const std::shared_ptr<InitValue> &initValue, const std::string &dataType)
+{
+    if (auto dupOperator = std::dynamic_pointer_cast<DupOperator>(initValue)) {
+        // Process DUP operator
+        visitExpression(dupOperator->repeatCount, ExpressionContext::DataDefinition);
+
+        // Visit operands
+        visitInitValue(dupOperator->operands, dataType);
+
+    } else if (auto questionMarkInitValue = std::dynamic_pointer_cast<QuestionMarkInitValue>(initValue)) {
+        // Uninitialized data; no action needed
+
+    } else if (auto expressionInitValue = std::dynamic_pointer_cast<ExpressionInitValue>(initValue)) {
+        // Process expression init value
+        visitExpression(expressionInitValue->expr, ExpressionContext::DataDefinition);
+
+        // TODO: Implement type checking between expression and data type
+
+    } else if (auto structOrRecordInitValue = std::dynamic_pointer_cast<StructOrRecordInitValue>(initValue)) {
+        // Process struct or record initialization
+        visitInitValue(structOrRecordInitValue->fields, dataType);
+
+    } else if (auto initList = std::dynamic_pointer_cast<InitializerList>(initValue)) {
+        for (const auto &init : initList->fields) {
+            visitInitValue(init, dataType);
+        }
+    } else {
+        LOG_DETAILED_ERROR("Unknown initialization value type.");
+    }
+}
+
+void SemanticAnalyzer::visitExpression(const ExpressionPtr &node, ExpressionContext context)
+{
+    expressionDepth = 0;
+    visitExpressionHelper(node, context);
+}
+
+void SemanticAnalyzer::visitExpressionHelper(const ExpressionPtr &node, ExpressionContext context)
+{
+    expressionDepth++;
+    if (auto brackets = std::dynamic_pointer_cast<Brackets>(node)) {
+        visitBrackets(brackets, context);
+    } else if (auto squareBrackets = std::dynamic_pointer_cast<SquareBrackets>(node)) {
+        visitSquareBrackets(squareBrackets, context);
+    } else if (auto implicitPlus = std::dynamic_pointer_cast<ImplicitPlusOperator>(node)) {
+        visitImplicitPlusOperator(implicitPlus, context);
+    } else if (auto binaryOp = std::dynamic_pointer_cast<BinaryOperator>(node)) {
+        visitBinaryOperator(binaryOp, context);
+    } else if (auto unaryOp = std::dynamic_pointer_cast<UnaryOperator>(node)) {
+        visitUnaryOperator(unaryOp, context);
+    } else if (auto leaf = std::dynamic_pointer_cast<Leaf>(node)) {
+        visitLeaf(leaf, context);
+    } else {
+        LOG_DETAILED_ERROR("Unknown expression ptr node");
+    }
+    expressionDepth--;
+}
+
+void SemanticAnalyzer::visitBrackets(const std::shared_ptr<Brackets> &node, ExpressionContext context)
+{
+    visitExpressionHelper(node->operand, context);
+
+    auto operand = node->operand;
+    node->constantValue = operand->constantValue;
+    node->isRelocatable = operand->isRelocatable;
+    node->type = operand->type;
+    node->size = operand->size;
+    node->registers = operand->registers;
+}
+
+void SemanticAnalyzer::visitSquareBrackets(const std::shared_ptr<SquareBrackets> &node, ExpressionContext context)
+{
+    visitExpressionHelper(node->operand, context);
+
+    auto operand = node->operand;
+    node->constantValue = operand->constantValue;
+    node->isRelocatable = operand->isRelocatable;
+    if (operand->type == OperandType::UnfinishedMemoryOperand) {
+        // check we only have 32 bit regsiters, and dont have 2 esp
+        // delay checking for this, because for (esp + esp) we want to report can have registers in expressions
+        // dont want to call this (reportInvalidAddressExpression())
+        bool implicit = false;
+        ExpressionPtr expr;
+        std::shared_ptr<BinaryOperator> binOp;
+        std::shared_ptr<ImplicitPlusOperator> implicitPlusOp;
+        if ((binOp = std::dynamic_pointer_cast<BinaryOperator>(operand))) {
+            implicit = false;
+            // Check that we have [eax * 5] in []
+            if (binOp->op.lexeme == "+") {
+                bool firstIsRegisterWithOptionalScale = binOp->left->type == OperandType::RegisterOperand;
+                if (auto binOpLeft = std::dynamic_pointer_cast<BinaryOperator>(binOp->left)) {
+                    if (binOpLeft->op.lexeme == "*" && (binOpLeft->left->type == OperandType::RegisterOperand ||
+                                                        binOpLeft->right->type == OperandType::RegisterOperand)) {
+                        firstIsRegisterWithOptionalScale = true;
+                    }
+                }
+                bool firstIsConstant = bool(binOp->left->constantValue);
+                bool secondIsRegisterWithOptionalScale = binOp->right->type == OperandType::RegisterOperand;
+                if (auto binOpRight = std::dynamic_pointer_cast<BinaryOperator>(binOp->right)) {
+                    if (binOpRight->op.lexeme == "*" && (binOpRight->left->type == OperandType::RegisterOperand ||
+                                                         binOpRight->right->type == OperandType::RegisterOperand)) {
+                        secondIsRegisterWithOptionalScale = true;
+                    }
+                }
+                bool secondIsConstant = bool(binOp->right->constantValue);
+                if ((firstIsConstant && secondIsRegisterWithOptionalScale) ||
+                    (firstIsRegisterWithOptionalScale && secondIsConstant)) {
+                    // allowed
+                } else {
+                    node->type = OperandType::InvalidOperand;
+                    reportNonRegisterInSquareBrackets(binOp);
+                    return;
+                }
+            } else if (binOp->op.lexeme != "*") {
+                node->type = OperandType::InvalidOperand;
+                reportNonRegisterInSquareBrackets(binOp);
+                return;
+            }
+            expr = binOp;
+        } else if ((implicitPlusOp = std::dynamic_pointer_cast<ImplicitPlusOperator>(operand))) {
+            // report error, beacuse can't have [[eax][ebx]]
+            node->type = OperandType::InvalidOperand;
+            reportNonRegisterInSquareBrackets(binOp);
+            return;
+        } else {
+            LOG_DETAILED_ERROR("Unexpected operand type!\n");
+        }
+        bool non32bitRegister = false;
+        int espCount = 0;
+        for (const auto &[regToken, scale] : operand->registers) {
+            if (registerSizes[stringToUpper(regToken.lexeme)] != 4) {
+                non32bitRegister = true;
+            }
+            if (stringToUpper(regToken.lexeme) == "ESP") {
+                espCount += 1;
+            }
+        }
+
+        if (non32bitRegister) {
+            node->type = OperandType::InvalidOperand;
+            reportNon32bitRegister(expr, implicit);
+            return;
+        }
+        if (espCount == 2) {
+            node->type = OperandType::InvalidOperand;
+            reportTwoEsp(expr, implicit);
+            return;
+        }
+        node->type = OperandType::MemoryOperand;
+    } else if (operand->type == OperandType::RegisterOperand) {
+        bool non32bitRegister = false;
+        for (const auto &[regToken, scale] : operand->registers) {
+            if (registerSizes[stringToUpper(regToken.lexeme)] != 4) {
+                non32bitRegister = true;
+            }
+        }
+        if (non32bitRegister) {
+            node->type = OperandType::InvalidOperand;
+            reportNon32bitRegister(operand, true);
+            return;
+        }
+        node->type = OperandType::MemoryOperand;
+    } else {
+        node->type = operand->type;
+    }
+    if (operand->registers.empty()) {
+        node->size = operand->size;
+    } else {
+        // modifiactors reset known size
+        node->size = std::nullopt;
+    }
+    node->registers = operand->registers;
+}
+
+void SemanticAnalyzer::visitImplicitPlusOperator(const std::shared_ptr<ImplicitPlusOperator> &node,
+                                                 ExpressionContext context)
+{
+    visitExpressionHelper(node->left, context);
+    visitExpressionHelper(node->right, context);
+
+    auto left = node->left;
+    auto right = node->right;
+
+    if (left->isRelocatable && right->isRelocatable) {
+        node->type = OperandType::InvalidOperand;
+        reportCantAddVariables(node, true);
+        return;
+    }
+    // check that we have not more then 2 registers, and only one has scale (eax * 1) is counted as having scale
+    if (left->registers.size() + right->registers.size() > 2) {
+        node->type = OperandType::InvalidOperand;
+        reportMoreThanTwoRegistersAfterAdd(node, true);
+        return;
+    }
+
+    auto newRegisters = left->registers;
+    for (const auto &[regToken, scale] : right->registers) {
+        newRegisters[regToken] = scale;
+    }
+    // ensure only one has scale
+    int scaleCount = 0;
+    for (const auto &[regToken, scale] : newRegisters) {
+        if (newRegisters[regToken].has_value()) {
+            scaleCount += 1;
+        }
+    }
+    if (scaleCount > 1) {
+        node->type = OperandType::InvalidOperand;
+        reportMoreThanOneScaleAfterAdd(node, true);
+        return;
+    }
+
+    // check we only have 32 bit regsiters, and dont have 2 esp
+    // in implicit plus - need to check immediately
+    // to detect [esp][esp]
+    // for esp + esp - want to have error - can't have regsiters in expressions
+    bool non32bitRegister = false;
+    int espCount = 0;
+    for (const auto &[regToken, scale] : newRegisters) {
+        if (registerSizes[stringToUpper(regToken.lexeme)] != 4) {
+            non32bitRegister = true;
+        }
+        if (stringToUpper(regToken.lexeme) == "ESP") {
+            espCount += 1;
+        }
+    }
+
+    if (non32bitRegister) {
+        node->type = OperandType::InvalidOperand;
+        reportNon32bitRegister(node, true);
+        return;
+    }
+    if (espCount == 2) {
+        node->type = OperandType::InvalidOperand;
+        reportTwoEsp(node, true);
+        return;
+    }
+
+    if (left->constantValue && right->constantValue) {
+        node->constantValue = left->constantValue.value() + right->constantValue.value();
+    } else {
+        node->constantValue = std::nullopt;
+    }
+    node->isRelocatable = left->isRelocatable || right->isRelocatable;
+
+    if (left->type == OperandType::ImmediateOperand && right->type == OperandType::ImmediateOperand) {
+        node->type = OperandType::ImmediateOperand;
+    } else if (left->type == OperandType::RegisterOperand || right->type == OperandType::RegisterOperand) {
+        node->type = OperandType::UnfinishedMemoryOperand;
+    } else if (left->type == OperandType::UnfinishedMemoryOperand ||
+               right->type == OperandType::UnfinishedMemoryOperand) {
+        node->type = OperandType::UnfinishedMemoryOperand;
+    } else if (left->type == OperandType::MemoryOperand || right->type == OperandType::MemoryOperand) {
+        node->type = OperandType::MemoryOperand;
+    } else {
+        // shouldn't happen (except in OperandType::InvalidOperand)
+    }
+
+    if (!left->size || !right->size) {
+        node->size = std::nullopt;
+    } else {
+        // TODO: report that operands have different sizes
+        node->size = left->size;
+    }
+    node->registers = newRegisters;
+}
+
+void SemanticAnalyzer::visitBinaryOperator(const std::shared_ptr<BinaryOperator> &node, ExpressionContext context)
+{
+    visitExpressionHelper(node->left, context);
+    visitExpressionHelper(node->right, context);
+
+    std::string op = stringToUpper(node->op.lexeme);
+    auto left = node->left;
+    auto right = node->right;
+
+    if (op == ".") {
+        if (left->type == OperandType::UnfinishedMemoryOperand) {
+            node->type = OperandType::InvalidOperand;
+            reportInvalidAddressExpression(left);
+            return;
+        } else if (right->type == OperandType::UnfinishedMemoryOperand) {
+            node->type = OperandType::InvalidOperand;
+            reportInvalidAddressExpression(right);
+            return;
+        }
+        if (left->type == OperandType::MemoryOperand) {
+            std::shared_ptr<Leaf> leaf;
+            if ((leaf = std::dynamic_pointer_cast<Leaf>(right)) && leaf->token.type == TokenType::Identifier) {
+                // TODO: check that left type has field and that field is valid
+                node->constantValue = std::nullopt;
+                node->isRelocatable = left->isRelocatable;
+                node->type = OperandType::MemoryOperand;
+                node->size = left->size;
+                node->registers = left->registers;
+                return;
+            }
+        }
+        reportDotOperatorIncorrectArgument(node);
+    } else if (op == "PTR") {
+        if (left->type == OperandType::UnfinishedMemoryOperand) {
+            node->type = OperandType::InvalidOperand;
+            reportInvalidAddressExpression(left);
+            return;
+        } else if (right->type == OperandType::UnfinishedMemoryOperand) {
+            node->type = OperandType::InvalidOperand;
+            reportInvalidAddressExpression(right);
+            return;
+        }
+        std::shared_ptr<Leaf> leaf;
+        // CRITICAL TODO: left can also be identifier, if it's a type symbol
+        if ((leaf = std::dynamic_pointer_cast<Leaf>(left)) &&
+            leaf->token.type == TokenType::Type /* !=TokenType::Identifier */) {
+            if (right->type != OperandType::RegisterOperand) {
+                node->constantValue = right->constantValue;
+                node->isRelocatable = right->isRelocatable;
+                node->type = right->type;
+                // TODO: get size from right id symbol table
+                std::string typeOperand = stringToUpper(leaf->token.lexeme);
+                if (typeOperand == "BYTE") {
+                    node->size = OperandSize("BYTE", 1);
+                } else if (typeOperand == "WORD") {
+                    node->size = OperandSize("WORD", 2);
+                } else if (typeOperand == "DWORD") {
+                    node->size = OperandSize("DWORD", 4);
+                } else if (typeOperand == "QWORD") {
+                    node->size = OperandSize("QWORD", 8);
+                }
+                node->registers = right->registers;
+                return;
+            }
+        }
+        reportPtrOperatorIncorrectArgument(node);
+    } else if (op == "*" || op == "/" || op == "MOD" || op == "SHL" || op == "SHR") {
+        // can check this immediately cause eax * 4, eax is RegisterOperand
+        if (left->type == OperandType::UnfinishedMemoryOperand) {
+            node->type = OperandType::InvalidOperand;
+            reportInvalidAddressExpression(left);
+            return;
+        } else if (right->type == OperandType::UnfinishedMemoryOperand) {
+            node->type = OperandType::InvalidOperand;
+            reportInvalidAddressExpression(right);
+            return;
+        }
+        // handle eax * 4
+        if (op == "*") {
+            if ((left->constantValue && right->type == OperandType::RegisterOperand) ||
+                (right->constantValue && left->type == OperandType::RegisterOperand)) {
+                int32_t value = 0;
+                std::shared_ptr<Leaf> leafNode;
+                if (left->constantValue) {
+                    value = left->constantValue.value();
+                    leafNode = std::dynamic_pointer_cast<Leaf>(right);
+                } else {
+                    value = right->constantValue.value();
+                    leafNode = std::dynamic_pointer_cast<Leaf>(left);
+                }
+                if (value != 1 && value != 2 && value != 4 && value != 8) {
+                    node->type = OperandType::InvalidOperand;
+                    reportInvalidScaleValue(node);
+                    return;
+                }
+                if (stringToUpper(leafNode->token.lexeme) == "ESP") {
+                    node->type = OperandType::InvalidOperand;
+                    reportIncorrectIndexRegister(leafNode);
+                    return;
+                }
+
+                node->constantValue = std::nullopt;
+                node->isRelocatable = false;
+                node->type = OperandType::UnfinishedMemoryOperand;
+                node->size = std::nullopt;
+                if (left->type == OperandType::RegisterOperand) {
+                    std::shared_ptr<Leaf> leftLeaf = std::dynamic_pointer_cast<Leaf>(left);
+                    node->registers[leftLeaf->token] = value;
+                } else {
+                    std::shared_ptr<Leaf> rightLeaf = std::dynamic_pointer_cast<Leaf>(right);
+                    node->registers[rightLeaf->token] = value;
+                }
+                return;
+            }
+        }
+        if (left->constantValue && right->constantValue) {
+            if (op == "*") {
+                node->constantValue = left->constantValue.value() * right->constantValue.value();
+            } else if (op == "/") {
+                if (right->constantValue.value() == 0) {
+                    node->type = OperandType::InvalidOperand;
+                    reportDivisionByZero(node);
+                    return;
+                }
+                node->constantValue = left->constantValue.value() / right->constantValue.value();
+            } else if (op == "MOD") {
+                if (right->constantValue.value() == 0) {
+                    node->type = OperandType::InvalidOperand;
+                    reportDivisionByZero(node);
+                    return;
+                }
+                node->constantValue = left->constantValue.value() % right->constantValue.value();
+            } else if (op == "SHL") {
+                // TODO: calculate SHL
+                node->constantValue = 0;
+            } else if (op == "SHR") {
+                // TODO: calculate SHR
+                node->constantValue = 0;
+            }
+
+            node->constantValue = right->constantValue;
+            node->isRelocatable = right->isRelocatable;
+            node->type = right->type;
+            node->size = OperandSize("DWORD", 4);
+            node->registers = left->registers;
+            return;
+        }
+
+        reportOtherBinaryOperatorIncorrectArgument(node);
+    } else if (op == "+") {
+        if (left->isRelocatable && right->isRelocatable) {
+            node->type = OperandType::InvalidOperand;
+            reportCantAddVariables(node, false);
+            return;
+        }
+        // check that we have not more then 2 registers, and only one has scale (eax * 1) is counted as having scale
+        if (left->registers.size() + right->registers.size() > 2) {
+            node->type = OperandType::InvalidOperand;
+            reportMoreThanTwoRegistersAfterAdd(node, false);
+            return;
+        }
+
+        auto newRegisters = left->registers;
+        for (const auto &[regToken, scale] : right->registers) {
+            newRegisters[regToken] = scale;
+        }
+        // ensure only one has scale
+        int scaleCount = 0;
+        for (const auto &[regToken, scale] : newRegisters) {
+            if (newRegisters[regToken].has_value()) {
+                scaleCount += 1;
+            }
+        }
+        if (scaleCount > 1) {
+            node->type = OperandType::InvalidOperand;
+            reportMoreThanOneScaleAfterAdd(node, false);
+            return;
+        }
+        // check we only have 32 bit regsiters, and dont have 2 esp
+        // checking for this is delayed until operator []
+        if (left->constantValue && right->constantValue) {
+            node->constantValue = left->constantValue.value() + right->constantValue.value();
+        } else {
+            node->constantValue = std::nullopt;
+        }
+        node->isRelocatable = left->isRelocatable || right->isRelocatable;
+
+        if (left->type == OperandType::ImmediateOperand && right->type == OperandType::ImmediateOperand) {
+            node->type = OperandType::ImmediateOperand;
+        } else if (left->type == OperandType::RegisterOperand || right->type == OperandType::RegisterOperand) {
+            node->type = OperandType::UnfinishedMemoryOperand;
+        } else if (left->type == OperandType::UnfinishedMemoryOperand ||
+                   right->type == OperandType::UnfinishedMemoryOperand) {
+            node->type = OperandType::UnfinishedMemoryOperand;
+        } else if (left->type == OperandType::MemoryOperand || right->type == OperandType::MemoryOperand) {
+            node->type = OperandType::MemoryOperand;
+        } else {
+            // shouldn't happen (except in OperandType::InvalidOperand)
+        }
+
+        if (!left->size || !right->size) {
+            node->size = std::nullopt;
+        } else {
+            // TODO: report that operands have different sizes
+            node->size = left->size;
+        }
+        node->registers = newRegisters;
+        return;
+
+    } else if (op == "-") {
+        if (!(left->registers.empty() && left->isRelocatable) && !right->constantValue) {
+            node->type = OperandType::InvalidOperand;
+
+            // need to check this after, cause after `-` can still be UnsinishedMemoryOperand
+            if (left->type == OperandType::UnfinishedMemoryOperand) {
+                reportInvalidAddressExpression(left);
+                return;
+            } else if (right->type == OperandType::UnfinishedMemoryOperand) {
+                reportInvalidAddressExpression(right);
+                return;
+            }
+            node->type = OperandType::InvalidOperand;
+            reportBinaryMinusOperatorIncorrectArgument(node);
+            return;
+        }
+
+        if (left->registers.empty() && left->isRelocatable) {
+            // left is an adress expression, right can be an address expression or constant
+            if (right->constantValue) {
+                node->constantValue = left->constantValue.value() - right->constantValue.value();
+                node->isRelocatable = false;
+                node->type = OperandType::ImmediateOperand;
+                node->size = OperandSize("DWORD", 4);
+                node->registers = {};
+                return;
+            } else if (right->isRelocatable && right->registers.empty()) {
+                node->constantValue = 1; // TODO: calculate actual constant value of the differece between 2 relocations
+                node->isRelocatable = false;
+                node->type = OperandType::ImmediateOperand;
+                node->size = OperandSize("DWORD", 4);
+                node->registers = {};
+                return;
+            }
+        }
+        // left is not an adress expression, right must be constant
+        else if (right->constantValue) {
+            if (left->constantValue) {
+                node->constantValue = left->constantValue.value() - right->constantValue.value();
+
+            } else {
+                node->constantValue = left->constantValue;
+            }
+            node->isRelocatable = left->isRelocatable;
+            if (left->type == OperandType::RegisterOperand) {
+                node->type = OperandType::UnfinishedMemoryOperand;
+            } else {
+                node->type = left->type;
+            }
+            node->size = left->size;
+            node->registers = left->registers;
+            return;
+        }
+
+    } else {
+        LOG_DETAILED_ERROR("Unknown binary operator!");
+    }
+}
+
+void SemanticAnalyzer::visitUnaryOperator(const std::shared_ptr<UnaryOperator> &node, ExpressionContext context)
+{
+    visitExpressionHelper(node->operand, context);
+
+    std::string op = stringToUpper(node->op.lexeme);
+    auto operand = node->operand;
+
+    if (op == "LENGTH" || op == "LENGTHOF") {
+        if (operand->type == OperandType::UnfinishedMemoryOperand) {
+            node->type = OperandType::InvalidOperand;
+            reportInvalidAddressExpression(operand);
+            return;
+        }
+        std::shared_ptr<Leaf> leaf;
+        // operand must be identifier
+        if (!(leaf = std::dynamic_pointer_cast<Leaf>(operand)) || leaf->token.type != TokenType::Identifier) {
+            node->type = OperandType::InvalidOperand;
+            reportUnaryOperatorIncorrectArgument(node);
+            return;
+        }
+        // TODO: calculate actual size
+        node->constantValue = 1;
+        node->isRelocatable = false;
+        node->type = OperandType::ImmediateOperand;
+        node->size = OperandSize("DWORD", 4);
+        node->registers = {};
+    } else if (op == "SIZE" || op == "SIZEOF") {
+        if (operand->type == OperandType::UnfinishedMemoryOperand) {
+            node->type = OperandType::InvalidOperand;
+            reportInvalidAddressExpression(operand);
+            return;
+        }
+        std::shared_ptr<Leaf> leaf;
+        // operand must be identifier
+        if (!(leaf = std::dynamic_pointer_cast<Leaf>(operand)) || leaf->token.type != TokenType::Identifier) {
+            node->type = OperandType::InvalidOperand;
+            reportUnaryOperatorIncorrectArgument(node);
+            return;
+        }
+        // TODO: calculate actual size
+        node->constantValue = 1;
+        node->isRelocatable = false;
+        node->type = OperandType::ImmediateOperand;
+        node->size = OperandSize("DWORD", 4);
+        node->registers = {};
+
+    } else if (op == "WIDTH" || op == "MASK") {
+        if (operand->type == OperandType::UnfinishedMemoryOperand) {
+            node->type = OperandType::InvalidOperand;
+            reportInvalidAddressExpression(operand);
+            return;
+        }
+        std::shared_ptr<Leaf> leaf;
+        // operand must be identifier
+        if (!(leaf = std::dynamic_pointer_cast<Leaf>(operand)) || leaf->token.type != TokenType::Identifier) {
+            node->type = OperandType::InvalidOperand;
+            reportUnaryOperatorIncorrectArgument(node);
+            return;
+        }
+        // TODO: check that leaf->token id is a record type (or field of record)
+        // TODO: calculate actual size
+        node->constantValue = 1;
+        node->isRelocatable = false;
+        node->type = OperandType::ImmediateOperand;
+        node->size = OperandSize("DWORD", 4);
+        node->registers = {};
+
+    } else if (op == "OFFSET") {
+        if (operand->type == OperandType::UnfinishedMemoryOperand) {
+            node->type = OperandType::InvalidOperand;
+            reportInvalidAddressExpression(operand);
+            return;
+        }
+        // operand must be adress expression
+        if (operand->constantValue || !operand->registers.empty()) {
+            node->type = OperandType::InvalidOperand;
+            reportUnaryOperatorIncorrectArgument(node);
+            return;
+        }
+        node->constantValue = operand->constantValue;
+        node->isRelocatable = operand->isRelocatable;
+        node->type = OperandType::ImmediateOperand;
+        node->size = operand->size;
+        node->registers = operand->registers;
+
+    } else if (op == "TYPE") {
+        if (operand->type == OperandType::UnfinishedMemoryOperand) {
+            node->type = OperandType::InvalidOperand;
+            reportInvalidAddressExpression(operand);
+            return;
+        }
+
+        if (!operand->size) {
+            node->constantValue = 0;
+            warnTypeReturnsZero(node);
+        } else {
+            node->constantValue = operand->size.value().value;
+        }
+        node->isRelocatable = false;
+        node->type = OperandType::ImmediateOperand;
+        node->size = OperandSize("DWORD", 4);
+        node->registers = {};
+        return;
+    } else if (op == "+" || op == "-") {
+        if (operand->type == OperandType::UnfinishedMemoryOperand) {
+            node->type = OperandType::InvalidOperand;
+            reportInvalidAddressExpression(operand);
+            return;
+        }
+        // operand must be constant value
+        if (!operand->constantValue) {
+            node->type = OperandType::InvalidOperand;
+            reportUnaryOperatorIncorrectArgument(node);
+            return;
+        }
+        if (op == "-") {
+            node->constantValue = -operand->constantValue.value();
+        } else if (op == "+") {
+            node->constantValue = operand->constantValue;
+        }
+        node->isRelocatable = false;
+        node->type = OperandType::ImmediateOperand;
+        node->size = OperandSize("DWORD", 4);
+        node->registers = {};
+    } else {
+        LOG_DETAILED_ERROR("Unknown unary operator!");
+    }
+}
+
+void SemanticAnalyzer::visitLeaf(const std::shared_ptr<Leaf> &node, ExpressionContext context)
+{
+    Token token = node->token;
+
+    if (token.type == TokenType::Identifier) {
+        // TODO: check if symbol is defined
+        node->constantValue = std::nullopt;
+        // TODO: if symbol is struct fields -> then it's not relocatable (fixed a bug in finding 2 variables that are added in [erx].a.b[evx])
+        node->isRelocatable = true;
+        node->size = OperandSize("DWORD", 4); // TODO: get size from symbol table
+        node->type = OperandType::MemoryOperand;
+        node->registers = {};
+        // TODO: check if symbol is type and other properties from symbol table
+    } else if (token.type == TokenType::Number) {
+        auto numberValue = parseNumber(token.lexeme);
+        if (!numberValue) {
+            node->type = OperandType::InvalidOperand;
+            reportNumberTooLarge(token);
+            return;
+        }
+        node->constantValue = numberValue;
+        node->isRelocatable = false;
+        node->size = OperandSize("DWORD", 4);
+        node->type = OperandType::ImmediateOperand;
+        node->registers = {};
+    } else if (token.type == TokenType::StringLiteral) {
+        // if expressionDepth == 1 in DataDefiniton context - string literal can be any length
+        // any other - needs to be less than 4 bytes
+        // size() + 2, because " " are in the lexeme
+        if (context == ExpressionContext::InstructionOperand && token.lexeme.size() > 4 + 2) {
+            node->type = OperandType::InvalidOperand;
+            reportStringTooLarge(token);
+            return;
+        }
+        node->constantValue = 0; // TODO: convert string value to bytes and then to int32_t
+        node->isRelocatable = false;
+        node->size = OperandSize("DWORD", 4);
+        node->type = OperandType::ImmediateOperand;
+        node->registers = {};
+    } else if (token.type == TokenType::Register) {
+        if (context == ExpressionContext::DataDefinition) {
+            node->type = OperandType::InvalidOperand;
+            reportRegisterNotAllowed(token);
+            return;
+        }
+        node->constantValue = std::nullopt;
+        node->isRelocatable = false;
+        int value = registerSizes[stringToUpper(token.lexeme)];
+        node->size = OperandSize(sizeValueToStr[value], value);
+        node->type = OperandType::RegisterOperand;
+        node->registers[token] = std::nullopt;
+    } else if (token.type == TokenType::Dollar) {
+        node->constantValue = std::nullopt;
+        node->isRelocatable = true;
+        node->type = OperandType::ImmediateOperand;
+        node->size = OperandSize("DWORD", 4);
+        node->registers = {};
+    } else if (token.type == TokenType::Type) {
+        // TODO if expressionDepth == 1 - report error (operand can't be a type)
+        node->constantValue = std::nullopt;
+        node->isRelocatable = false;
+        node->type = OperandType::InvalidOperand;
+        node->size = std::nullopt;
+        node->registers = {};
+    } else {
+        LOG_DETAILED_ERROR("Unkown leaf token!");
+    }
+}
+
 File semantic_analyzer.h:
 
 #pragma once
@@ -2545,7 +3578,21 @@ public:
 private:
     void visit(const ASTPtr &node);
 
-    void visitStatement(const std::shared_ptr<Statement> statement);
+    void visitStatement(const std::shared_ptr<Statement> &statement);
+    void visitInstruction(const std::shared_ptr<Instruction> &instruction);
+    void visitDirective(const std::shared_ptr<Directive> &directive);
+    void visitLabelDef(const std::shared_ptr<LabelDef> &labelDef);
+
+    void visitSegDir(const std::shared_ptr<SegDir> &segDir);
+    void visitDataDir(const std::shared_ptr<DataDir> &dataDir);
+    void visitStructDir(const std::shared_ptr<StructDir> &structDir);
+    void visitEquDir(const std::shared_ptr<EquDir> &equDir);
+    void visitEqualDir(const std::shared_ptr<EqualDir> &equalDir);
+    void visitEndDir(const std::shared_ptr<EndDir> &endDir);
+
+    void visitDataItem(const std::shared_ptr<DataItem> &dataItem);
+    void visitInitValue(const std::shared_ptr<InitValue> &initValue, const std::string &dataType);
+    void visitInitializerList(const std::shared_ptr<InitializerList> &initList, const std::string &dataType);
 
     // ASTexpression nodes
     void visitExpression(const ExpressionPtr &node, ExpressionContext context);
@@ -2557,6 +3604,7 @@ private:
     void visitUnaryOperator(const std::shared_ptr<UnaryOperator> &node, ExpressionContext context);
     void visitLeaf(const std::shared_ptr<Leaf> &node, ExpressionContext context);
 
+    void reportRegisterNotAllowed(const Token &reg);
     void reportNumberTooLarge(const Token &number);
     void reportStringTooLarge(const Token &string);
     void reportUnaryOperatorIncorrectArgument(const std::shared_ptr<UnaryOperator> &node);
@@ -2573,6 +3621,7 @@ private:
     void reportTwoEsp(const ExpressionPtr &node, bool implicit);
     void reportNon32bitRegister(const ExpressionPtr &node, bool implicit);
     void reportBinaryMinusOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node);
+    void reportNonRegisterInSquareBrackets(const std::shared_ptr<BinaryOperator> &node);
 
     void warnTypeReturnsZero(const std::shared_ptr<UnaryOperator> &node);
 
@@ -2689,6 +3738,18 @@ std::string getOperandType(const ExpressionPtr &node)
     } else {
         return "address expression with modificators";
     }
+}
+
+void SemanticAnalyzer::reportRegisterNotAllowed(const Token &reg)
+{
+    if (panicLine) {
+        return;
+    }
+    panicLine = true;
+
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::REGISTER_NOT_ALLOWED);
+    diag.addPrimaryLabel(reg.span, "");
+    parseSess->dcx->addDiagnostic(diag);
 }
 
 void SemanticAnalyzer::reportNumberTooLarge(const Token &number)
@@ -3006,6 +4067,12 @@ void SemanticAnalyzer::findRelocatableVariables(const ExpressionPtr &node, std::
         return;
     }
     if (auto binaryOp = std::dynamic_pointer_cast<BinaryOperator>(node)) {
+        if (binaryOp->op.lexeme == ".") {
+            if (binaryOp->left->isRelocatable) {
+                findRelocatableVariables(binaryOp->left, firstVar, secondVar);
+                return;
+            }
+        }
         if (binaryOp->left->isRelocatable) {
             findRelocatableVariables(binaryOp->left, firstVar, secondVar);
         }
@@ -3206,6 +4273,13 @@ void SemanticAnalyzer::reportNon32bitRegister(const ExpressionPtr &node, bool im
 
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::NON_32BIT_REGISTER);
 
+    if (auto reg = std::dynamic_pointer_cast<Leaf>(node)) {
+        int size = registerSizes[stringToUpper(reg->token.lexeme)];
+        diag.addPrimaryLabel(reg->token.span, fmt::format("this is a {} byte register", size));
+        parseSess->dcx->addDiagnostic(diag);
+        return;
+    }
+
     if (implicit) {
         auto implicitOp = std::dynamic_pointer_cast<ImplicitPlusOperator>(node);
         bool first = true;
@@ -3271,6 +4345,19 @@ void SemanticAnalyzer::reportBinaryMinusOperatorIncorrectArgument(const std::sha
     diag.addSecondaryLabel(getExpressionSpan(left), fmt::format("help: this has type `{}`", getOperandType(left)));
     diag.addSecondaryLabel(getExpressionSpan(right), fmt::format("help: this has type `{}`", getOperandType(right)));
 
+    parseSess->dcx->addDiagnostic(diag);
+}
+
+void SemanticAnalyzer::reportNonRegisterInSquareBrackets(const std::shared_ptr<BinaryOperator> &node)
+{
+
+    if (panicLine) {
+        return;
+    }
+    panicLine = true;
+
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::NON_REGISTER_IN_SQUARE_BRACKETS);
+    diag.addPrimaryLabel(getExpressionSpan(node), "");
     parseSess->dcx->addDiagnostic(diag);
 }
 
@@ -3920,37 +5007,34 @@ File tokenize.cpp:
 #include <unordered_set>
 #include <string>
 
-static const std::unordered_set<std::string> directives = {"INCLUDE", "EQU",    "DB",     "DW",    "DD",   "DQ",
-                                                           "END",     ".STACK", ".DATA",  ".CODE", "PROC", "ENDP",
-                                                           "STRUC",   "ENDS",   "RECORD", "="};
+static const std::unordered_set<std::string> directives = {"INCLUDE", "EQU",   "=",      "DB",    "DW",    "DD",
+                                                           "DQ",      "END",   ".STACK", ".DATA", ".CODE", "PROC",
+                                                           "ENDP",    "STRUC", "ENDS",   "RECORD"};
 
 static const std::unordered_set<std::string> reservedWords = {"DUP"};
 
 // delete DUP from here?
-static const std::unordered_set<std::string> operators = {"+",      "-",        "*",     "/",    ".",     "MOD",
-                                                          "SHL",    "SHR",      "PTR",   "TYPE", "SIZE",  "SIZEOF",
+static const std::unordered_set<std::string> operators = {"+",      "-",        "*",     "/",    ".",      "MOD",
+                                                          "SHL",    "SHR",      "PTR",   "TYPE", "SIZE",   "SIZEOF",
                                                           "LENGTH", "LENGTHOF", "WIDTH", "MASK", "OFFSET", "DUP"};
 
 static const std::unordered_set<std::string> types = {"BYTE", "WORD", "DWORD", "QWORD"};
 
 static const std::unordered_set<std::string> instructions = {
-    "MOV",   "XCHG",  "MOVZX", "MOVSX", "DIV",   "IDIV",  "MUL",   "IMUL",  "ADD",   "ADC",   "INC",   "SUB",
-    "SBB",   "DEC",   "NEG",   "JE",    "JNE",   "JA",    "JAE",   "JB",    "JBE",   "JL",    "JLE",   "JG",
-    "JGE",   "JC",    "JNC",   "JZ",    "JNZ",   "JMP",   "CALL",  "RET",   "SHL",   "SHR",   "ROL",   "RCL",
-    "ROR",   "RCR",   "AND",   "OR",    "XOR",   "REP",   "REPE",  "REPNE", "MOVSB", "MOVSW", "MOVSD", "LODSB",
-    "LODSW", "LODSD", "STOSB", "STOSW", "STOSD", "SCASB", "SCASW", "SCASD", "CMPSB", "CMPSW", "CMPSD",
-};
+    "MOV",   "XCHG",  "MOVZX", "MOVSX", "DIV",    "IDIV",    "MUL",    "IMUL",  "ADD",   "ADC",   "INC",   "SUB",
+    "SBB",   "DEC",   "NEG",   "JE",    "JNE",    "JA",      "JAE",    "JB",    "JBE",   "JL",    "JLE",   "JG",
+    "JGE",   "JC",    "JNC",   "JZ",    "JNZ",    "JMP",     "CALL",   "RET",   "SHL",   "SHR",   "ROL",   "RCL",
+    "ROR",   "RCR",   "AND",   "OR",    "XOR",    "REP",     "REPE",   "REPNE", "MOVSB", "MOVSW", "MOVSD", "LODSB",
+    "LODSW", "LODSD", "STOSB", "STOSW", "STOSD",  "SCASB",   "SCASW",  "SCASD", "CMPSB", "CMPSW", "CMPSD", "INCHAR",
+    "ININT", "EXIT",  "OUTI",  "OUTU",  "OUTSTR", "OUTCHAR", "NEWLINE"};
 
 static const std::unordered_set<std::string> registers = {"AL", "AX",  "EAX", "BL",  "BX",  "EBX", "CL",
                                                           "CX", "ECX", "DL",  "DX",  "EDX", "SI",  "ESI",
                                                           "DI", "EDI", "BP",  "EBP", "SP",  "ESP"};
 
-
-
 std::vector<Token> Tokenizer::tokenize()
 {
     size_t length = src.size();
-    std::shared_ptr<SyntaxContextData> context = std::make_shared<SyntaxContextData>();
 
     while (pos < length) {
         skipWhitespace();
@@ -3960,7 +5044,7 @@ std::vector<Token> Tokenizer::tokenize()
         }
 
         if (src[pos] == '\n') {
-            tokens.emplace_back(Token{TokenType::EndOfLine, "", Span(pos, pos + 1, context)});
+            tokens.emplace_back(Token{TokenType::EndOfLine, "", Span(pos, pos + 1, nullptr)});
             ++pos;
             continue; // Skip calling getNextToken() after processing '\n'
         }
@@ -3977,7 +5061,7 @@ std::vector<Token> Tokenizer::tokenize()
 
     // because files always ends with a '\n', we can make EndOfFile span equal to the last '\n'
     // to be able to underline EndOfFile correctly
-    tokens.emplace_back(Token{TokenType::EndOfFile, "", Span(pos - 1, pos, context)});
+    tokens.emplace_back(Token{TokenType::EndOfFile, "", Span(pos - 1, pos, nullptr)});
 
     // TODO: remove testing code
     // Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_NUMBER_FORMAT);
