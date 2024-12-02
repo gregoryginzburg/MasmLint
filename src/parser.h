@@ -52,7 +52,6 @@ private:
     std::shared_ptr<EndDir> parseEndDir();
 
     std::shared_ptr<Instruction> parseInstruction();
-    std::shared_ptr<LabelDef> parseLabelDef();
 
     std::shared_ptr<DataItem> parseDataItem();
     std::shared_ptr<InitValue> parseInitValue();
@@ -76,25 +75,36 @@ private:
     std::shared_ptr<Diagnostic> reportMustBeInSegmentBlock(const Token &firstToken, const Token &lastToken);
 
     // SegDir
-    std::shared_ptr<Diagnostic> reportExpectedSegDir(const Token &token);
+
     // DataDir
     std::shared_ptr<Diagnostic> reportExpectedIdentifierInDataDir(const Token &token);
+
     // StructDir
     std::shared_ptr<Diagnostic> reportExpectedIdentifierBeforeStruc(const Token &token);
-    std::shared_ptr<Diagnostic> reportExpectedIdentifierInStrucDir(const Token& token);
-    std::shared_ptr<Diagnostic> reportExpectedStruc(const Token &token);
-    std::shared_ptr<Diagnostic> reportExpectedDifferentIdentifierInStructDir(const Token &found, const Token& expected);
+    std::shared_ptr<Diagnostic> reportExpectedIdentifierInStrucDir(const Token &token);
+    std::shared_ptr<Diagnostic> reportExpectedDifferentIdentifierInStructDir(const Token &found, const Token &expected);
     std::shared_ptr<Diagnostic> reportExpectedEnds(const Token &token);
     std::shared_ptr<Diagnostic> reportMissingIdentifierBeforeEnds(const Token &token);
-    std::shared_ptr<Diagnostic> reportExpectedEndsDirective(const Token &token);
+
+    // ProcDir
+    std::shared_ptr<Diagnostic> reportExpectedIdentifierBeforeProc(const Token &token);
+    std::shared_ptr<Diagnostic> reportExpectedIdentifierInProcDir(const Token &token);
+    std::shared_ptr<Diagnostic> reportExpectedDifferentIdentifierInProcDir(const Token &found, const Token &expected);
+    std::shared_ptr<Diagnostic> reportExpectedEndp(const Token &token);
+    std::shared_ptr<Diagnostic> reportMissingIdentifierBeforeEndp(const Token &token);
+
+    // EquDir
+    std::shared_ptr<Diagnostic> reportExpectedIdentifierInEquDir(const Token &token);
+    std::shared_ptr<Diagnostic> reportExpectedIdentifierBeforeEqu(const Token &token);
+
+    // EqualDir
+    std::shared_ptr<Diagnostic> reportExpectedIdentifierInEqualDir(const Token &token);
+    std::shared_ptr<Diagnostic> reportExpectedIdentifierBeforeEqual(const Token &token);
 
     // Instruction
     std::shared_ptr<Diagnostic> reportExpectedInstruction(const Token &token);
     std::shared_ptr<Diagnostic> reportExpectedCommaOrEndOfLine(const Token &token);
-
-    // LabelDef
     std::shared_ptr<Diagnostic> reportExpectedIdentifierInLabel(const Token &token);
-    std::shared_ptr<Diagnostic> reportExpectedColonInLabel(const Token &token);
 
     // DataItem
     std::shared_ptr<Diagnostic> reportExpectedVariableNameOrDataDirective(const Token &token);

@@ -21,10 +21,9 @@ DEFINE_ERROR(EXPECTED_END_DIR, "All files must end with the `END` directive")
 
 // Statement
 DEFINE_ERROR(MUST_BE_IN_SEGMENT_BLOCK,
-             "Instructions and data definitions must be in segment blocks (`.CODE` and `.DATA`)")
+             "Instructions and data definitions must be in segment blocks (`.CODE` or `.DATA`)")
 
 // SegDir
-DEFINE_ERROR(EXPECTED_SEG_DIR, "Expected `.CODE` or `.DATA` or `.STACK` directive")
 
 // DataDir
 // EXPECTED_IDENTIFIER_IN_DATA_DIR = EXPECTED_IDENTIFIER
@@ -32,19 +31,29 @@ DEFINE_ERROR(EXPECTED_SEG_DIR, "Expected `.CODE` or `.DATA` or `.STACK` directiv
 // StructDir
 // EXPECTED_IDENTIFIER_IN_STRUCT_DIR = EXPECTED_IDENTIFIER
 DEFINE_ERROR(EXPECTED_IDENTIFIER_BEFORE_STRUC, "Expected a name before `STRUC` directive")
-DEFINE_ERROR(EXPECTED_STRUC, "Expected `STRUC`")
 DEFINE_ERROR(EXPECTED_DIFFERENT_IDENTIFIER_STRUCT_DIR, "`STRUC` names dont't match")
 DEFINE_ERROR(EXPECTED_ENDS, "All `STRUC` definitions must end with the `ENDS` directive")
 DEFINE_ERROR(MISSING_IDENTIFIER_BEFORE_ENDS, "Before `ENDS` directive a `STRUC` name must be specified")
-DEFINE_ERROR(EXPECTED_ENDS_DIRECTIVE, "`STRUC` definition must end with the `ENDS` directive")
+
+// ProcDir
+// EXPECTED_IDENTIFIER_IN_PROC_DIR = EXPECTED_IDENTIFIER
+DEFINE_ERROR(EXPECTED_IDENTIFIER_BEFORE_PROC, "Expected a name before `PROC` directive")
+DEFINE_ERROR(EXPECTED_DIFFERENT_IDENTIFIER_PROC_DIR, "`PROC` names dont't match")
+DEFINE_ERROR(EXPECTED_ENDP, "All `PROC` definitions must end with the `ENDP` directive")
+DEFINE_ERROR(MISSING_IDENTIFIER_BEFORE_ENDP, "Before `ENDP` directive a `PROC` name must be specified")
+
+// EquDir
+// EXPECTED_IDENTIFIER_IN_EQU_DIR = EXPECTED_IDENTIFIER
+DEFINE_ERROR(EXPECTED_IDENTIFIER_BEFORE_EQU, "Expected a name before `EQU` directive")
+
+// EqualDir
+// EXPECTED_IDENTIFIER_IN_EQUAL_DIR = EXPECTED_IDENTIFIER
+DEFINE_ERROR(EXPECTED_IDENTIFIER_BEFORE_EQUAL, "Expected a name before `=` directive")
 
 // Instruction
 DEFINE_ERROR(EXPECTED_INSTRUCTION, "Expected instruction name")
 DEFINE_ERROR(EXPECTED_COMMA_OR_END_OF_LINE, "Expected `,` or `\\n`")
-
-// LabelDef
 // EXPECTED_IDENTIFIER_IN_LABEL = EXPECTED_IDENTIFIER
-DEFINE_ERROR(EXPECTED_COLON, "Expected `:`, found `{}`")
 
 // DataItem
 DEFINE_ERROR(EXPECTED_VARIABLE_NAME_OR_DATA_DIRECTIVE,

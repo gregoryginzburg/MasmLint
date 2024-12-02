@@ -41,8 +41,6 @@ void SemanticAnalyzer::visitStatement(const std::shared_ptr<Statement> &statemen
         visitInstruction(instruction);
     } else if (auto directive = std::dynamic_pointer_cast<Directive>(statement)) {
         visitDirective(directive);
-    } else if (auto labelDef = std::dynamic_pointer_cast<LabelDef>(statement)) {
-        visitLabelDef(labelDef);
     } else {
         LOG_DETAILED_ERROR("Unknown statement type.");
     }
@@ -50,9 +48,6 @@ void SemanticAnalyzer::visitStatement(const std::shared_ptr<Statement> &statemen
 
 void SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &instruction)
 {
-    if (instruction->label) {
-        visitLabelDef(instruction->label.value());
-    }
     for (const auto &operand : instruction->operands) {
         visitExpression(operand, ExpressionContext::InstructionOperand);
         if (operand->type == OperandType::UnfinishedMemoryOperand) {
@@ -82,10 +77,6 @@ void SemanticAnalyzer::visitDirective(const std::shared_ptr<Directive> &directiv
     }
 }
 
-void SemanticAnalyzer::visitLabelDef(const std::shared_ptr<LabelDef> & /*labelDef*/)
-{
-    // Check if the label is already defined
-}
 
 void SemanticAnalyzer::visitSegDir(const std::shared_ptr<SegDir> &segDir)
 {

@@ -167,35 +167,33 @@ std::shared_ptr<Statement> Parser::parseStatement()
         auto diag = reportExpectedIdentifierBeforeStruc(currentToken);
         return INVALID_STATEMENT(diag);
     } else if (match("RECORD")) {
-
+        // TODO:
     } else if (match("PROC")) {
-
+        auto diag = reportExpectedIdentifierBeforeProc(currentToken);
+        return INVALID_STATEMENT(diag);
     } else if (match("EQU")) {
-
+        auto diag = reportExpectedIdentifierBeforeEqu(currentToken);
+        return INVALID_STATEMENT(diag);
     } else if (match("=")) {
+        auto diag = reportExpectedIdentifierBeforeEqual(currentToken);
+        return INVALID_STATEMENT(diag);
     }
 
     if (lookaheadMatch(1, "STRUC")) {
         return parseStructDir();
-        // } else if (lookaheadMatch(1, "RECORD")) {
-        //     return parseRecordDir();
-        // } else if (lookaheadMatch(1, "PROC")) {
-        //     return parseProcDir();
-        // } else if (lookaheadMatch(1, "EQU")) {
-        //     return parseEquDir();
-        // } else if (lookaheadMatch(1, "=")) {
-        //     return parseEqualDir();
-    } else {
+    } else if (lookaheadMatch(1, "PROC")) {
+        return parseProcDir();
+    } else if (lookaheadMatch(1, "EQU")) {
+        return parseEquDir();
+    } else if (lookaheadMatch(1, "=")) {
+        return parseEqualDir();
+    } // TODO: RECORD dir
+    else {
         if (currentSegment) {
             if (currentSegment.value() == ".DATA") {
                 return parseDataDir();
             } else {
-                if (lookaheadMatch(1, ":") &&
-                    (lookaheadMatch(2, TokenType::EndOfLine) || lookaheadMatch(2, TokenType::EndOfFile))) {
-                    return parseLabelDef();
-                } else {
-                    return parseInstruction();
-                }
+                return parseInstruction();
             }
         } else {
             // TODO: change?
@@ -213,8 +211,8 @@ std::shared_ptr<Statement> Parser::parseStatement()
 std::shared_ptr<SegDir> Parser::parseSegDir()
 {
     if (!match(".CODE") && !match(".DATA") && !match(".STACK")) {
-        auto diag = reportExpectedSegDir(currentToken);
-        return INVALID_SEG_DIR(diag);
+        LOG_DETAILED_ERROR("shouldn't happen");
+        return INVALID_SEG_DIR(std::nullopt);
     }
     Token directiveToken = currentToken;
     std::optional<ExpressionPtr> expression;
@@ -255,14 +253,14 @@ std::shared_ptr<StructDir> Parser::parseStructDir()
     Token directiveToken, endsDirToken;
     std::vector<std::shared_ptr<DataDir>> fields;
     if (!match(TokenType::Identifier)) {
-        auto diag = reportExpectedIdentifierInStrucDir(currentToken); // TODO in parseStatement check for this too
+        auto diag = reportExpectedIdentifierInStrucDir(currentToken);
         return INVALID_STRUCT_DIR(diag);
     }
     firstIdToken = currentToken;
     consume(TokenType::Identifier);
     if (!match("STRUC")) {
-        auto diag = reportExpectedStruc(currentToken);
-        return INVALID_STRUCT_DIR(diag);
+        LOG_DETAILED_ERROR("shouldn't happen");
+        return INVALID_STRUCT_DIR(std::nullopt);
     }
     directiveToken = currentToken;
     consume("STRUC");
@@ -307,19 +305,20 @@ std::shared_ptr<StructDir> Parser::parseStructDir()
     }
 
     // parse ENDS
-    if (!match(TokenType::Identifier)) {
-        auto diag = reportExpectedEndsDirective(currentToken);
+    if (!lookaheadMatch(1, "ENDS")) {
+        auto diag = reportExpectedEnds(currentToken);
         return INVALID_STRUCT_DIR(diag);
     }
     if (stringToUpper(currentToken.lexeme) != stringToUpper(firstIdToken.lexeme)) {
         auto diag = reportExpectedDifferentIdentifierInStructDir(currentToken, firstIdToken);
         return INVALID_STRUCT_DIR(diag);
     }
+
     secondIdToken = currentToken;
     consume(TokenType::Identifier);
     if (!match("ENDS")) {
-        auto diag = reportExpectedEnds(currentToken);
-        return INVALID_STRUCT_DIR(diag);
+        LOG_DETAILED_ERROR("shouldn't happen");
+        return INVALID_STRUCT_DIR(std::nullopt);
     }
     endsDirToken = currentToken;
     consume("ENDS");
@@ -328,17 +327,156 @@ std::shared_ptr<StructDir> Parser::parseStructDir()
 
 std::shared_ptr<RecordDir> Parser::parseRecordDir() { return nullptr; }
 
-std::shared_ptr<ProcDir> Parser::parseProcDir() { return nullptr; }
+std::shared_ptr<ProcDir> Parser::parseProcDir()
+{
+    Token firstIdToken, secondIdToken;
+    Token directiveToken, endpDirToken;
+    std::vector<std::shared_ptr<Instruction>> fields;
+    if (!match(TokenType::Identifier)) {
+        auto diag = reportExpectedIdentifierInProcDir(currentToken);
+        return INVALID_PROC_DIR(diag);
+    }
+    firstIdToken = currentToken;
+    consume(TokenType::Identifier);
+    if (!match("PROC")) {
+        LOG_DETAILED_ERROR("shouldn't happen");
+        return INVALID_PROC_DIR(std::nullopt);
+    }
+    directiveToken = currentToken;
+    consume("PROC");
+    if (!match(TokenType::EndOfLine)) {
+        auto diag = reportExpectedEndOfLine(currentToken);
+        return INVALID_PROC_DIR(diag);
+    }
+    consume(TokenType::EndOfLine);
 
-std::shared_ptr<EquDir> Parser::parseEquDir() { return nullptr; }
+    while (!match("ENDP") && !lookaheadMatch(1, "ENDP") && !match(TokenType::EndOfFile)) {
+        if (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
+            std::shared_ptr<Instruction> instruction;
+            instruction = parseInstruction();
+            if (INVALID(instruction)) {
+                synchronize();
+            } else {
+                if (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
+                    reportExpectedEndOfLine(currentToken);
+                    synchronize();
+                    // continue parsing after synchronize
+                }
+            }
 
-std::shared_ptr<EqualDir> Parser::parseEqualDir() { return nullptr; }
+            // Can't consume endoffile
+            if (match(TokenType::EndOfLine)) {
+                consume(TokenType::EndOfLine);
+            }
 
-std::shared_ptr<EndDir> Parser::parseEndDir() { return nullptr; }
+            fields.push_back(instruction);
+
+        } else {
+            // empty line
+            if (match(TokenType::EndOfLine)) {
+                consume(TokenType::EndOfLine);
+            }
+        }
+    }
+    if (match("ENDP")) {
+        auto diag = reportMissingIdentifierBeforeEndp(currentToken);
+        return INVALID_PROC_DIR(diag);
+    }
+
+    // parse ENDP
+    if (!lookaheadMatch(1, "ENDP")) {
+        auto diag = reportExpectedEndp(currentToken);
+        return INVALID_PROC_DIR(diag);
+    }
+    if (stringToUpper(currentToken.lexeme) != stringToUpper(firstIdToken.lexeme)) {
+        auto diag = reportExpectedDifferentIdentifierInProcDir(currentToken, firstIdToken);
+        return INVALID_PROC_DIR(diag);
+    }
+    secondIdToken = currentToken;
+    consume(TokenType::Identifier);
+    if (!match("ENDP")) {
+        LOG_DETAILED_ERROR("shouldn't happen");
+        return INVALID_PROC_DIR(std::nullopt);
+    }
+    endpDirToken = currentToken;
+    consume("ENDP");
+    return std::make_shared<ProcDir>(firstIdToken, directiveToken, fields, secondIdToken, endpDirToken);
+}
+
+std::shared_ptr<EquDir> Parser::parseEquDir()
+{
+    if (!match(TokenType::Identifier)) {
+        auto diag = reportExpectedIdentifierInEquDir(currentToken);
+        return INVALID_EQU_DIR(diag);
+    }
+    Token idToken = currentToken;
+    consume(TokenType::Identifier);
+
+    if (!match("EQU")) {
+        LOG_DETAILED_ERROR("shouldn't happen");
+        return INVALID_EQU_DIR(std::nullopt);
+    }
+    Token directiveToken = currentToken;
+    consume(TokenType::Directive);
+
+    // TODO: can also be a string in <> (or without <>?)
+    ExpressionPtr expr = parseExpression();
+    if (INVALID(expr)) {
+        return INVALID_EQU_DIR(expr->diagnostic);
+    }
+
+    return std::make_shared<EquDir>(idToken, directiveToken, expr);
+}
+
+std::shared_ptr<EqualDir> Parser::parseEqualDir()
+{
+    if (!match(TokenType::Identifier)) {
+        auto diag = reportExpectedIdentifierInEqualDir(currentToken);
+        return INVALID_EQUAL_DIR(diag);
+    }
+    Token idToken = currentToken;
+    consume(TokenType::Identifier);
+
+    if (!match("=")) {
+        LOG_DETAILED_ERROR("shouldn't happen");
+        return INVALID_EQUAL_DIR(std::nullopt);
+    }
+    Token directiveToken = currentToken;
+    consume(TokenType::Directive);
+
+    ExpressionPtr expr = parseExpression();
+    if (INVALID(expr)) {
+        return INVALID_EQUAL_DIR(expr->diagnostic);
+    }
+
+    return std::make_shared<EqualDir>(idToken, directiveToken, expr);
+}
+
+std::shared_ptr<EndDir> Parser::parseEndDir()
+{
+    if (!match("END")) {
+        LOG_DETAILED_ERROR("shouldn't happen");
+        return INVALID_END_DIR(std::nullopt);
+    }
+    Token directiveToken = currentToken;
+    consume(TokenType::Directive);
+
+    if (match(TokenType::EndOfLine) || match(TokenType::EndOfFile)) {
+        return std::make_shared<EndDir>(directiveToken, std::nullopt);
+    }
+
+    ExpressionPtr expr = parseExpression();
+    if (INVALID(expr)) {
+        return INVALID_END_DIR(expr->diagnostic);
+    }
+
+    return std::make_shared<EndDir>(directiveToken, expr);
+}
 
 std::shared_ptr<Instruction> Parser::parseInstruction()
 {
-    std::optional<std::shared_ptr<LabelDef>> label;
+    std::optional<Token> label;
+    std::optional<Token> menmonicToken;
     std::vector<ExpressionPtr> operands;
     if (lookaheadMatch(1, ":")) {
         if (!match(TokenType::Identifier)) {
@@ -348,13 +486,17 @@ std::shared_ptr<Instruction> Parser::parseInstruction()
         Token labelToken = currentToken;
         consume(TokenType::Identifier);
         consume(":");
-        label = std::make_shared<LabelDef>(labelToken);
+        label = labelToken;
     }
+    if (match(TokenType::EndOfLine) || match(TokenType::EndOfFile)) {
+        return std::make_shared<Instruction>(label, std::nullopt, operands);
+    }
+
     if (!match(TokenType::Instruction)) {
         auto diag = reportExpectedInstruction(currentToken);
         return INVALID_INSTRUCTION(diag);
     }
-    Token menmonicToken = currentToken;
+    menmonicToken = currentToken;
     consume(TokenType::Instruction);
 
     if (match(TokenType::EndOfLine) || match(TokenType::EndOfFile)) {
@@ -379,22 +521,6 @@ std::shared_ptr<Instruction> Parser::parseInstruction()
         return INVALID_INSTRUCTION(diag);
     }
     return std::make_shared<Instruction>(label, menmonicToken, operands);
-}
-
-std::shared_ptr<LabelDef> Parser::parseLabelDef()
-{
-    if (!match(TokenType::Identifier)) {
-        auto diag = reportExpectedIdentifierInLabel(currentToken);
-        return INVALID_LABEL_DEF(diag);
-    }
-    Token labelToken = currentToken;
-    consume(TokenType::Identifier);
-    if (!match(":")) {
-        auto diag = reportExpectedColonInLabel(currentToken);
-        return INVALID_LABEL_DEF(diag);
-    }
-    consume(":");
-    return std::make_shared<LabelDef>(labelToken);
 }
 
 std::shared_ptr<DataItem> Parser::parseDataItem()

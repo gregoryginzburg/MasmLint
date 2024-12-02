@@ -33,14 +33,6 @@ std::shared_ptr<Diagnostic> Parser::reportMustBeInSegmentBlock(const Token &firs
 }
 
 // SegDir
-std::shared_ptr<Diagnostic> Parser::reportExpectedSegDir(const Token &token)
-{
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_SEG_DIR, token.lexeme);
-    diag.addPrimaryLabel(token.span, "");
-    parseSess->dcx->addDiagnostic(diag);
-
-    return parseSess->dcx->getLastDiagnostic();
-}
 
 // DataDir
 std::shared_ptr<Diagnostic> Parser::reportExpectedIdentifierInDataDir(const Token &token)
@@ -82,15 +74,6 @@ std::shared_ptr<Diagnostic> Parser::reportExpectedIdentifierInStrucDir(const Tok
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> Parser::reportExpectedStruc(const Token &token)
-{
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_STRUC);
-    diag.addPrimaryLabel(token.span, "");
-    parseSess->dcx->addDiagnostic(diag);
-
-    return parseSess->dcx->getLastDiagnostic();
-}
-
 std::shared_ptr<Diagnostic> Parser::reportExpectedDifferentIdentifierInStructDir(const Token &found,
                                                                                  const Token &expected)
 {
@@ -119,12 +102,103 @@ std::shared_ptr<Diagnostic> Parser::reportMissingIdentifierBeforeEnds(const Toke
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> Parser::reportExpectedEndsDirective(const Token &token)
+// ProcDir
+std::shared_ptr<Diagnostic> Parser::reportExpectedIdentifierBeforeProc(const Token &token)
 {
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_ENDS_DIRECTIVE, token.lexeme);
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_IDENTIFIER_BEFORE_PROC);
+    diag.addPrimaryLabel(token.span, "");
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+std::shared_ptr<Diagnostic> Parser::reportExpectedIdentifierInProcDir(const Token &token)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_IDENTIFIER, token.lexeme);
+
+    if (isReservedWord(token)) {
+        diag.addPrimaryLabel(token.span, fmt::format("`{}` is a reserved word", token.lexeme));
+
+    } else {
+        diag.addPrimaryLabel(token.span, "");
+    }
+
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+std::shared_ptr<Diagnostic> Parser::reportExpectedDifferentIdentifierInProcDir(const Token &found,
+                                                                               const Token &expected)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_DIFFERENT_IDENTIFIER_PROC_DIR);
+    diag.addPrimaryLabel(found.span, fmt::format("expected `{}`", expected.lexeme));
+    parseSess->dcx->addDiagnostic(diag);
+
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+std::shared_ptr<Diagnostic> Parser::reportExpectedEndp(const Token &token)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_ENDP);
     diag.addPrimaryLabel(token.span, "");
     parseSess->dcx->addDiagnostic(diag);
 
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+std::shared_ptr<Diagnostic> Parser::reportMissingIdentifierBeforeEndp(const Token &token)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::MISSING_IDENTIFIER_BEFORE_ENDP);
+    diag.addPrimaryLabel(token.span, "");
+    parseSess->dcx->addDiagnostic(diag);
+
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+// EqualDir
+std::shared_ptr<Diagnostic> Parser::reportExpectedIdentifierInEquDir(const Token &token)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_IDENTIFIER, token.lexeme);
+
+    if (isReservedWord(token)) {
+        diag.addPrimaryLabel(token.span, fmt::format("`{}` is a reserved word", token.lexeme));
+
+    } else {
+        diag.addPrimaryLabel(token.span, "");
+    }
+
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+std::shared_ptr<Diagnostic> Parser::reportExpectedIdentifierBeforeEqu(const Token &token)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_IDENTIFIER_BEFORE_EQU);
+    diag.addPrimaryLabel(token.span, "");
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+// EqualDir
+std::shared_ptr<Diagnostic> Parser::reportExpectedIdentifierInEqualDir(const Token &token)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_IDENTIFIER, token.lexeme);
+
+    if (isReservedWord(token)) {
+        diag.addPrimaryLabel(token.span, fmt::format("`{}` is a reserved word", token.lexeme));
+
+    } else {
+        diag.addPrimaryLabel(token.span, "");
+    }
+
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+std::shared_ptr<Diagnostic> Parser::reportExpectedIdentifierBeforeEqual(const Token &token)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_IDENTIFIER_BEFORE_EQUAL);
+    diag.addPrimaryLabel(token.span, "");
+    parseSess->dcx->addDiagnostic(diag);
     return parseSess->dcx->getLastDiagnostic();
 }
 
@@ -153,7 +227,6 @@ std::shared_ptr<Diagnostic> Parser::reportExpectedCommaOrEndOfLine(const Token &
     return parseSess->dcx->getLastDiagnostic();
 }
 
-// LabelDef
 std::shared_ptr<Diagnostic> Parser::reportExpectedIdentifierInLabel(const Token &token)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_IDENTIFIER, token.lexeme);
@@ -165,14 +238,6 @@ std::shared_ptr<Diagnostic> Parser::reportExpectedIdentifierInLabel(const Token 
         diag.addPrimaryLabel(token.span, "");
     }
 
-    parseSess->dcx->addDiagnostic(diag);
-    return parseSess->dcx->getLastDiagnostic();
-}
-
-std::shared_ptr<Diagnostic> Parser::reportExpectedColonInLabel(const Token &token)
-{
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_COLON, token.lexeme);
-    diag.addPrimaryLabel(token.span, "");
     parseSess->dcx->addDiagnostic(diag);
     return parseSess->dcx->getLastDiagnostic();
 }

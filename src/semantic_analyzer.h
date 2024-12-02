@@ -23,7 +23,6 @@ private:
     void visitStatement(const std::shared_ptr<Statement> &statement);
     void visitInstruction(const std::shared_ptr<Instruction> &instruction);
     void visitDirective(const std::shared_ptr<Directive> &directive);
-    void visitLabelDef(const std::shared_ptr<LabelDef> &labelDef);
 
     void visitSegDir(const std::shared_ptr<SegDir> &segDir);
     void visitDataDir(const std::shared_ptr<DataDir> &dataDir);

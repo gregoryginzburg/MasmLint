@@ -12,7 +12,7 @@ class AST;
 class Expression;
 class Statement;
 class EndDir;
-class LabelDef;
+class Instruction;
 class Directive;
 class InitializerList;
 using ASTPtr = std::shared_ptr<AST>;
@@ -26,6 +26,10 @@ using ExpressionPtr = std::shared_ptr<Expression>;
 #define INVALID_SEG_DIR(diag) (std::make_shared<SegDir>(diag))
 #define INVALID_DATA_DIR(diag) (std::make_shared<DataDir>(diag))
 #define INVALID_STRUCT_DIR(diag) (std::make_shared<StructDir>(diag))
+#define INVALID_PROC_DIR(diag) (std::make_shared<ProcDir>(diag))
+#define INVALID_EQU_DIR(diag) (std::make_shared<EquDir>(diag))
+#define INVALID_EQUAL_DIR(diag) (std::make_shared<EqualDir>(diag))
+#define INVALID_END_DIR(diag) (std::make_shared<EndDir>(diag))
 
 #define INVALID_INSTRUCTION(diag) (std::make_shared<Instruction>(diag))
 #define INVALID_LABEL_DEF(diag) (std::make_shared<LabelDef>(diag))
@@ -212,6 +216,8 @@ public:
     Token directiveToken;
     ExpressionPtr value; // TODO: can also be a string
 
+    EquDir(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
+    EquDir(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
     EquDir(Token idToken, Token directiveToken, ExpressionPtr value)
         : idToken(std::move(idToken)), directiveToken(std::move(directiveToken)), value(std::move(value))
     {
@@ -224,6 +230,8 @@ public:
     Token directiveToken;
     ExpressionPtr value;
 
+    EqualDir(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
+    EqualDir(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
     EqualDir(Token idToken, Token directiveToken, ExpressionPtr value)
         : idToken(std::move(idToken)), directiveToken(std::move(directiveToken)), value(std::move(value))
     {
@@ -231,7 +239,21 @@ public:
 };
 
 class ProcDir : public Directive {
-    // TODO
+public:
+    Token firstIdToken;
+    Token directiveToken;
+    std::vector<std::shared_ptr<Instruction>> fields;
+    Token secondIdToken;
+    Token endpDirToken;
+
+    ProcDir(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
+    ProcDir(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
+    ProcDir(Token firstIdToken, Token directiveToken, const std::vector<std::shared_ptr<Instruction>> &fields,
+            Token secondIdToken, Token endsDirToken)
+        : firstIdToken(std::move(firstIdToken)), directiveToken(std::move(directiveToken)), fields(fields),
+          secondIdToken(std::move(secondIdToken)), endpDirToken(std::move(endsDirToken))
+    {
+    }
 };
 
 class EndDir : public Directive {
@@ -239,6 +261,8 @@ public:
     Token endToken;
     std::optional<ExpressionPtr> addressExpr;
 
+    EndDir(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
+    EndDir(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
     EndDir(Token endToken, std::optional<ExpressionPtr> addressExpr)
         : endToken(std::move(endToken)), addressExpr(std::move(addressExpr))
     {
@@ -248,25 +272,17 @@ public:
 // Instructions
 class Instruction : public Statement {
 public:
-    std::optional<std::shared_ptr<LabelDef>> label;
-    Token mnemonicToken;
+    std::optional<Token> label;
+    std::optional<Token> mnemonicToken;
     std::vector<ExpressionPtr> operands;
 
     Instruction(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
     Instruction(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
-    Instruction(std::optional<std::shared_ptr<LabelDef>> label, Token mnemonicToken,
+    Instruction(std::optional<Token> label, std::optional<Token> mnemonicToken,
                 const std::vector<ExpressionPtr> &operands)
         : label(label), mnemonicToken(std::move(mnemonicToken)), operands(operands)
     {
     }
-};
-
-class LabelDef : public Statement {
-public:
-    Token idToken;
-
-    LabelDef(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
-    LabelDef(Token idToken) : idToken(std::move(idToken)) {}
 };
 
 // Expressions
@@ -384,16 +400,16 @@ inline void printAST(const ASTPtr &node, size_t indent)
     } else if (auto instruction = std::dynamic_pointer_cast<Instruction>(node)) {
         std::cout << indentation << "Instruction\n";
         if (instruction->label) {
-            std::cout << indentation << "Label:\n";
-            printAST(instruction->label.value(), indent + 2);
+            std::cout << indentation << "Label:" << instruction->label.value().lexeme << "\n";
         }
-        std::cout << indentation << "Mnemonic: " << instruction->mnemonicToken.lexeme << "\n";
+        if (!instruction->mnemonicToken) {
+            return;
+        }
+        std::cout << indentation << "Mnemonic: " << instruction->mnemonicToken.value().lexeme << "\n";
         std::cout << indentation << "Operands:\n";
         for (const auto &operand : instruction->operands) {
             printAST(operand, indent + 2);
         }
-    } else if (auto labelDef = std::dynamic_pointer_cast<LabelDef>(node)) {
-        std::cout << indentation << "Label Definition: " << labelDef->idToken.lexeme << "\n";
     } else if (auto directive = std::dynamic_pointer_cast<Directive>(node)) {
         if (auto segDir = std::dynamic_pointer_cast<SegDir>(directive)) {
             std::cout << indentation << "Segment Directive\n";
