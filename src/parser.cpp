@@ -167,7 +167,8 @@ std::shared_ptr<Statement> Parser::parseStatement()
         auto diag = reportExpectedIdentifierBeforeStruc(currentToken);
         return INVALID_STATEMENT(diag);
     } else if (match("RECORD")) {
-        // TODO:
+        auto diag = reportExpectedIdentifierBeforeRecord(currentToken);
+        return INVALID_STATEMENT(diag);
     } else if (match("PROC")) {
         auto diag = reportExpectedIdentifierBeforeProc(currentToken);
         return INVALID_STATEMENT(diag);
@@ -183,12 +184,13 @@ std::shared_ptr<Statement> Parser::parseStatement()
         return parseStructDir();
     } else if (lookaheadMatch(1, "PROC")) {
         return parseProcDir();
+    } else if (lookaheadMatch(1, "RECORD")) {
+        return parseRecordDir();
     } else if (lookaheadMatch(1, "EQU")) {
         return parseEquDir();
     } else if (lookaheadMatch(1, "=")) {
         return parseEqualDir();
-    } // TODO: RECORD dir
-    else {
+    } else {
         if (currentSegment) {
             if (currentSegment.value() == ".DATA") {
                 return parseDataDir();
@@ -309,7 +311,7 @@ std::shared_ptr<StructDir> Parser::parseStructDir()
         auto diag = reportExpectedEnds(currentToken);
         return INVALID_STRUCT_DIR(diag);
     }
-    if (stringToUpper(currentToken.lexeme) != stringToUpper(firstIdToken.lexeme)) {
+    if (currentToken.lexeme != firstIdToken.lexeme) {
         auto diag = reportExpectedDifferentIdentifierInStructDir(currentToken, firstIdToken);
         return INVALID_STRUCT_DIR(diag);
     }
@@ -325,7 +327,73 @@ std::shared_ptr<StructDir> Parser::parseStructDir()
     return std::make_shared<StructDir>(firstIdToken, directiveToken, fields, secondIdToken, endsDirToken);
 }
 
-std::shared_ptr<RecordDir> Parser::parseRecordDir() { return nullptr; }
+std::shared_ptr<RecordDir> Parser::parseRecordDir()
+{
+    Token idToken, directiveToken;
+    std::vector<std::shared_ptr<RecordField>> fields;
+    if (!match(TokenType::Identifier)) {
+        auto diag = reportExpectedIdentifierInRecordDir(currentToken);
+        return INVALID_RECORD_DIR(diag);
+    }
+    idToken = currentToken;
+    consume(TokenType::Identifier);
+    if (!match("RECORD")) {
+        LOG_DETAILED_ERROR("shouldn't happen");
+        return INVALID_RECORD_DIR(std::nullopt);
+    }
+    directiveToken = currentToken;
+    consume("RECORD");
+
+    std::shared_ptr<RecordField> field = parseRecordField();
+    if (INVALID(field)) {
+        return INVALID_RECORD_DIR(field->diagnostic);
+    }
+
+    while (match(",")) {
+        advance();
+        field = parseRecordField();
+        if (INVALID(field)) {
+            return INVALID_RECORD_DIR(field->diagnostic);
+        }
+        fields.push_back(field);
+    }
+
+    if (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
+        auto diag = reportExpectedCommaOrEndOfLine(currentToken);
+        return INVALID_RECORD_DIR(diag);
+    }
+
+    return std::make_shared<RecordDir>(idToken, directiveToken, fields);
+}
+
+std::shared_ptr<RecordField> Parser::parseRecordField()
+{
+    if (!match(TokenType::Identifier)) {
+        auto diag = reportExpectedIdentifierInRecordDir(currentToken);
+        return INVALID_RECORD_FIELD(diag);
+    }
+    Token fieldToken = currentToken;
+    advance();
+    if (!match(":")) {
+        auto diag = reportExpectedColonInRecordField(currentToken);
+        return INVALID_RECORD_FIELD(diag);
+    }
+    advance();
+    ExpressionPtr width = parseExpression();
+    if (INVALID(width)) {
+        return INVALID_RECORD_FIELD(width->diagnostic);
+    }
+    std::optional<ExpressionPtr> initialValue;
+    if (match("=")) {
+        advance();
+        ExpressionPtr initial = parseExpression();
+        if (INVALID(initial)) {
+            return INVALID_RECORD_FIELD(initial->diagnostic);
+        }
+        initialValue = initial;
+    }
+    return std::make_shared<RecordField>(fieldToken, width, initialValue);
+}
 
 std::shared_ptr<ProcDir> Parser::parseProcDir()
 {
@@ -388,7 +456,7 @@ std::shared_ptr<ProcDir> Parser::parseProcDir()
         auto diag = reportExpectedEndp(currentToken);
         return INVALID_PROC_DIR(diag);
     }
-    if (stringToUpper(currentToken.lexeme) != stringToUpper(firstIdToken.lexeme)) {
+    if (currentToken.lexeme != firstIdToken.lexeme) {
         auto diag = reportExpectedDifferentIdentifierInProcDir(currentToken, firstIdToken);
         return INVALID_PROC_DIR(diag);
     }

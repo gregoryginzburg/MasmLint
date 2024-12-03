@@ -154,6 +154,38 @@ std::shared_ptr<Diagnostic> Parser::reportMissingIdentifierBeforeEndp(const Toke
     return parseSess->dcx->getLastDiagnostic();
 }
 
+// RecordDir
+std::shared_ptr<Diagnostic> Parser::reportExpectedIdentifierInRecordDir(const Token &token)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_IDENTIFIER, token.lexeme);
+
+    if (isReservedWord(token)) {
+        diag.addPrimaryLabel(token.span, fmt::format("`{}` is a reserved word", token.lexeme));
+
+    } else {
+        diag.addPrimaryLabel(token.span, "");
+    }
+
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+std::shared_ptr<Diagnostic> Parser::reportExpectedColonInRecordField(const Token &token)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_COLON_IN_RECORD_DIR);
+    diag.addPrimaryLabel(token.span, "");
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+std::shared_ptr<Diagnostic> Parser::reportExpectedIdentifierBeforeRecord(const Token &token)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_IDENTIFIER_BEFORE_RECORD);
+    diag.addPrimaryLabel(token.span, "");
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
 // EqualDir
 std::shared_ptr<Diagnostic> Parser::reportExpectedIdentifierInEquDir(const Token &token)
 {
@@ -270,7 +302,7 @@ std::shared_ptr<Diagnostic> Parser::reportUnclosedDelimiterInDataInitializer(con
 
 std::shared_ptr<Diagnostic> Parser::reportExpectedCommaOrClosingDelimiter(const Token &token)
 {
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXCPECTED_COMMA_OR_CLOSING_DELIMITER, token.lexeme);
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_COMMA_OR_CLOSING_DELIMITER, token.lexeme);
     diag.addPrimaryLabel(token.span, "");
     parseSess->dcx->addDiagnostic(diag);
     return parseSess->dcx->getLastDiagnostic();

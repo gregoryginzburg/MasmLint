@@ -66,6 +66,10 @@ void SemanticAnalyzer::visitDirective(const std::shared_ptr<Directive> &directiv
         visitDataDir(dataDir);
     } else if (auto structDir = std::dynamic_pointer_cast<StructDir>(directive)) {
         visitStructDir(structDir);
+    } else if (auto procDir = std::dynamic_pointer_cast<ProcDir>(directive)) {
+        visitProcDir(procDir);
+    } else if (auto recordDir = std::dynamic_pointer_cast<RecordDir>(directive)) {
+        visitRecordDir(recordDir);
     } else if (auto equDir = std::dynamic_pointer_cast<EquDir>(directive)) {
         visitEquDir(equDir);
     } else if (auto equalDir = std::dynamic_pointer_cast<EqualDir>(directive)) {
@@ -77,7 +81,6 @@ void SemanticAnalyzer::visitDirective(const std::shared_ptr<Directive> &directiv
     }
 }
 
-
 void SemanticAnalyzer::visitSegDir(const std::shared_ptr<SegDir> &segDir)
 {
     if (segDir->constExpr) {
@@ -85,10 +88,7 @@ void SemanticAnalyzer::visitSegDir(const std::shared_ptr<SegDir> &segDir)
     }
 }
 
-void SemanticAnalyzer::visitDataDir(const std::shared_ptr<DataDir> &dataDir)
-{
-    visitDataItem(dataDir->dataItem);
-}
+void SemanticAnalyzer::visitDataDir(const std::shared_ptr<DataDir> &dataDir) { visitDataItem(dataDir->dataItem); }
 
 void SemanticAnalyzer::visitStructDir(const std::shared_ptr<StructDir> &structDir)
 {
@@ -100,6 +100,10 @@ void SemanticAnalyzer::visitStructDir(const std::shared_ptr<StructDir> &structDi
         visitDataDir(field);
     }
 }
+
+void SemanticAnalyzer::visitProcDir(const std::shared_ptr<ProcDir> &procDir) {}
+
+void SemanticAnalyzer::visitRecordDir(const std::shared_ptr<RecordDir> &recordDir) {}
 
 void SemanticAnalyzer::visitEquDir(const std::shared_ptr<EquDir> &equDir)
 {
@@ -809,7 +813,8 @@ void SemanticAnalyzer::visitLeaf(const std::shared_ptr<Leaf> &node, ExpressionCo
     if (token.type == TokenType::Identifier) {
         // TODO: check if symbol is defined
         node->constantValue = std::nullopt;
-        // TODO: if symbol is struct fields -> then it's not relocatable (fixed a bug in finding 2 variables that are added in [erx].a.b[evx])
+        // TODO: if symbol is struct fields -> then it's not relocatable (fixed a bug in finding 2 variables that are
+        // added in [erx].a.b[evx])
         node->isRelocatable = true;
         node->size = OperandSize("DWORD", 4); // TODO: get size from symbol table
         node->type = OperandType::MemoryOperand;

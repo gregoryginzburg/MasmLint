@@ -27,6 +27,8 @@ private:
     void visitSegDir(const std::shared_ptr<SegDir> &segDir);
     void visitDataDir(const std::shared_ptr<DataDir> &dataDir);
     void visitStructDir(const std::shared_ptr<StructDir> &structDir);
+    void visitProcDir(const std::shared_ptr<ProcDir> &procDir);
+    void visitRecordDir(const std::shared_ptr<RecordDir> &recordDir);
     void visitEquDir(const std::shared_ptr<EquDir> &equDir);
     void visitEqualDir(const std::shared_ptr<EqualDir> &equalDir);
     void visitEndDir(const std::shared_ptr<EndDir> &endDir);

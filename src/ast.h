@@ -15,6 +15,7 @@ class EndDir;
 class Instruction;
 class Directive;
 class InitializerList;
+class RecordField;
 using ASTPtr = std::shared_ptr<AST>;
 using ExpressionPtr = std::shared_ptr<Expression>;
 
@@ -27,6 +28,8 @@ using ExpressionPtr = std::shared_ptr<Expression>;
 #define INVALID_DATA_DIR(diag) (std::make_shared<DataDir>(diag))
 #define INVALID_STRUCT_DIR(diag) (std::make_shared<StructDir>(diag))
 #define INVALID_PROC_DIR(diag) (std::make_shared<ProcDir>(diag))
+#define INVALID_RECORD_DIR(diag) (std::make_shared<RecordDir>(diag))
+#define INVALID_RECORD_FIELD(diag) (std::make_shared<RecordField>(diag))
 #define INVALID_EQU_DIR(diag) (std::make_shared<EquDir>(diag))
 #define INVALID_EQUAL_DIR(diag) (std::make_shared<EqualDir>(diag))
 #define INVALID_END_DIR(diag) (std::make_shared<EndDir>(diag))
@@ -207,7 +210,32 @@ public:
 };
 
 class RecordDir : public Directive {
-    // TODO:
+public:
+    Token idToken;
+    Token directiveToken;
+    std::vector<std::shared_ptr<RecordField>> fields;
+
+    RecordDir() = default;
+    RecordDir(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
+    RecordDir(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
+    RecordDir(Token idToken, Token directiveToken, std::vector<std::shared_ptr<RecordField>> fields)
+        : idToken(std::move(idToken)), directiveToken(std::move(directiveToken)), fields(std::move(fields))
+    {
+    }
+};
+
+class RecordField : public AST {
+public:
+    Token fieldToken;
+    ExpressionPtr width;
+    std::optional<ExpressionPtr> initialValue;
+
+    RecordField(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
+    RecordField(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
+    RecordField(Token fieldToken, ExpressionPtr width, std::optional<ExpressionPtr> initialValue)
+        : fieldToken(std::move(fieldToken)), width(std::move(width)), initialValue(std::move(initialValue))
+    {
+    }
 };
 
 class EquDir : public Directive {
@@ -400,7 +428,7 @@ inline void printAST(const ASTPtr &node, size_t indent)
     } else if (auto instruction = std::dynamic_pointer_cast<Instruction>(node)) {
         std::cout << indentation << "Instruction\n";
         if (instruction->label) {
-            std::cout << indentation << "Label:" << instruction->label.value().lexeme << "\n";
+            std::cout << indentation << "Label: " << instruction->label.value().lexeme << "\n";
         }
         if (!instruction->mnemonicToken) {
             return;
@@ -437,8 +465,12 @@ inline void printAST(const ASTPtr &node, size_t indent)
             std::cout << indentation << "Ends Directive Token: " << structDir->endsDirToken.lexeme << "\n";
         } else if (auto recordDir = std::dynamic_pointer_cast<RecordDir>(directive)) {
             std::cout << indentation << "Record Directive\n";
-            // TODO: Implement handling for RecordDir
-            std::cout << indentation << "Record Directive handling not implemented\n";
+            std::cout << indentation << "Identifier: " << recordDir->idToken.lexeme << "\n";
+            std::cout << indentation << "Directive Token: " << recordDir->directiveToken.lexeme << "\n";
+            std::cout << indentation << "Fields:\n";
+            for (const auto &field : recordDir->fields) {
+                printAST(field, indent + 2);
+            }
         } else if (auto equDir = std::dynamic_pointer_cast<EquDir>(directive)) {
             std::cout << indentation << "Equ Directive\n";
             std::cout << indentation << "Identifier: " << equDir->idToken.lexeme << "\n";
@@ -453,8 +485,14 @@ inline void printAST(const ASTPtr &node, size_t indent)
             printAST(equalDir->value, indent + 2);
         } else if (auto procDir = std::dynamic_pointer_cast<ProcDir>(directive)) {
             std::cout << indentation << "Proc Directive\n";
-            // TODO: Implement handling for ProcDir
-            std::cout << indentation << "Proc Directive handling not implemented\n";
+            std::cout << indentation << "First Identifier: " << procDir->firstIdToken.lexeme << "\n";
+            std::cout << indentation << "Directive Token: " << procDir->directiveToken.lexeme << "\n";
+            std::cout << indentation << "Instructions:\n";
+            for (const auto &instr : procDir->fields) {
+                printAST(instr, indent + 2);
+            }
+            std::cout << indentation << "Second Identifier: " << procDir->secondIdToken.lexeme << "\n";
+            std::cout << indentation << "Endp Directive Token: " << procDir->endpDirToken.lexeme << "\n";
         } else if (auto endDir = std::dynamic_pointer_cast<EndDir>(directive)) {
             std::cout << indentation << "End Directive\n";
             std::cout << indentation << "End Token: " << endDir->endToken.lexeme << "\n";
@@ -476,7 +514,6 @@ inline void printAST(const ASTPtr &node, size_t indent)
             std::cout << indentation << "Identifier Token: " << recordInstance->idToken.lexeme << "\n";
             std::cout << indentation << "Init Values:\n";
             printAST(recordInstance->initValues, indent + 2);
-
         } else if (auto structInstance = std::dynamic_pointer_cast<StructInstance>(dataItem)) {
             std::cout << indentation << "Struct Instance\n";
             std::cout << indentation << "Identifier Token: " << structInstance->idToken.lexeme << "\n";
@@ -503,11 +540,13 @@ inline void printAST(const ASTPtr &node, size_t indent)
             std::cout << indentation << "Expression Init Value:\n";
             printAST(addressExprInitValue->expr, indent + 2);
         } else if (auto structOrRecord = std::dynamic_pointer_cast<StructOrRecordInitValue>(initValue)) {
-            std::cout << indentation << "StructOrRecordInitValue: " << "\n";
+            std::cout << indentation << "Struct or Record Init Value\n";
+            std::cout << indentation << "Left Bracket: " << structOrRecord->leftBracket.lexeme << "\n";
+            std::cout << indentation << "Right Bracket: " << structOrRecord->rightBracket.lexeme << "\n";
+            std::cout << indentation << "Fields:\n";
             printAST(structOrRecord->fields, indent + 2);
-
         } else if (auto initList = std::dynamic_pointer_cast<InitializerList>(initValue)) {
-            std::cout << indentation << "Initializer list: " << "\n";
+            std::cout << indentation << "Initializer List\n";
             for (const auto &operand : initList->fields) {
                 printAST(operand, indent + 2);
             }
@@ -515,53 +554,6 @@ inline void printAST(const ASTPtr &node, size_t indent)
             std::cout << indentation << "Unhandled InitValue Type\n";
         }
     } else if (auto expression = std::dynamic_pointer_cast<Expression>(node)) {
-        if (indent == 2) {
-            auto constantValue = expression->constantValue;
-            if (constantValue) {
-                std::cout << "constantValue: " << constantValue.value() << "\n";
-            } else {
-                std::cout << "constantValue: nullopt\n";
-            }
-
-            std::cout << "isRelocatable: " << (expression->isRelocatable ? "true" : "false") << "\n";
-
-            std::cout << "registers:\n";
-            for (const auto &[key, value] : expression->registers) {
-                std::cout << key.lexeme << ": ";
-                if (value) {
-                    std::cout << *value << "\n";
-                } else {
-                    std::cout << "nullopt\n";
-                }
-            }
-
-            std::cout << "type: ";
-            switch (expression->type) {
-            case OperandType::ImmediateOperand:
-                std::cout << "ImmediateOperand\n";
-                break;
-            case OperandType::RegisterOperand:
-                std::cout << "RegisterOperand\n";
-                break;
-            case OperandType::MemoryOperand:
-                std::cout << "MemoryOperand\n";
-                break;
-            case OperandType::UnfinishedMemoryOperand:
-                std::cout << "UnfinishedMemoryOperand\n";
-                break;
-            case OperandType::InvalidOperand:
-                std::cout << "InvalidOperand\n";
-                break;
-            }
-
-            auto size = expression->size;
-            if (size) {
-                std::cout << "size: " << size.value().symbol << "\n";
-            } else {
-                std::cout << "size: nullopt\n";
-            }
-        }
-
         if (auto binaryOp = std::dynamic_pointer_cast<BinaryOperator>(expression)) {
             std::cout << indentation << "Binary Operator (" << binaryOp->op.lexeme << ")\n";
             std::cout << indentation << "Left:\n";
@@ -574,10 +566,14 @@ inline void printAST(const ASTPtr &node, size_t indent)
             printAST(unaryOp->operand, indent + 2);
         } else if (auto brackets = std::dynamic_pointer_cast<Brackets>(expression)) {
             std::cout << indentation << "Brackets\n";
+            std::cout << indentation << "Left Bracket: " << brackets->leftBracket.lexeme << "\n";
+            std::cout << indentation << "Right Bracket: " << brackets->rightBracket.lexeme << "\n";
             std::cout << indentation << "Operand:\n";
             printAST(brackets->operand, indent + 2);
         } else if (auto squareBrackets = std::dynamic_pointer_cast<SquareBrackets>(expression)) {
             std::cout << indentation << "Square Brackets\n";
+            std::cout << indentation << "Left Bracket: " << squareBrackets->leftBracket.lexeme << "\n";
+            std::cout << indentation << "Right Bracket: " << squareBrackets->rightBracket.lexeme << "\n";
             std::cout << indentation << "Operand:\n";
             printAST(squareBrackets->operand, indent + 2);
         } else if (auto implicitPlus = std::dynamic_pointer_cast<ImplicitPlusOperator>(expression)) {
@@ -590,6 +586,15 @@ inline void printAST(const ASTPtr &node, size_t indent)
             std::cout << indentation << "Leaf (" << leaf->token.lexeme << ")\n";
         } else {
             std::cout << indentation << "Unhandled Expression Type\n";
+        }
+    } else if (auto recordField = std::dynamic_pointer_cast<RecordField>(node)) {
+        std::cout << indentation << "Record Field\n";
+        std::cout << indentation << "Field Token: " << recordField->fieldToken.lexeme << "\n";
+        std::cout << indentation << "Width:\n";
+        printAST(recordField->width, indent + 2);
+        if (recordField->initialValue) {
+            std::cout << indentation << "Initial Value:\n";
+            printAST(*recordField->initialValue, indent + 2);
         }
     } else {
         std::cout << indentation << "Unhandled AST Node Type\n";

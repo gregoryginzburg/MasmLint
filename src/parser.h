@@ -45,10 +45,11 @@ private:
     std::shared_ptr<SegDir> parseSegDir();
     std::shared_ptr<DataDir> parseDataDir();
     std::shared_ptr<StructDir> parseStructDir();
+    std::shared_ptr<ProcDir> parseProcDir();
     std::shared_ptr<RecordDir> parseRecordDir();
+    std::shared_ptr<RecordField> parseRecordField();
     std::shared_ptr<EquDir> parseEquDir();
     std::shared_ptr<EqualDir> parseEqualDir();
-    std::shared_ptr<ProcDir> parseProcDir();
     std::shared_ptr<EndDir> parseEndDir();
 
     std::shared_ptr<Instruction> parseInstruction();
@@ -92,6 +93,11 @@ private:
     std::shared_ptr<Diagnostic> reportExpectedDifferentIdentifierInProcDir(const Token &found, const Token &expected);
     std::shared_ptr<Diagnostic> reportExpectedEndp(const Token &token);
     std::shared_ptr<Diagnostic> reportMissingIdentifierBeforeEndp(const Token &token);
+
+    // RecordDir
+    std::shared_ptr<Diagnostic> reportExpectedIdentifierInRecordDir(const Token &token);
+    std::shared_ptr<Diagnostic> reportExpectedColonInRecordField(const Token &token);
+    std::shared_ptr<Diagnostic> reportExpectedIdentifierBeforeRecord(const Token &token);
 
     // EquDir
     std::shared_ptr<Diagnostic> reportExpectedIdentifierInEquDir(const Token &token);
