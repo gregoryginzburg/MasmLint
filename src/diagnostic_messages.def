@@ -15,6 +15,10 @@ DEFINE_ERROR(INVALID_NUMBER_FORMAT, "Invalid number format")
 DEFINE_ERROR(UNTERMINATED_STRING_LITERAL, "Unterminated string literal")
 
 // Syntax errors
+// General
+
+DEFINE_ERROR(SYMBOL_REDEFINITION, "Symbol redefinition: `{}`")
+
 // Program
 DEFINE_ERROR(EXPECTED_END_OF_LINE, "Expected `\\n`, found `{}`")
 DEFINE_ERROR(EXPECTED_END_DIR, "All files must end with the `END` directive")
@@ -88,7 +92,7 @@ DEFINE_ERROR(INVALID_SCALE_VALUE, "Invalid scale value")
 DEFINE_ERROR(INCORRECT_INDEX_REGISTER, "Index register can't be `ESP`")
 DEFINE_ERROR(OTHER_BINARY_OPERATOR_INCORRECT_ARGUMENT, "Incorrect argument in the binary operator `{}`")
 DEFINE_ERROR(CANT_ADD_VARIABLES, "Can't {} add 2 variables")
-DEFINE_ERROR(INVALID_ADDRESS_EXPRESSION, "Invalid address expression")
+DEFINE_ERROR(CANT_HAVE_REGISTERS_IN_EXPRESSION, "Can't have registers in expression")
 DEFINE_ERROR(MORE_THAN_TWO_REGISTERS, "Can't have more than 2 registers in an address expression with modificators")
 DEFINE_ERROR(MORE_THAN_ONE_SCALE,
              "Can't have more than 1 register with a scale in an address expression with modificators")

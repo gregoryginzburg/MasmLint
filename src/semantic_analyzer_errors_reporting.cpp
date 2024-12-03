@@ -261,25 +261,25 @@ void SemanticAnalyzer::reportOtherBinaryOperatorIncorrectArgument(const std::sha
     parseSess->dcx->addDiagnostic(diag);
 }
 
-void SemanticAnalyzer::reportInvalidAddressExpression(const ExpressionPtr &node)
+// called when there's unfinished memory operand that needs to be finished
+void SemanticAnalyzer::reportCantHaveRegistersInExpression(const ExpressionPtr &node)
 {
     if (panicLine) {
         return;
     }
     panicLine = true;
 
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_ADDRESS_EXPRESSION);
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::CANT_HAVE_REGISTERS_IN_EXPRESSION);
 
     // find first thing that lead to UnfinishedMemoryOperand and print it
     ExpressionPtr errorNode;
     findInvalidExpressionCause(node, errorNode);
 
     if (!errorNode) {
-        diag.addPrimaryLabel(getExpressionSpan(node), "need to add [] to create a valid address expression");
+        LOG_DETAILED_ERROR("Can't find invalid expression cause");
     } else {
         if (auto binaryOp = std::dynamic_pointer_cast<BinaryOperator>(errorNode)) {
-            diag.addPrimaryLabel(getExpressionSpan(binaryOp),
-                                 "can't have registers inside expressions"); // TODO: change label string
+            diag.addPrimaryLabel(getExpressionSpan(binaryOp), "can't have registers inside expressions");
 
         } else if (auto implicitPlus = std::dynamic_pointer_cast<ImplicitPlusOperator>(errorNode)) {
             diag.addPrimaryLabel(getExpressionSpan(implicitPlus), "can't have registers inside expressions");

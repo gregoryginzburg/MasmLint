@@ -57,7 +57,7 @@ private:
     void reportInvalidScaleValue(const std::shared_ptr<BinaryOperator> &node);
     void reportIncorrectIndexRegister(const std::shared_ptr<Leaf> &node);
     void reportOtherBinaryOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node);
-    void reportInvalidAddressExpression(const ExpressionPtr &node);
+    void reportCantHaveRegistersInExpression(const ExpressionPtr &node);
     void reportCantAddVariables(const ExpressionPtr &node, bool implicit);
     void reportMoreThanTwoRegistersAfterAdd(const ExpressionPtr &node, bool implicit);
     void reportMoreThanOneScaleAfterAdd(const ExpressionPtr &node, bool implicit);

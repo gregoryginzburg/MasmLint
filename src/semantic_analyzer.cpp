@@ -8,7 +8,7 @@ std::map<std::string, int> SemanticAnalyzer::registerSizes = {
     {"CX", 2}, {"ECX", 4}, {"DL", 1},  {"DX", 2},  {"EDX", 4}, {"SI", 2},  {"ESI", 4},
     {"DI", 2}, {"EDI", 4}, {"BP", 2},  {"EBP", 4}, {"SP", 2},  {"ESP", 4}};
 
-std::map<int, std::string> SemanticAnalyzer::sizeValueToStr = {{1, "BYTE"}, {2, "WORD"}, {4, "DWORD"}};
+std::map<int, std::string> SemanticAnalyzer::sizeValueToStr = {{1, "BYTE"}, {2, "WORD"}, {4, "DWORD"}, {8, "QWORD"}};
 
 SemanticAnalyzer::SemanticAnalyzer(std::shared_ptr<ParseSession> parseSession, ASTPtr ast)
     : parseSess(std::move(parseSession)), ast(std::move(ast))
@@ -21,6 +21,10 @@ void SemanticAnalyzer::visit(const ASTPtr &node)
 {
     if (auto program = std::dynamic_pointer_cast<Program>(node)) {
         for (const auto &statement : program->statements) {
+            panicLine = false;
+            if (INVALID(statement)) {
+                continue;
+            }
             visitStatement(statement);
         }
         if (program->endDir) {
@@ -33,10 +37,6 @@ void SemanticAnalyzer::visit(const ASTPtr &node)
 
 void SemanticAnalyzer::visitStatement(const std::shared_ptr<Statement> &statement)
 {
-    panicLine = false;
-    if (INVALID(statement)) {
-        return;
-    }
     if (auto instruction = std::dynamic_pointer_cast<Instruction>(statement)) {
         visitInstruction(instruction);
     } else if (auto directive = std::dynamic_pointer_cast<Directive>(statement)) {
@@ -51,7 +51,7 @@ void SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
     for (const auto &operand : instruction->operands) {
         visitExpression(operand, ExpressionContext::InstructionOperand);
         if (operand->type == OperandType::UnfinishedMemoryOperand) {
-            reportInvalidAddressExpression(operand);
+            reportCantHaveRegistersInExpression(operand);
         }
     }
 
@@ -101,7 +101,16 @@ void SemanticAnalyzer::visitStructDir(const std::shared_ptr<StructDir> &structDi
     }
 }
 
-void SemanticAnalyzer::visitProcDir(const std::shared_ptr<ProcDir> &procDir) {}
+void SemanticAnalyzer::visitProcDir(const std::shared_ptr<ProcDir> &procDir)
+{
+    for (const auto &instruction : procDir->instructions) {
+        if (INVALID(instruction)) {
+            continue;
+        }
+        panicLine = false;
+        visitInstruction(instruction);
+    }
+}
 
 void SemanticAnalyzer::visitRecordDir(const std::shared_ptr<RecordDir> &recordDir) {}
 
@@ -112,6 +121,7 @@ void SemanticAnalyzer::visitEquDir(const std::shared_ptr<EquDir> &equDir)
 
 void SemanticAnalyzer::visitEqualDir(const std::shared_ptr<EqualDir> &equalDir)
 {
+    // handle symbol redefinition
     visitExpression(equalDir->value, ExpressionContext::DataDefinition);
 }
 
@@ -421,11 +431,11 @@ void SemanticAnalyzer::visitBinaryOperator(const std::shared_ptr<BinaryOperator>
     if (op == ".") {
         if (left->type == OperandType::UnfinishedMemoryOperand) {
             node->type = OperandType::InvalidOperand;
-            reportInvalidAddressExpression(left);
+            reportCantHaveRegistersInExpression(left);
             return;
         } else if (right->type == OperandType::UnfinishedMemoryOperand) {
             node->type = OperandType::InvalidOperand;
-            reportInvalidAddressExpression(right);
+            reportCantHaveRegistersInExpression(right);
             return;
         }
         if (left->type == OperandType::MemoryOperand) {
@@ -444,11 +454,11 @@ void SemanticAnalyzer::visitBinaryOperator(const std::shared_ptr<BinaryOperator>
     } else if (op == "PTR") {
         if (left->type == OperandType::UnfinishedMemoryOperand) {
             node->type = OperandType::InvalidOperand;
-            reportInvalidAddressExpression(left);
+            reportCantHaveRegistersInExpression(left);
             return;
         } else if (right->type == OperandType::UnfinishedMemoryOperand) {
             node->type = OperandType::InvalidOperand;
-            reportInvalidAddressExpression(right);
+            reportCantHaveRegistersInExpression(right);
             return;
         }
         std::shared_ptr<Leaf> leaf;
@@ -479,11 +489,11 @@ void SemanticAnalyzer::visitBinaryOperator(const std::shared_ptr<BinaryOperator>
         // can check this immediately cause eax * 4, eax is RegisterOperand
         if (left->type == OperandType::UnfinishedMemoryOperand) {
             node->type = OperandType::InvalidOperand;
-            reportInvalidAddressExpression(left);
+            reportCantHaveRegistersInExpression(left);
             return;
         } else if (right->type == OperandType::UnfinishedMemoryOperand) {
             node->type = OperandType::InvalidOperand;
-            reportInvalidAddressExpression(right);
+            reportCantHaveRegistersInExpression(right);
             return;
         }
         // handle eax * 4
@@ -565,27 +575,31 @@ void SemanticAnalyzer::visitBinaryOperator(const std::shared_ptr<BinaryOperator>
             return;
         }
         // check that we have not more then 2 registers, and only one has scale (eax * 1) is counted as having scale
-        if (left->registers.size() + right->registers.size() > 2) {
-            node->type = OperandType::InvalidOperand;
-            reportMoreThanTwoRegistersAfterAdd(node, false);
-            return;
-        }
+        // Not needed now, because [eax + ebx] is forbidden (only one register inside [])
+        // later the error CANT_HAVE_REGISTERS_IN_EXPRESSION will be emitted
+        {
+            // if (left->registers.size() + right->registers.size() > 2) {
+            //     node->type = OperandType::InvalidOperand;
+            //     reportMoreThanTwoRegistersAfterAdd(node, false);
+            //     return;
+            // }
 
-        auto newRegisters = left->registers;
-        for (const auto &[regToken, scale] : right->registers) {
-            newRegisters[regToken] = scale;
-        }
-        // ensure only one has scale
-        int scaleCount = 0;
-        for (const auto &[regToken, scale] : newRegisters) {
-            if (newRegisters[regToken].has_value()) {
-                scaleCount += 1;
-            }
-        }
-        if (scaleCount > 1) {
-            node->type = OperandType::InvalidOperand;
-            reportMoreThanOneScaleAfterAdd(node, false);
-            return;
+            // auto newRegisters = left->registers;
+            // for (const auto &[regToken, scale] : right->registers) {
+            //     newRegisters[regToken] = scale;
+            // }
+            // // ensure only one has scale
+            // int scaleCount = 0;
+            // for (const auto &[regToken, scale] : newRegisters) {
+            //     if (newRegisters[regToken].has_value()) {
+            //         scaleCount += 1;
+            //     }
+            // }
+            // if (scaleCount > 1) {
+            //     node->type = OperandType::InvalidOperand;
+            //     reportMoreThanOneScaleAfterAdd(node, false);
+            //     return;
+            // }
         }
         // check we only have 32 bit regsiters, and dont have 2 esp
         // checking for this is delayed until operator []
@@ -615,6 +629,11 @@ void SemanticAnalyzer::visitBinaryOperator(const std::shared_ptr<BinaryOperator>
             // TODO: report that operands have different sizes
             node->size = left->size;
         }
+
+        auto newRegisters = left->registers;
+        for (const auto &[regToken, scale] : right->registers) {
+            newRegisters[regToken] = scale;
+        }
         node->registers = newRegisters;
         return;
 
@@ -624,10 +643,10 @@ void SemanticAnalyzer::visitBinaryOperator(const std::shared_ptr<BinaryOperator>
 
             // need to check this after, cause after `-` can still be UnsinishedMemoryOperand
             if (left->type == OperandType::UnfinishedMemoryOperand) {
-                reportInvalidAddressExpression(left);
+                reportCantHaveRegistersInExpression(left);
                 return;
             } else if (right->type == OperandType::UnfinishedMemoryOperand) {
-                reportInvalidAddressExpression(right);
+                reportCantHaveRegistersInExpression(right);
                 return;
             }
             node->type = OperandType::InvalidOperand;
@@ -687,7 +706,7 @@ void SemanticAnalyzer::visitUnaryOperator(const std::shared_ptr<UnaryOperator> &
     if (op == "LENGTH" || op == "LENGTHOF") {
         if (operand->type == OperandType::UnfinishedMemoryOperand) {
             node->type = OperandType::InvalidOperand;
-            reportInvalidAddressExpression(operand);
+            reportCantHaveRegistersInExpression(operand);
             return;
         }
         std::shared_ptr<Leaf> leaf;
@@ -706,7 +725,7 @@ void SemanticAnalyzer::visitUnaryOperator(const std::shared_ptr<UnaryOperator> &
     } else if (op == "SIZE" || op == "SIZEOF") {
         if (operand->type == OperandType::UnfinishedMemoryOperand) {
             node->type = OperandType::InvalidOperand;
-            reportInvalidAddressExpression(operand);
+            reportCantHaveRegistersInExpression(operand);
             return;
         }
         std::shared_ptr<Leaf> leaf;
@@ -726,7 +745,7 @@ void SemanticAnalyzer::visitUnaryOperator(const std::shared_ptr<UnaryOperator> &
     } else if (op == "WIDTH" || op == "MASK") {
         if (operand->type == OperandType::UnfinishedMemoryOperand) {
             node->type = OperandType::InvalidOperand;
-            reportInvalidAddressExpression(operand);
+            reportCantHaveRegistersInExpression(operand);
             return;
         }
         std::shared_ptr<Leaf> leaf;
@@ -747,7 +766,7 @@ void SemanticAnalyzer::visitUnaryOperator(const std::shared_ptr<UnaryOperator> &
     } else if (op == "OFFSET") {
         if (operand->type == OperandType::UnfinishedMemoryOperand) {
             node->type = OperandType::InvalidOperand;
-            reportInvalidAddressExpression(operand);
+            reportCantHaveRegistersInExpression(operand);
             return;
         }
         // operand must be adress expression
@@ -765,7 +784,7 @@ void SemanticAnalyzer::visitUnaryOperator(const std::shared_ptr<UnaryOperator> &
     } else if (op == "TYPE") {
         if (operand->type == OperandType::UnfinishedMemoryOperand) {
             node->type = OperandType::InvalidOperand;
-            reportInvalidAddressExpression(operand);
+            reportCantHaveRegistersInExpression(operand);
             return;
         }
 
@@ -783,7 +802,7 @@ void SemanticAnalyzer::visitUnaryOperator(const std::shared_ptr<UnaryOperator> &
     } else if (op == "+" || op == "-") {
         if (operand->type == OperandType::UnfinishedMemoryOperand) {
             node->type = OperandType::InvalidOperand;
-            reportInvalidAddressExpression(operand);
+            reportCantHaveRegistersInExpression(operand);
             return;
         }
         // operand must be constant value

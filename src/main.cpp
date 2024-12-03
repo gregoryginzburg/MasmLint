@@ -80,6 +80,8 @@ int main(int argc, char *argv[])
 
         if (!jsonOutput) {
             printAST(ast, 0);
+            std::cout << "\n";
+            parseSess->symbolTable->printSymbols();
         }
     } else {
         Diagnostic diag(Diagnostic::Level::Error, ErrorCode::FAILED_TO_OPEN_FILE, filename.string());

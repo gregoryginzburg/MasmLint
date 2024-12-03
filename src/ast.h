@@ -270,7 +270,7 @@ class ProcDir : public Directive {
 public:
     Token firstIdToken;
     Token directiveToken;
-    std::vector<std::shared_ptr<Instruction>> fields;
+    std::vector<std::shared_ptr<Instruction>> instructions;
     Token secondIdToken;
     Token endpDirToken;
 
@@ -278,7 +278,7 @@ public:
     ProcDir(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
     ProcDir(Token firstIdToken, Token directiveToken, const std::vector<std::shared_ptr<Instruction>> &fields,
             Token secondIdToken, Token endsDirToken)
-        : firstIdToken(std::move(firstIdToken)), directiveToken(std::move(directiveToken)), fields(fields),
+        : firstIdToken(std::move(firstIdToken)), directiveToken(std::move(directiveToken)), instructions(fields),
           secondIdToken(std::move(secondIdToken)), endpDirToken(std::move(endsDirToken))
     {
     }
@@ -488,7 +488,7 @@ inline void printAST(const ASTPtr &node, size_t indent)
             std::cout << indentation << "First Identifier: " << procDir->firstIdToken.lexeme << "\n";
             std::cout << indentation << "Directive Token: " << procDir->directiveToken.lexeme << "\n";
             std::cout << indentation << "Instructions:\n";
-            for (const auto &instr : procDir->fields) {
+            for (const auto &instr : procDir->instructions) {
                 printAST(instr, indent + 2);
             }
             std::cout << indentation << "Second Identifier: " << procDir->secondIdToken.lexeme << "\n";

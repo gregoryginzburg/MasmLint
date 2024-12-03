@@ -228,7 +228,7 @@ std::shared_ptr<SegDir> Parser::parseSegDir()
     return std::make_shared<SegDir>(directiveToken, expression);
 }
 
-std::shared_ptr<DataDir> Parser::parseDataDir()
+std::shared_ptr<DataDir> Parser::parseDataDir(bool isStructDefinition)
 {
     std::optional<Token> idToken;
     // TODO: debug and test this
@@ -241,6 +241,16 @@ std::shared_ptr<DataDir> Parser::parseDataDir()
             return INVALID_DATA_DIR(diag);
         }
         consume(TokenType::Identifier);
+        if (isStructDefinition) {
+            // add in semantic analysis
+        } else {
+            if (auto symbolPtr = parseSess->symbolTable->findSymbol(idToken.value())) {
+                auto diag = reportSymbolRedefinition(idToken.value(), symbolPtr->token);
+                return INVALID_DATA_DIR(diag);
+            }
+            parseSess->symbolTable->addSymbol(
+                std::make_shared<VariableSymbol>(idToken.value(), VariableSymbol::Type::DataVariable));
+        }
     }
     std::shared_ptr<DataItem> dataItem = parseDataItem();
     if (INVALID(dataItem)) {
@@ -260,6 +270,11 @@ std::shared_ptr<StructDir> Parser::parseStructDir()
     }
     firstIdToken = currentToken;
     consume(TokenType::Identifier);
+    if (auto symbolPtr = parseSess->symbolTable->findSymbol(firstIdToken)) {
+        auto diag = reportSymbolRedefinition(firstIdToken, symbolPtr->token);
+        return INVALID_STRUCT_DIR(diag);
+    }
+    parseSess->symbolTable->addSymbol(std::make_shared<StructSymbol>(firstIdToken));
     if (!match("STRUC")) {
         LOG_DETAILED_ERROR("shouldn't happen");
         return INVALID_STRUCT_DIR(std::nullopt);
@@ -275,7 +290,7 @@ std::shared_ptr<StructDir> Parser::parseStructDir()
     while (!match("ENDS") && !lookaheadMatch(1, "ENDS") && !match(TokenType::EndOfFile)) {
         if (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
             std::shared_ptr<DataDir> dataDir;
-            dataDir = parseDataDir();
+            dataDir = parseDataDir(true);
             if (INVALID(dataDir)) {
                 synchronize();
             } else {
@@ -337,6 +352,11 @@ std::shared_ptr<RecordDir> Parser::parseRecordDir()
     }
     idToken = currentToken;
     consume(TokenType::Identifier);
+    if (auto symbolPtr = parseSess->symbolTable->findSymbol(idToken)) {
+        auto diag = reportSymbolRedefinition(idToken, symbolPtr->token);
+        return INVALID_RECORD_DIR(diag);
+    }
+    parseSess->symbolTable->addSymbol(std::make_shared<RecordSymbol>(idToken));
     if (!match("RECORD")) {
         LOG_DETAILED_ERROR("shouldn't happen");
         return INVALID_RECORD_DIR(std::nullopt);
@@ -374,6 +394,11 @@ std::shared_ptr<RecordField> Parser::parseRecordField()
     }
     Token fieldToken = currentToken;
     advance();
+    if (auto symbolPtr = parseSess->symbolTable->findSymbol(fieldToken)) {
+        auto diag = reportSymbolRedefinition(fieldToken, symbolPtr->token);
+        return INVALID_RECORD_FIELD(diag);
+    }
+    parseSess->symbolTable->addSymbol(std::make_shared<RecordFieldSymbol>(fieldToken));
     if (!match(":")) {
         auto diag = reportExpectedColonInRecordField(currentToken);
         return INVALID_RECORD_FIELD(diag);
@@ -406,6 +431,12 @@ std::shared_ptr<ProcDir> Parser::parseProcDir()
     }
     firstIdToken = currentToken;
     consume(TokenType::Identifier);
+    if (auto symbolPtr = parseSess->symbolTable->findSymbol(firstIdToken)) {
+        auto diag = reportSymbolRedefinition(firstIdToken, symbolPtr->token);
+        return INVALID_PROC_DIR(diag);
+    }
+    parseSess->symbolTable->addSymbol(std::make_shared<ProcSymbol>(firstIdToken));
+
     if (!match("PROC")) {
         LOG_DETAILED_ERROR("shouldn't happen");
         return INVALID_PROC_DIR(std::nullopt);
@@ -479,6 +510,11 @@ std::shared_ptr<EquDir> Parser::parseEquDir()
     }
     Token idToken = currentToken;
     consume(TokenType::Identifier);
+    if (auto symbolPtr = parseSess->symbolTable->findSymbol(idToken)) {
+        auto diag = reportSymbolRedefinition(idToken, symbolPtr->token);
+        return INVALID_EQU_DIR(diag);
+    }
+    parseSess->symbolTable->addSymbol(std::make_shared<VariableSymbol>(idToken, VariableSymbol::Type::EquVariable));
 
     if (!match("EQU")) {
         LOG_DETAILED_ERROR("shouldn't happen");
@@ -504,6 +540,8 @@ std::shared_ptr<EqualDir> Parser::parseEqualDir()
     }
     Token idToken = currentToken;
     consume(TokenType::Identifier);
+    // Redefinition is allowed for `=`
+    parseSess->symbolTable->addSymbol(std::make_shared<VariableSymbol>(idToken, VariableSymbol::Type::EqualVariable));
 
     if (!match("=")) {
         LOG_DETAILED_ERROR("shouldn't happen");
@@ -553,6 +591,11 @@ std::shared_ptr<Instruction> Parser::parseInstruction()
         }
         Token labelToken = currentToken;
         consume(TokenType::Identifier);
+        if (auto symbolPtr = parseSess->symbolTable->findSymbol(labelToken)) {
+            auto diag = reportSymbolRedefinition(labelToken, symbolPtr->token);
+            return INVALID_INSTRUCTION(diag);
+        }
+        parseSess->symbolTable->addSymbol(std::make_shared<VariableSymbol>(labelToken, VariableSymbol::Type::Label));
         consume(":");
         label = labelToken;
     }

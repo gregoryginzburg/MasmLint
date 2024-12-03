@@ -43,7 +43,7 @@ private:
     std::shared_ptr<Statement> parseStatement();
 
     std::shared_ptr<SegDir> parseSegDir();
-    std::shared_ptr<DataDir> parseDataDir();
+    std::shared_ptr<DataDir> parseDataDir(bool isStructDefinition = false);
     std::shared_ptr<StructDir> parseStructDir();
     std::shared_ptr<ProcDir> parseProcDir();
     std::shared_ptr<RecordDir> parseRecordDir();
@@ -67,6 +67,9 @@ private:
     ExpressionPtr parseMemberAccessAndIndexingExpression();
     ExpressionPtr parseHighPrecedenceUnaryExpression();
     ExpressionPtr parsePrimaryExpression();
+
+    // General
+    std::shared_ptr<Diagnostic> reportSymbolRedefinition(const Token &token, const Token &firstDefinedToken);
 
     // Program
     std::shared_ptr<Diagnostic> reportExpectedEndOfLine(const Token &token);

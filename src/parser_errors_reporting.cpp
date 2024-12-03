@@ -2,6 +2,17 @@
 #include "log.h"
 #include "token.h"
 
+// General
+std::shared_ptr<Diagnostic> Parser::reportSymbolRedefinition(const Token &token, const Token &firstDefinedToken)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::SYMBOL_REDEFINITION, token.lexeme);
+    diag.addPrimaryLabel(token.span, "");
+    diag.addSecondaryLabel(firstDefinedToken.span, "first defined here");
+    parseSess->dcx->addDiagnostic(diag);
+
+    return parseSess->dcx->getLastDiagnostic();
+}
+
 // Program
 std::shared_ptr<Diagnostic> Parser::reportExpectedEndOfLine(const Token &token)
 {
