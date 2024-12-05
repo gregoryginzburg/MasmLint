@@ -9,30 +9,27 @@
 #include <unordered_set>
 #include <string>
 
-static const std::unordered_set<std::string> directives = {
-    "=",     ".CODE",  ".DATA", ".STACK", "DB",    "DW",    "DD",   "DQ",    "ELSE",   "ELSEIF", "END",
-    "ENDIF", "ENDM",   "ENDP",  "ENDS",   "EQU",   "FOR",   "FORC", "IF",    "IFE",    "IFB",    "IFNB",
-    "IFDIF", "IFDIFI", "IFIDN", "IFIDNI", "LOCAL", "MACRO", "PROC", "STRUC", "RECORD", "REPEAT", "INCLUDE"};
+static const std::unordered_set<std::string> directives = {"=",      ".CODE", ".DATA", ".STACK", "DB",     "DW",     "DD",    "DQ",     "ELSE",
+                                                           "ELSEIF", "END",   "ENDIF", "ENDM",   "ENDP",   "ENDS",   "EQU",   "FOR",    "FORC",
+                                                           "IF",     "IFE",   "IFB",   "IFNB",   "IFDIF",  "IFDIFI", "IFIDN", "IFIDNI", "LOCAL",
+                                                           "MACRO",  "PROC",  "STRUC", "RECORD", "REPEAT", "INCLUDE"};
 
 static const std::unordered_set<std::string> reservedWords = {"DUP"};
 
 // delete DUP from here?
-static const std::unordered_set<std::string> operators = {"+",      "-",        "*",     "/",    ".",      "MOD",
-                                                          "SHL",    "SHR",      "PTR",   "TYPE", "SIZE",   "SIZEOF",
-                                                          "LENGTH", "LENGTHOF", "WIDTH", "MASK", "OFFSET", "DUP"};
+static const std::unordered_set<std::string> operators = {"+",    "-",    "*",      "/",      ".",        "MOD",   "SHL",  "SHR",    "PTR",
+                                                          "TYPE", "SIZE", "SIZEOF", "LENGTH", "LENGTHOF", "WIDTH", "MASK", "OFFSET", "DUP"};
 
 static const std::unordered_set<std::string> types = {"BYTE", "WORD", "DWORD", "QWORD"};
 
 static const std::unordered_set<std::string> instructions = {
-    "ADC",   "ADD",  "AND",    "CALL",  "CBW",  "CDQ",  "CMP",   "CWD",    "DEC",     "DIV",    "IDIV", "IMUL", "INC",
-    "JA",    "JAE",  "JB",     "JBE",   "JC",   "JE",   "JECXZ", "JG",     "JGE",     "JL",     "JLE",  "JMP",  "JNC",
-    "JNE",   "JNZ",  "JZ",     "LEA",   "LOOP", "MOV",  "MOVSX", "MOVZX",  "MUL",     "NEG",    "NOT",  "OR",   "POP",
-    "POPFD", "PUSH", "PUSHFD", "RCL",   "RCR",  "RET",  "ROL",   "ROR",    "SBB",     "SHL",    "SHR",  "SUB",  "TEST",
-    "XCHG",  "XOR",  "INCHAR", "ININT", "EXIT", "OUTI", "OUTU",  "OUTSTR", "OUTCHAR", "NEWLINE"};
+    "ADC",   "ADD",   "AND", "CALL",  "CBW",  "CDQ", "CMP",    "CWD",   "DEC",  "DIV",    "IDIV", "IMUL",   "INC",     "JA",     "JAE",  "JB",
+    "JBE",   "JC",    "JE",  "JECXZ", "JG",   "JGE", "JL",     "JLE",   "JMP",  "JNC",    "JNE",  "JNZ",    "JZ",      "LEA",    "LOOP", "MOV",
+    "MOVSX", "MOVZX", "MUL", "NEG",   "NOT",  "OR",  "POP",    "POPFD", "PUSH", "PUSHFD", "RCL",  "RCR",    "RET",     "ROL",    "ROR",  "SBB",
+    "SHL",   "SHR",   "SUB", "TEST",  "XCHG", "XOR", "INCHAR", "ININT", "EXIT", "OUTI",   "OUTU", "OUTSTR", "OUTCHAR", "NEWLINE"};
 
-static const std::unordered_set<std::string> registers = {"AL", "AX",  "EAX", "BL",  "BX",  "EBX", "CL",
-                                                          "CX", "ECX", "DL",  "DX",  "EDX", "SI",  "ESI",
-                                                          "DI", "EDI", "BP",  "EBP", "SP",  "ESP"};
+static const std::unordered_set<std::string> registers = {"AL", "AX",  "EAX", "BL",  "BX", "EBX", "CL", "CX",  "ECX", "DL",
+                                                          "DX", "EDX", "SI",  "ESI", "DI", "EDI", "BP", "EBP", "SP",  "ESP"};
 
 std::vector<Token> Tokenizer::tokenize()
 {
@@ -149,10 +146,7 @@ bool Tokenizer::isDotName()
     // return true;
 }
 
-bool Tokenizer::isValidNumberStart(char c)
-{
-    return isdigit(static_cast<unsigned char>(c)) || (tolower(c) >= 'a' && tolower(c) <= 'f');
-}
+bool Tokenizer::isValidNumberStart(char c) { return isdigit(static_cast<unsigned char>(c)) || (tolower(c) >= 'a' && tolower(c) <= 'f'); }
 
 Token Tokenizer::getIdentifierOrKeywordToken()
 {

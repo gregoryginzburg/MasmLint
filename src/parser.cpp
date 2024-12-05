@@ -37,10 +37,7 @@ bool Parser::match(TokenType type) const { return currentToken.type == type; }
 
 bool Parser::match(const std::string &value) const { return stringToUpper(currentToken.lexeme) == value; }
 
-bool Parser::match(const std::unordered_set<std::string> &values) const
-{
-    return values.contains(stringToUpper(currentToken.lexeme));
-}
+bool Parser::match(const std::unordered_set<std::string> &values) const { return values.contains(stringToUpper(currentToken.lexeme)); }
 
 bool Parser::match(TokenType type, const std::string &value) const
 {
@@ -126,7 +123,7 @@ ASTPtr Parser::parse()
             } else {
                 // remove and handle everyhting in parseStatement()?
                 if (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
-                    reportExpectedEndOfLine(currentToken);
+                    std::ignore = reportExpectedEndOfLine(currentToken);
                     synchronize();
                     // continue parsing after synchronize
                 }
@@ -147,7 +144,7 @@ ASTPtr Parser::parse()
     if (match("END")) {
         endDir = parseEndDir();
     } else {
-        reportExpectedEndDir(currentToken);
+        std::ignore = reportExpectedEndDir(currentToken);
     }
     return std::make_shared<Program>(statements, endDir);
 }
@@ -228,31 +225,38 @@ std::shared_ptr<SegDir> Parser::parseSegDir()
     return std::make_shared<SegDir>(directiveToken, expression);
 }
 
-std::shared_ptr<DataDir> Parser::parseDataDir(bool isStructDefinition)
+std::shared_ptr<DataDir> Parser::parseDataDir(const std::optional<Token> &strucNameToken)
 {
     std::optional<Token> idToken;
     // TODO: debug and test this
     if (match(dataDirectives)) {
         idToken = std::nullopt;
-    } else if ((lookaheadMatch(1, dataDirectives) || lookaheadMatch(1, TokenType::Identifier))) {
+    } else if (false) {
+        // TODO: check whether first symbol is defined as STRUC
+    } else if ((lookaheadMatch(1, dataDirectives) ||
+                lookaheadMatch(1, TokenType::Identifier) /* TODO: check that this identifier is defined STRUC */)) {
         idToken = currentToken;
         if (!match(TokenType::Identifier)) {
             auto diag = reportExpectedIdentifierInDataDir(currentToken);
             return INVALID_DATA_DIR(diag);
         }
         consume(TokenType::Identifier);
-        if (isStructDefinition) {
-            // add in semantic analysis
+        if (strucNameToken) {
+            std::string fieldName = idToken.value().lexeme;
+            std::shared_ptr<Symbol> symbol = parseSess->symbolTable->findSymbol(strucNameToken.value());
+            auto structSymbol = std::dynamic_pointer_cast<StructSymbol>(symbol);
+            if (structSymbol->fields.contains(fieldName)) {
+                auto diag = reportSymbolRedefinition(idToken.value(), structSymbol->fields[fieldName]->token);
+                return INVALID_DATA_DIR(diag);
+            }
         } else {
             if (auto symbolPtr = parseSess->symbolTable->findSymbol(idToken.value())) {
                 auto diag = reportSymbolRedefinition(idToken.value(), symbolPtr->token);
                 return INVALID_DATA_DIR(diag);
             }
-            parseSess->symbolTable->addSymbol(
-                std::make_shared<VariableSymbol>(idToken.value(), VariableSymbol::Type::DataVariable));
         }
     }
-    std::shared_ptr<DataItem> dataItem = parseDataItem();
+    std::shared_ptr<DataItem> dataItem = parseDataItem(idToken, strucNameToken);
     if (INVALID(dataItem)) {
         return INVALID_DATA_DIR(dataItem->diagnostic);
     }
@@ -290,13 +294,13 @@ std::shared_ptr<StructDir> Parser::parseStructDir()
     while (!match("ENDS") && !lookaheadMatch(1, "ENDS") && !match(TokenType::EndOfFile)) {
         if (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
             std::shared_ptr<DataDir> dataDir;
-            dataDir = parseDataDir(true);
+            dataDir = parseDataDir(firstIdToken);
             if (INVALID(dataDir)) {
                 synchronize();
             } else {
                 // remove and handle everyhting in parseStatement()?
                 if (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
-                    reportExpectedEndOfLine(currentToken);
+                    std::ignore = reportExpectedEndOfLine(currentToken);
                     synchronize();
                     // continue parsing after synchronize
                 }
@@ -356,7 +360,7 @@ std::shared_ptr<RecordDir> Parser::parseRecordDir()
         auto diag = reportSymbolRedefinition(idToken, symbolPtr->token);
         return INVALID_RECORD_DIR(diag);
     }
-    parseSess->symbolTable->addSymbol(std::make_shared<RecordSymbol>(idToken));
+
     if (!match("RECORD")) {
         LOG_DETAILED_ERROR("shouldn't happen");
         return INVALID_RECORD_DIR(std::nullopt);
@@ -368,6 +372,7 @@ std::shared_ptr<RecordDir> Parser::parseRecordDir()
     if (INVALID(field)) {
         return INVALID_RECORD_DIR(field->diagnostic);
     }
+    fields.push_back(field);
 
     while (match(",")) {
         advance();
@@ -382,8 +387,10 @@ std::shared_ptr<RecordDir> Parser::parseRecordDir()
         auto diag = reportExpectedCommaOrEndOfLine(currentToken);
         return INVALID_RECORD_DIR(diag);
     }
+    auto recordDir = std::make_shared<RecordDir>(idToken, directiveToken, fields);
+    parseSess->symbolTable->addSymbol(std::make_shared<RecordSymbol>(idToken, recordDir));
 
-    return std::make_shared<RecordDir>(idToken, directiveToken, fields);
+    return recordDir;
 }
 
 std::shared_ptr<RecordField> Parser::parseRecordField()
@@ -398,7 +405,7 @@ std::shared_ptr<RecordField> Parser::parseRecordField()
         auto diag = reportSymbolRedefinition(fieldToken, symbolPtr->token);
         return INVALID_RECORD_FIELD(diag);
     }
-    parseSess->symbolTable->addSymbol(std::make_shared<RecordFieldSymbol>(fieldToken));
+
     if (!match(":")) {
         auto diag = reportExpectedColonInRecordField(currentToken);
         return INVALID_RECORD_FIELD(diag);
@@ -417,7 +424,10 @@ std::shared_ptr<RecordField> Parser::parseRecordField()
         }
         initialValue = initial;
     }
-    return std::make_shared<RecordField>(fieldToken, width, initialValue);
+    auto recordField = std::make_shared<RecordField>(fieldToken, width, initialValue);
+    parseSess->symbolTable->addSymbol(std::make_shared<RecordFieldSymbol>(fieldToken, recordField));
+
+    return recordField;
 }
 
 std::shared_ptr<ProcDir> Parser::parseProcDir()
@@ -457,7 +467,7 @@ std::shared_ptr<ProcDir> Parser::parseProcDir()
                 synchronize();
             } else {
                 if (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
-                    reportExpectedEndOfLine(currentToken);
+                    std::ignore = reportExpectedEndOfLine(currentToken);
                     synchronize();
                     // continue parsing after synchronize
                 }
@@ -514,7 +524,6 @@ std::shared_ptr<EquDir> Parser::parseEquDir()
         auto diag = reportSymbolRedefinition(idToken, symbolPtr->token);
         return INVALID_EQU_DIR(diag);
     }
-    parseSess->symbolTable->addSymbol(std::make_shared<VariableSymbol>(idToken, VariableSymbol::Type::EquVariable));
 
     if (!match("EQU")) {
         LOG_DETAILED_ERROR("shouldn't happen");
@@ -529,7 +538,10 @@ std::shared_ptr<EquDir> Parser::parseEquDir()
         return INVALID_EQU_DIR(expr->diagnostic);
     }
 
-    return std::make_shared<EquDir>(idToken, directiveToken, expr);
+    auto equDir = std::make_shared<EquDir>(idToken, directiveToken, expr);
+    parseSess->symbolTable->addSymbol(std::make_shared<EquVariableSymbol>(idToken, equDir));
+
+    return equDir;
 }
 
 std::shared_ptr<EqualDir> Parser::parseEqualDir()
@@ -541,7 +553,12 @@ std::shared_ptr<EqualDir> Parser::parseEqualDir()
     Token idToken = currentToken;
     consume(TokenType::Identifier);
     // Redefinition is allowed for `=`
-    parseSess->symbolTable->addSymbol(std::make_shared<VariableSymbol>(idToken, VariableSymbol::Type::EqualVariable));
+    if (auto symbolPtr = parseSess->symbolTable->findSymbol(idToken)) {
+        if (!std::dynamic_pointer_cast<EqualVariableSymbol>(symbolPtr)) {
+            auto diag = reportSymbolRedefinition(idToken, symbolPtr->token);
+            return INVALID_EQUAL_DIR(diag);
+        }
+    }
 
     if (!match("=")) {
         LOG_DETAILED_ERROR("shouldn't happen");
@@ -555,7 +572,10 @@ std::shared_ptr<EqualDir> Parser::parseEqualDir()
         return INVALID_EQUAL_DIR(expr->diagnostic);
     }
 
-    return std::make_shared<EqualDir>(idToken, directiveToken, expr);
+    auto equalDir = std::make_shared<EqualDir>(idToken, directiveToken, expr);
+    parseSess->symbolTable->addSymbol(std::make_shared<EqualVariableSymbol>(idToken, equalDir));
+
+    return equalDir;
 }
 
 std::shared_ptr<EndDir> Parser::parseEndDir()
@@ -595,7 +615,7 @@ std::shared_ptr<Instruction> Parser::parseInstruction()
             auto diag = reportSymbolRedefinition(labelToken, symbolPtr->token);
             return INVALID_INSTRUCTION(diag);
         }
-        parseSess->symbolTable->addSymbol(std::make_shared<VariableSymbol>(labelToken, VariableSymbol::Type::Label));
+        parseSess->symbolTable->addSymbol(std::make_shared<LabelSymbol>(labelToken));
         consume(":");
         label = labelToken;
     }
@@ -634,7 +654,7 @@ std::shared_ptr<Instruction> Parser::parseInstruction()
     return std::make_shared<Instruction>(label, menmonicToken, operands);
 }
 
-std::shared_ptr<DataItem> Parser::parseDataItem()
+std::shared_ptr<DataItem> Parser::parseDataItem(const std::optional<Token> &idToken, const std::optional<Token> &strucNameToken)
 {
     if (!match(TokenType::Identifier) && !match(dataDirectives)) {
         auto diag = reportExpectedVariableNameOrDataDirective(currentToken);
@@ -644,6 +664,14 @@ std::shared_ptr<DataItem> Parser::parseDataItem()
     // TODO: determine whether is's a struct or record
     Token dataTypeToken = currentToken;
     advance();
+    if (idToken && strucNameToken) {
+        std::string fieldName = idToken.value().lexeme;
+        std::shared_ptr<Symbol> symbol = parseSess->symbolTable->findSymbol(strucNameToken.value());
+        auto structSymbol = std::dynamic_pointer_cast<StructSymbol>(symbol);
+        structSymbol->fields[fieldName] = std::make_shared<DataVariableSymbol>(idToken.value(), dataTypeToken);
+    } else if (idToken && !strucNameToken) {
+        parseSess->symbolTable->addSymbol(std::make_shared<DataVariableSymbol>(idToken.value(), dataTypeToken));
+    }
     std::shared_ptr<InitValue> initValue = parseInitValue();
     if (INVALID(initValue)) {
         return INVALID_DATA_ITEM(initValue->diagnostic);
@@ -720,8 +748,8 @@ std::shared_ptr<InitValue> Parser::parseSingleInitValue()
             return std::make_shared<DupOperator>(expr, op, operands);
         } else {
             // <var var> - can't be
-            if (!dataInitializerDelimitersStack.empty() && !match(TokenType::CloseAngleBracket) &&
-                !match(TokenType::CloseBracket) && !match(TokenType::Comma)) {
+            if (!dataInitializerDelimitersStack.empty() && !match(TokenType::CloseAngleBracket) && !match(TokenType::CloseBracket) &&
+                !match(TokenType::Comma)) {
                 if (match(TokenType::EndOfLine) || match(TokenType::EndOfFile)) {
                     auto diag = reportUnclosedDelimiterInDataInitializer(currentToken);
                     return INVALID_INIT_VALUE(diag);
@@ -890,8 +918,7 @@ ExpressionPtr Parser::parseMemberAccessAndIndexingExpression()
 ExpressionPtr Parser::parseHighPrecedenceUnaryExpression()
 {
     std::vector<Token> operators;
-    while (match("LENGTH") || match("LENGTHOF") || match("SIZE") || match("SIZEOF") || match("WIDTH") ||
-           match("MASK")) {
+    while (match("LENGTH") || match("LENGTHOF") || match("SIZE") || match("SIZEOF") || match("WIDTH") || match("MASK")) {
         Token op = currentToken;
         operators.push_back(op);
         advance();
@@ -940,8 +967,8 @@ ExpressionPtr Parser::parsePrimaryExpression()
         }
         expressionDelimitersStack.pop();
         return std::make_shared<SquareBrackets>(leftBracket, rightBracket.value(), expr);
-    } else if (match(TokenType::Identifier) || match(TokenType::Number) || match(TokenType::StringLiteral) ||
-               match(TokenType::Register) || match(TokenType::Type) || match(TokenType::Dollar)) {
+    } else if (match(TokenType::Identifier) || match(TokenType::Number) || match(TokenType::StringLiteral) || match(TokenType::Register) ||
+               match(TokenType::Type) || match(TokenType::Dollar)) {
         Token token = currentToken;
         advance();
         std::string curentTokenLexemeUpper = stringToUpper(currentToken.lexeme);
@@ -951,15 +978,13 @@ ExpressionPtr Parser::parsePrimaryExpression()
         // or there might be `(` or `[` - implicit plus for index operator
         if (!expressionDelimitersStack.empty() && currentToken.type != TokenType::CloseSquareBracket &&
             currentToken.type != TokenType::CloseBracket && currentToken.type != TokenType::OpenSquareBracket &&
-            currentToken.type != TokenType::OpenBracket && curentTokenLexemeUpper != "+" &&
-            curentTokenLexemeUpper != "-" && curentTokenLexemeUpper != "*" && curentTokenLexemeUpper != "/" &&
-            curentTokenLexemeUpper != "PTR" && curentTokenLexemeUpper != "." && curentTokenLexemeUpper != "MOD" &&
-            curentTokenLexemeUpper != "SHL" && curentTokenLexemeUpper != "SHR") {
+            currentToken.type != TokenType::OpenBracket && curentTokenLexemeUpper != "+" && curentTokenLexemeUpper != "-" &&
+            curentTokenLexemeUpper != "*" && curentTokenLexemeUpper != "/" && curentTokenLexemeUpper != "PTR" && curentTokenLexemeUpper != "." &&
+            curentTokenLexemeUpper != "MOD" && curentTokenLexemeUpper != "SHL" && curentTokenLexemeUpper != "SHR") {
 
             // try to distinct between `(var var` and `(1 + 2` or `(1 + 2,
             // when after var there aren't any vars and only possible closing things and then endofline -
-            if (currentToken.type == TokenType::EndOfLine || currentToken.type == TokenType::EndOfFile ||
-                currentToken.type == TokenType::Comma) {
+            if (currentToken.type == TokenType::EndOfLine || currentToken.type == TokenType::EndOfFile || currentToken.type == TokenType::Comma) {
                 auto diag = reportUnclosedDelimiterError(currentToken);
                 return INVALID_EXPRESSION(diag);
             }

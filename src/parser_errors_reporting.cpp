@@ -85,8 +85,7 @@ std::shared_ptr<Diagnostic> Parser::reportExpectedIdentifierInStrucDir(const Tok
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> Parser::reportExpectedDifferentIdentifierInStructDir(const Token &found,
-                                                                                 const Token &expected)
+std::shared_ptr<Diagnostic> Parser::reportExpectedDifferentIdentifierInStructDir(const Token &found, const Token &expected)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_DIFFERENT_IDENTIFIER_STRUCT_DIR);
     diag.addPrimaryLabel(found.span, fmt::format("expected `{}`", expected.lexeme));
@@ -137,8 +136,7 @@ std::shared_ptr<Diagnostic> Parser::reportExpectedIdentifierInProcDir(const Toke
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> Parser::reportExpectedDifferentIdentifierInProcDir(const Token &found,
-                                                                               const Token &expected)
+std::shared_ptr<Diagnostic> Parser::reportExpectedDifferentIdentifierInProcDir(const Token &found, const Token &expected)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_DIFFERENT_IDENTIFIER_PROC_DIR);
     diag.addPrimaryLabel(found.span, fmt::format("expected `{}`", expected.lexeme));
@@ -301,8 +299,7 @@ std::shared_ptr<Diagnostic> Parser::reportUnclosedDelimiterInDataInitializer(con
     if (dataInitializerDelimitersStack.empty()) {
         LOG_DETAILED_ERROR("Empty demimiters stack!");
     } else {
-        Diagnostic diag(Diagnostic::Level::Error, ErrorCode::UNCLOSED_DELIMITER,
-                        dataInitializerDelimitersStack.top().lexeme);
+        Diagnostic diag(Diagnostic::Level::Error, ErrorCode::UNCLOSED_DELIMITER, dataInitializerDelimitersStack.top().lexeme);
         diag.addPrimaryLabel(token.span, "");
         Token openingDelimiter = dataInitializerDelimitersStack.top();
         diag.addSecondaryLabel(openingDelimiter.span, "unclosed delimiter");
@@ -333,8 +330,7 @@ std::shared_ptr<Diagnostic> Parser::reportUnclosedDelimiterError(const Token &cl
     if (expressionDelimitersStack.empty()) {
         LOG_DETAILED_ERROR("Empty demimiters stack!");
     } else {
-        Diagnostic diag(Diagnostic::Level::Error, ErrorCode::UNCLOSED_DELIMITER,
-                        expressionDelimitersStack.top().lexeme);
+        Diagnostic diag(Diagnostic::Level::Error, ErrorCode::UNCLOSED_DELIMITER, expressionDelimitersStack.top().lexeme);
         diag.addPrimaryLabel(closingDelimiter.span, "");
         Token openingDelimiter = expressionDelimitersStack.top();
         diag.addSecondaryLabel(openingDelimiter.span, "unclosed delimiter");
@@ -345,8 +341,7 @@ std::shared_ptr<Diagnostic> Parser::reportUnclosedDelimiterError(const Token &cl
 
 std::shared_ptr<Diagnostic> Parser::reportExpectedExpression(const Token &token)
 {
-    if ((token.type == TokenType::CloseSquareBracket || token.type == TokenType::CloseBracket) &&
-        expressionDelimitersStack.empty()) {
+    if ((token.type == TokenType::CloseSquareBracket || token.type == TokenType::CloseBracket) && expressionDelimitersStack.empty()) {
         Diagnostic diag(Diagnostic::Level::Error, ErrorCode::UNEXPECTED_CLOSING_DELIMITER, token.lexeme);
         diag.addPrimaryLabel(token.span, "");
         parseSess->dcx->addDiagnostic(diag);

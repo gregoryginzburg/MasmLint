@@ -1,3 +1,7 @@
+.DATA
+ anothervar db 1
+
+
 .CODE
-mov [eax], [eax]
+mov (BYTE PTR [eax]).s, 1
 END

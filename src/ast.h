@@ -58,10 +58,7 @@ public:
 
 class Program : public AST {
 public:
-    Program(const std::vector<std::shared_ptr<Statement>> &sentences, std::shared_ptr<Directive> endDir)
-        : statements(sentences), endDir(endDir)
-    {
-    }
+    Program(const std::vector<std::shared_ptr<Statement>> &sentences, std::shared_ptr<Directive> endDir) : statements(sentences), endDir(endDir) {}
     std::vector<std::shared_ptr<Statement>> statements;
     std::shared_ptr<Directive> endDir;
 };
@@ -145,10 +142,7 @@ public:
     Token idToken;
     std::shared_ptr<InitValue> initValues;
 
-    RecordInstance(Token idToken, std::shared_ptr<InitValue> initValues)
-        : idToken(std::move(idToken)), initValues(std::move(initValues))
-    {
-    }
+    RecordInstance(Token idToken, std::shared_ptr<InitValue> initValues) : idToken(std::move(idToken)), initValues(std::move(initValues)) {}
 };
 
 class StructInstance : public DataItem {
@@ -156,10 +150,7 @@ public:
     Token idToken;
     std::shared_ptr<InitValue> initValues;
 
-    StructInstance(Token idToken, std::shared_ptr<InitValue> initValues)
-        : idToken(std::move(idToken)), initValues(std::move(initValues))
-    {
-    }
+    StructInstance(Token idToken, std::shared_ptr<InitValue> initValues) : idToken(std::move(idToken)), initValues(std::move(initValues)) {}
 };
 
 // Directives
@@ -185,10 +176,7 @@ public:
 
     DataDir(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
     DataDir(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
-    DataDir(std::optional<Token> idToken, std::shared_ptr<DataItem> dataItem)
-        : idToken(std::move(idToken)), dataItem(std::move(dataItem))
-    {
-    }
+    DataDir(std::optional<Token> idToken, std::shared_ptr<DataItem> dataItem) : idToken(std::move(idToken)), dataItem(std::move(dataItem)) {}
 };
 
 class StructDir : public Directive {
@@ -201,10 +189,9 @@ public:
 
     StructDir(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
     StructDir(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
-    StructDir(Token firstIdToken, Token directiveToken, const std::vector<std::shared_ptr<DataDir>> &fields,
-              Token secondIdToken, Token endsDirToken)
-        : firstIdToken(std::move(firstIdToken)), directiveToken(std::move(directiveToken)), fields(fields),
-          secondIdToken(std::move(secondIdToken)), endsDirToken(std::move(endsDirToken))
+    StructDir(Token firstIdToken, Token directiveToken, const std::vector<std::shared_ptr<DataDir>> &fields, Token secondIdToken, Token endsDirToken)
+        : firstIdToken(std::move(firstIdToken)), directiveToken(std::move(directiveToken)), fields(fields), secondIdToken(std::move(secondIdToken)),
+          endsDirToken(std::move(endsDirToken))
     {
     }
 };
@@ -276,8 +263,8 @@ public:
 
     ProcDir(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
     ProcDir(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
-    ProcDir(Token firstIdToken, Token directiveToken, const std::vector<std::shared_ptr<Instruction>> &fields,
-            Token secondIdToken, Token endsDirToken)
+    ProcDir(Token firstIdToken, Token directiveToken, const std::vector<std::shared_ptr<Instruction>> &fields, Token secondIdToken,
+            Token endsDirToken)
         : firstIdToken(std::move(firstIdToken)), directiveToken(std::move(directiveToken)), instructions(fields),
           secondIdToken(std::move(secondIdToken)), endpDirToken(std::move(endsDirToken))
     {
@@ -291,10 +278,7 @@ public:
 
     EndDir(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
     EndDir(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
-    EndDir(Token endToken, std::optional<ExpressionPtr> addressExpr)
-        : endToken(std::move(endToken)), addressExpr(std::move(addressExpr))
-    {
-    }
+    EndDir(Token endToken, std::optional<ExpressionPtr> addressExpr) : endToken(std::move(endToken)), addressExpr(std::move(addressExpr)) {}
 };
 
 // Instructions
@@ -306,8 +290,7 @@ public:
 
     Instruction(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
     Instruction(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
-    Instruction(std::optional<Token> label, std::optional<Token> mnemonicToken,
-                const std::vector<ExpressionPtr> &operands)
+    Instruction(std::optional<Token> label, std::optional<Token> mnemonicToken, const std::vector<ExpressionPtr> &operands)
         : label(label), mnemonicToken(std::move(mnemonicToken)), operands(operands)
     {
     }
@@ -315,13 +298,7 @@ public:
 
 // Expressions
 // UnfinishedMemoryOperand is when [] are forgotten
-enum class OperandType : uint8_t {
-    ImmediateOperand,
-    RegisterOperand,
-    MemoryOperand,
-    UnfinishedMemoryOperand,
-    InvalidOperand
-};
+enum class OperandType : uint8_t { ImmediateOperand, RegisterOperand, MemoryOperand, UnfinishedMemoryOperand, Unspecified };
 
 struct OperandSize {
     OperandSize(std::string symbol, int value) : symbol(std::move(symbol)), value(value) {}
@@ -334,21 +311,19 @@ public:
     Expression() = default;
     Expression(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
     // expression attributes for semantic analysis
-    std::optional<int32_t> constantValue;
+    std::optional<int64_t> constantValue;
+    bool unresolvedSymbols = false;
     bool isRelocatable = false;
     std::map<Token, std::optional<int32_t>> registers;
 
     // attributes for later operands semantic analysis
-    OperandType type = OperandType::InvalidOperand;
+    OperandType type = OperandType::Unspecified;
     std::optional<OperandSize> size = std::nullopt;
 };
 
 class BinaryOperator : public Expression {
 public:
-    BinaryOperator(Token op, ExpressionPtr left, ExpressionPtr right)
-        : op(std::move(op)), left(std::move(left)), right(std::move(right))
-    {
-    }
+    BinaryOperator(Token op, ExpressionPtr left, ExpressionPtr right) : op(std::move(op)), left(std::move(left)), right(std::move(right)) {}
 
     Token op;
     ExpressionPtr left;

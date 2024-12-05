@@ -24,8 +24,7 @@ DEFINE_ERROR(EXPECTED_END_OF_LINE, "Expected `\\n`, found `{}`")
 DEFINE_ERROR(EXPECTED_END_DIR, "All files must end with the `END` directive")
 
 // Statement
-DEFINE_ERROR(MUST_BE_IN_SEGMENT_BLOCK,
-             "Instructions and data definitions must be in segment blocks (`.CODE` or `.DATA`)")
+DEFINE_ERROR(MUST_BE_IN_SEGMENT_BLOCK, "Instructions and data definitions must be in segment blocks (`.CODE` or `.DATA`)")
 
 // SegDir
 
@@ -65,8 +64,7 @@ DEFINE_ERROR(EXPECTED_COMMA_OR_END_OF_LINE, "Expected `,` or `\\n`")
 // EXPECTED_IDENTIFIER_IN_LABEL = EXPECTED_IDENTIFIER
 
 // DataItem
-DEFINE_ERROR(EXPECTED_VARIABLE_NAME_OR_DATA_DIRECTIVE,
-             "Expected variable name or data directive (`DB`, `DW`, `DD`, 'DQ`)")
+DEFINE_ERROR(EXPECTED_VARIABLE_NAME_OR_DATA_DIRECTIVE, "Expected variable name or data directive (`DB`, `DW`, `DD`, 'DQ`)")
 
 // InitValue
 // UNCLOSED_DELIMITER_IN_INIT_VALUE = UNCLOSED_DELIMITER
@@ -81,12 +79,44 @@ DEFINE_ERROR(EXCPECTED_OPERATOR_OR_CLOSING_DELIMITER, "Expected operator or `)` 
 DEFINE_ERROR(EXPECTED_IDENTIFIER, "Expected identifier, found `{}`")
 
 // Semantic errors
+
+// Instruction errors
+DEFINE_ERROR(INVALID_NUMBER_OF_OPERANDS, "Invalid number of operands in the instruction")
+DEFINE_ERROR(CANT_HAVE_TWO_MEMORY_OPERANDS, "Can't have 2 memory operands")
+DEFINE_ERROR(DESTINATION_OPERAND_CANT_BE_IMMEDIATE, "Destination operand can't be immediate")
+DEFINE_ERROR(IMMEDIATE_OPERAND_TOO_BIG, "Immediate operand is too big for the destination operand")
+DEFINE_ERROR(OPERANDS_HAVE_DIFFERENT_SIZE, "Operands have different size")
+
+DEFINE_ERROR(EXPRESSION_MUST_BE_MEMORY_OR_REGISTER_OPERAND, "Operand must be a memory or a register operand")
+DEFINE_ERROR(EXPRESSION_MUST_HAVE_SIZE, "Operand must have a size")
+DEFINE_ERROR(INVALID_OPERAND_SIZE, "Invalid operand size")
+
+// RecordDir errors
+DEFINE_ERROR(RECORD_WIDTH_TOO_BIG, "`RECORD` total width exceeds 32 bits")
+
+// RecordField errors
+DEFINE_ERROR(RECORD_FIELD_WIDTH_MUST_BE_POSITIVE, "`RECORD` field width must be positive")
+DEFINE_ERROR(RECORD_FIELD_TOO_BIG, "`RECORD` field width exceeds 31 bits")
+
 // Expression errors
+DEFINE_ERROR(EXPRESSION_MUST_BE_CONSTANT, "Expression must be constant")
+DEFINE_ERROR(RECORD_NOT_ALLOWED, "Record `{}` is not allowed outside of `WIDTH` or `MASK` or `SIZE(OF)` operand")
+DEFINE_ERROR(RECORD_FIELD_NOT_ALLOWED, "Record field `{}` is not allowed outside of `WIDTH` or `MASK` operand")
+DEFINE_ERROR(UNDEFINED_SYMBOL, "Undefined symbol `{}`")
+DEFINE_ERROR(TYPE_NOT_ALLOWED, "Type `{}` is not allowed outside of `PTR` first argument or as `SIZE(OF)` operand")
 DEFINE_ERROR(REGISTER_NOT_ALLOWED, "Register is not allowed outside of instruction operands")
 DEFINE_ERROR(CONSTANT_TOO_LARGE, "Constant too large")
 DEFINE_ERROR(UNARY_OPERATOR_INCORRECT_ARGUMENT, "Incorrect argument in the unary operator `{}`")
+
+// Dot operator
 DEFINE_ERROR(DOT_OPERATOR_INCORRECT_ARGUMENT, "Incorrect argument in the binary operator `.`")
+// DOT_SIZE_NOT_SPECIFIED = DOT_OPERATOR_INCORRECT_ARGUMENT
+// DOT_TYPE_NOT_STRUCT = DOT_OPERATOR_INCORRECT_ARGUMENT
+DEFINE_ERROR(DOT_OPERATOR_FIELD_DOESNT_EXIST, "STRUC `{}` doesn't have `{}` field")
+
+// Ptr Operator
 DEFINE_ERROR(PTR_OPERATOR_INCORRECT_ARGUMENT, "Incorrect argument in the binary operator `PTR`")
+
 DEFINE_ERROR(DIVISION_BY_ZERO_IN_EXPRESSION, "Division by `0` in the expression")
 DEFINE_ERROR(INVALID_SCALE_VALUE, "Invalid scale value")
 DEFINE_ERROR(INCORRECT_INDEX_REGISTER, "Index register can't be `ESP`")
@@ -94,13 +124,11 @@ DEFINE_ERROR(OTHER_BINARY_OPERATOR_INCORRECT_ARGUMENT, "Incorrect argument in th
 DEFINE_ERROR(CANT_ADD_VARIABLES, "Can't {} add 2 variables")
 DEFINE_ERROR(CANT_HAVE_REGISTERS_IN_EXPRESSION, "Can't have registers in expression")
 DEFINE_ERROR(MORE_THAN_TWO_REGISTERS, "Can't have more than 2 registers in an address expression with modificators")
-DEFINE_ERROR(MORE_THAN_ONE_SCALE,
-             "Can't have more than 1 register with a scale in an address expression with modificators")
+DEFINE_ERROR(MORE_THAN_ONE_SCALE, "Can't have more than 1 register with a scale in an address expression with modificators")
 DEFINE_ERROR(TWO_ESP_REGISTERS, "Can't have 2 ESP registers in an address expression with modificators")
 DEFINE_ERROR(NON_32BIT_REGISTER, "Can't have a non 32 bit register in an address expression with modificators")
 DEFINE_ERROR(BINARY_MINUS_OPERATOR_INCORRECT_ARGUMENT, "Incorrect argument in the binary operator `-`")
-DEFINE_ERROR(NON_REGISTER_IN_SQUARE_BRACKETS,
-             "Can only have a register with an optional scale and an optional constant expression inside `[]`")
+DEFINE_ERROR(NON_REGISTER_IN_SQUARE_BRACKETS, "Can only have a register with an optional scale and an optional constant expression inside `[]`")
 
 // Warnings
 // Expression warnings

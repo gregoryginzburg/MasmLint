@@ -14,29 +14,32 @@ std::shared_ptr<Symbol> SymbolTable::findSymbol(const Token &token)
     return nullptr;
 }
 
+std::shared_ptr<Symbol> SymbolTable::findSymbol(const std::string &name)
+{
+    auto it = symbols.find(name);
+    if (it != symbols.end()) {
+        return it->second;
+    }
+    return nullptr;
+}
+
 void SymbolTable::printSymbols()
 {
     std::cout << "Symbol Table:\n";
     for (const auto &[name, symbol] : symbols) {
-        if (auto variableSymbol = std::dynamic_pointer_cast<VariableSymbol>(symbol)) {
-            std::string type = "";
-            switch (variableSymbol->type) {
-            case VariableSymbol::Type::DataVariable:
-                type = "Data Variable";
-                break;
-            case VariableSymbol::Type::EquVariable:
-                type = "EQU Variable";
-                break;
-            case VariableSymbol::Type::EqualVariable:
-                type = "`=` Variable";
-                break;
-            case VariableSymbol::Type::Label:
-                type = "Label Variable";
-                break;
-            }
-            std::cout << "Name: " << name << ", Type: " << type << "\n";
+        if (auto dataVariableSymbol = std::dynamic_pointer_cast<DataVariableSymbol>(symbol)) {
+            std::cout << "Name: " << name << ", Type: " << "Data Variable" << "\n";
+        } else if (auto equVariableSymbol = std::dynamic_pointer_cast<EquVariableSymbol>(symbol)) {
+            std::cout << "Name: " << name << ", Type: " << "EQU Variable" << "\n";
+        } else if (auto equalVariableSymbol = std::dynamic_pointer_cast<EqualVariableSymbol>(symbol)) {
+            std::cout << "Name: " << name << ", Type: " << "`=` Variable" << "\n";
+        } else if (auto labelSymbol = std::dynamic_pointer_cast<LabelSymbol>(symbol)) {
+            std::cout << "Name: " << name << ", Type: " << "Label Variable" << "\n";
         } else if (auto structSymbol = std::dynamic_pointer_cast<StructSymbol>(symbol)) {
             std::cout << "Name: " << name << ", Type: " << "STRUC" << "\n";
+            for (const auto &[field, variable] : structSymbol->fields) {
+                std::cout << "  Field name: " << field << "\n";
+            }
         } else if (auto procSymbol = std::dynamic_pointer_cast<ProcSymbol>(symbol)) {
             std::cout << "Name: " << name << ", Type: " << "PROC" << "\n";
         } else if (auto recordSymbol = std::dynamic_pointer_cast<RecordSymbol>(symbol)) {
