@@ -4,6 +4,8 @@
 
 void SymbolTable::addSymbol(const std::shared_ptr<Symbol> &symbol) { symbols[symbol->token.lexeme] = symbol; }
 
+void SymbolTable::removeSymbol(const std::shared_ptr<Symbol> &symbol) { symbols.erase(symbol->token.lexeme); }
+
 // Returns nullptr when symbol is not found
 std::shared_ptr<Symbol> SymbolTable::findSymbol(const Token &token)
 {
@@ -37,7 +39,7 @@ void SymbolTable::printSymbols()
             std::cout << "Name: " << name << ", Type: " << "Label Variable" << "\n";
         } else if (auto structSymbol = std::dynamic_pointer_cast<StructSymbol>(symbol)) {
             std::cout << "Name: " << name << ", Type: " << "STRUC" << "\n";
-            for (const auto &[field, variable] : structSymbol->fields) {
+            for (const auto &[field, variable] : structSymbol->namedFields) {
                 std::cout << "  Field name: " << field << "\n";
             }
         } else if (auto procSymbol = std::dynamic_pointer_cast<ProcSymbol>(symbol)) {

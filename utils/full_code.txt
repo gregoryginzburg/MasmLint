@@ -67,7 +67,7 @@ public:
     AST(AST &&) = default;
     AST &operator=(AST &&) = default;
 
-    std::optional<std::shared_ptr<Diagnostic>> diagnostic;
+    mutable std::optional<std::shared_ptr<Diagnostic>> diagnostic;
 };
 
 class Program : public AST {
@@ -93,13 +93,16 @@ public:
 
 class DupOperator : public InitValue {
 public:
-    DupOperator(ExpressionPtr repeatCount, Token op, std::shared_ptr<InitializerList> operands)
-        : repeatCount(std::move(repeatCount)), op(std::move(op)), operands(std::move(operands))
+    DupOperator(ExpressionPtr repeatCount, Token op, Token leftBracket, std::shared_ptr<InitializerList> operands, Token rightBracket)
+        : repeatCount(std::move(repeatCount)), op(std::move(op)), leftBracket(std::move(leftBracket)), operands(std::move(operands)),
+          rightBracket(std::move(rightBracket))
     {
     }
     ExpressionPtr repeatCount;
     Token op;
+    Token leftBracket;
     std::shared_ptr<InitializerList> operands;
+    Token rightBracket;
 };
 
 class QuestionMarkInitValue : public InitValue {
@@ -117,12 +120,12 @@ public:
 class StructOrRecordInitValue : public InitValue {
 public:
     StructOrRecordInitValue(Token leftBracket, Token rightBracket, std::shared_ptr<InitializerList> fields)
-        : fields(std::move(fields)), leftBracket(std::move(leftBracket)), rightBracket(std::move(rightBracket))
+        : initList(std::move(fields)), leftBracket(std::move(leftBracket)), rightBracket(std::move(rightBracket))
     {
     }
     Token leftBracket;
     Token rightBracket;
-    std::shared_ptr<InitializerList> fields;
+    std::shared_ptr<InitializerList> initList;
 };
 
 class InitializerList : public InitValue {
@@ -136,35 +139,15 @@ public:
 // Define data (data items)
 class DataItem : public AST {
 public:
+    Token dataTypeToken;
+    std::shared_ptr<InitializerList> initValues;
+
     DataItem() = default;
     DataItem(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
-};
-
-class BuiltinInstance : public DataItem {
-public:
-    Token dataTypeToken;
-    std::shared_ptr<InitValue> initValues;
-
-    BuiltinInstance(Token dataTypeToken, std::shared_ptr<InitValue> initValues)
+    DataItem(Token dataTypeToken, std::shared_ptr<InitializerList> initValues)
         : dataTypeToken(std::move(dataTypeToken)), initValues(std::move(initValues))
     {
     }
-};
-
-class RecordInstance : public DataItem {
-public:
-    Token idToken;
-    std::shared_ptr<InitValue> initValues;
-
-    RecordInstance(Token idToken, std::shared_ptr<InitValue> initValues) : idToken(std::move(idToken)), initValues(std::move(initValues)) {}
-};
-
-class StructInstance : public DataItem {
-public:
-    Token idToken;
-    std::shared_ptr<InitValue> initValues;
-
-    StructInstance(Token idToken, std::shared_ptr<InitValue> initValues) : idToken(std::move(idToken)), initValues(std::move(initValues)) {}
 };
 
 // Directives
@@ -493,24 +476,11 @@ inline void printAST(const ASTPtr &node, size_t indent)
             std::cout << indentation << "Unhandled Directive Type\n";
         }
     } else if (auto dataItem = std::dynamic_pointer_cast<DataItem>(node)) {
-        if (auto builtinInstance = std::dynamic_pointer_cast<BuiltinInstance>(dataItem)) {
-            std::cout << indentation << "Builtin Instance\n";
-            std::cout << indentation << "Data Type Token: " << builtinInstance->dataTypeToken.lexeme << "\n";
-            std::cout << indentation << "Init Values:\n";
-            printAST(builtinInstance->initValues, indent + 2);
-        } else if (auto recordInstance = std::dynamic_pointer_cast<RecordInstance>(dataItem)) {
-            std::cout << indentation << "Record Instance\n";
-            std::cout << indentation << "Identifier Token: " << recordInstance->idToken.lexeme << "\n";
-            std::cout << indentation << "Init Values:\n";
-            printAST(recordInstance->initValues, indent + 2);
-        } else if (auto structInstance = std::dynamic_pointer_cast<StructInstance>(dataItem)) {
-            std::cout << indentation << "Struct Instance\n";
-            std::cout << indentation << "Identifier Token: " << structInstance->idToken.lexeme << "\n";
-            std::cout << indentation << "Init Values:\n";
-            printAST(structInstance->initValues, indent + 2);
-        } else {
-            std::cout << indentation << "Unhandled DataItem Type\n";
-        }
+        std::cout << indentation << "Builtin Instance\n";
+        std::cout << indentation << "Data Type Token: " << dataItem->dataTypeToken.lexeme << "\n";
+        std::cout << indentation << "Init Values:\n";
+        printAST(dataItem->initValues, indent + 2);
+
     } else if (auto initValue = std::dynamic_pointer_cast<InitValue>(node)) {
         if (auto dupOperator = std::dynamic_pointer_cast<DupOperator>(initValue)) {
             std::cout << indentation << "Dup Operator\n";
@@ -533,7 +503,7 @@ inline void printAST(const ASTPtr &node, size_t indent)
             std::cout << indentation << "Left Bracket: " << structOrRecord->leftBracket.lexeme << "\n";
             std::cout << indentation << "Right Bracket: " << structOrRecord->rightBracket.lexeme << "\n";
             std::cout << indentation << "Fields:\n";
-            printAST(structOrRecord->fields, indent + 2);
+            printAST(structOrRecord->initList, indent + 2);
         } else if (auto initList = std::dynamic_pointer_cast<InitializerList>(initValue)) {
             std::cout << indentation << "Initializer List\n";
             for (const auto &operand : initList->fields) {
@@ -612,6 +582,46 @@ inline Span getExpressionSpan(const ExpressionPtr &node)
         return {0, 0, nullptr};
     }
 }
+
+inline Span getInitValueSpan(const std::shared_ptr<InitValue> &node)
+{
+    if (node->diagnostic) {
+        return {0, 0, nullptr};
+    }
+
+    if (auto dupOperator = std::dynamic_pointer_cast<DupOperator>(node)) {
+        Span span = getExpressionSpan(dupOperator->repeatCount);
+        span = Span::merge(span, dupOperator->rightBracket.span);
+        return span;
+    }
+
+    if (auto questionMarkInitValue = std::dynamic_pointer_cast<QuestionMarkInitValue>(node)) {
+        return questionMarkInitValue->token.span;
+    }
+
+    if (auto expressionInitValue = std::dynamic_pointer_cast<ExpressionInitValue>(node)) {
+        return getExpressionSpan(expressionInitValue->expr);
+    }
+
+    if (auto structOrRecord = std::dynamic_pointer_cast<StructOrRecordInitValue>(node)) {
+        Span span = Span::merge(structOrRecord->leftBracket.span, structOrRecord->rightBracket.span);
+        return span;
+    }
+
+    if (auto initList = std::dynamic_pointer_cast<InitializerList>(node)) {
+        if (initList->fields.size() == 0) {
+            LOG_DETAILED_ERROR("Initalizer list length can't be 0");
+            return {0, 0, nullptr};
+        }
+
+        Span result = Span::merge(getInitValueSpan(initList->fields[0]), getInitValueSpan(initList->fields.back()));
+        return result;
+    }
+
+    LOG_DETAILED_ERROR("Unknown InitValue node!\n");
+    return {0, 0, nullptr};
+}
+
 File diagnostic.cpp:
 
 #include "diagnostic.h"
@@ -1112,9 +1122,9 @@ void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, const std::string &
             const char c = messageLine[i];
             if (c == '|') {
                 if (primaryLabelIndex && primaryLabelIndex == i) {
-                    coloredLine += format(fg(primaryColor), "{}", "│");
+                    coloredLine += format(fg(primaryColor), "{}", "|");
                 } else {
-                    coloredLine += format(fg(cyanColor), "{}", "│");
+                    coloredLine += format(fg(cyanColor), "{}", "|");
                 }
             } else {
                 coloredLine += c;
@@ -1145,9 +1155,9 @@ void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, const std::string &
             char c = messageLine[i];
             if (c == '|') {
                 if (primaryLabelIndex && primaryLabelIndex == i) {
-                    coloredLine += format(fg(primaryColor), "{}", "│");
+                    coloredLine += format(fg(primaryColor), "{}", "|");
                 } else {
-                    coloredLine += format(fg(cyanColor), "{}", "│");
+                    coloredLine += format(fg(cyanColor), "{}", "|");
                 }
             } else {
                 coloredLine += c;
@@ -1525,10 +1535,7 @@ bool Parser::match(TokenType type) const { return currentToken.type == type; }
 
 bool Parser::match(const std::string &value) const { return stringToUpper(currentToken.lexeme) == value; }
 
-bool Parser::match(const std::unordered_set<std::string> &values) const
-{
-    return values.contains(stringToUpper(currentToken.lexeme));
-}
+bool Parser::match(const std::unordered_set<std::string> &values) const { return values.contains(stringToUpper(currentToken.lexeme)); }
 
 bool Parser::match(TokenType type, const std::string &value) const
 {
@@ -1722,7 +1729,10 @@ std::shared_ptr<DataDir> Parser::parseDataDir(const std::optional<Token> &strucN
     // TODO: debug and test this
     if (match(dataDirectives)) {
         idToken = std::nullopt;
-    } else if ((lookaheadMatch(1, dataDirectives) || lookaheadMatch(1, TokenType::Identifier))) {
+    } else if (false) {
+        // TODO: check whether first symbol is defined as STRUC or RECORD?
+    } else if ((lookaheadMatch(1, dataDirectives) ||
+                lookaheadMatch(1, TokenType::Identifier) /* TODO: check that this identifier is defined STRUC or RECORD?*/)) {
         idToken = currentToken;
         if (!match(TokenType::Identifier)) {
             auto diag = reportExpectedIdentifierInDataDir(currentToken);
@@ -1733,8 +1743,8 @@ std::shared_ptr<DataDir> Parser::parseDataDir(const std::optional<Token> &strucN
             std::string fieldName = idToken.value().lexeme;
             std::shared_ptr<Symbol> symbol = parseSess->symbolTable->findSymbol(strucNameToken.value());
             auto structSymbol = std::dynamic_pointer_cast<StructSymbol>(symbol);
-            if (structSymbol->fields.contains(fieldName)) {
-                auto diag = reportSymbolRedefinition(idToken.value(), structSymbol->fields[fieldName]->token);
+            if (structSymbol->namedFields.contains(fieldName)) {
+                auto diag = reportSymbolRedefinition(idToken.value(), structSymbol->namedFields[fieldName]->token);
                 return INVALID_DATA_DIR(diag);
             }
         } else {
@@ -1860,6 +1870,7 @@ std::shared_ptr<RecordDir> Parser::parseRecordDir()
     if (INVALID(field)) {
         return INVALID_RECORD_DIR(field->diagnostic);
     }
+    fields.push_back(field);
 
     while (match(",")) {
         advance();
@@ -2040,6 +2051,12 @@ std::shared_ptr<EqualDir> Parser::parseEqualDir()
     Token idToken = currentToken;
     consume(TokenType::Identifier);
     // Redefinition is allowed for `=`
+    if (auto symbolPtr = parseSess->symbolTable->findSymbol(idToken)) {
+        if (!std::dynamic_pointer_cast<EqualVariableSymbol>(symbolPtr)) {
+            auto diag = reportSymbolRedefinition(idToken, symbolPtr->token);
+            return INVALID_EQUAL_DIR(diag);
+        }
+    }
 
     if (!match("=")) {
         LOG_DETAILED_ERROR("shouldn't happen");
@@ -2135,8 +2152,7 @@ std::shared_ptr<Instruction> Parser::parseInstruction()
     return std::make_shared<Instruction>(label, menmonicToken, operands);
 }
 
-std::shared_ptr<DataItem> Parser::parseDataItem(const std::optional<Token> &idToken,
-                                                const std::optional<Token> &strucNameToken)
+std::shared_ptr<DataItem> Parser::parseDataItem(const std::optional<Token> &idToken, const std::optional<Token> &strucNameToken)
 {
     if (!match(TokenType::Identifier) && !match(dataDirectives)) {
         auto diag = reportExpectedVariableNameOrDataDirective(currentToken);
@@ -2150,21 +2166,21 @@ std::shared_ptr<DataItem> Parser::parseDataItem(const std::optional<Token> &idTo
         std::string fieldName = idToken.value().lexeme;
         std::shared_ptr<Symbol> symbol = parseSess->symbolTable->findSymbol(strucNameToken.value());
         auto structSymbol = std::dynamic_pointer_cast<StructSymbol>(symbol);
-        structSymbol->fields[fieldName] = std::make_shared<DataVariableSymbol>(idToken.value(), dataTypeToken);
+        structSymbol->namedFields[fieldName] = std::make_shared<DataVariableSymbol>(idToken.value(), dataTypeToken);
     } else if (idToken && !strucNameToken) {
         parseSess->symbolTable->addSymbol(std::make_shared<DataVariableSymbol>(idToken.value(), dataTypeToken));
     }
-    std::shared_ptr<InitValue> initValue = parseInitValue();
+    std::shared_ptr<InitializerList> initValue = parseInitValues();
     if (INVALID(initValue)) {
         return INVALID_DATA_ITEM(initValue->diagnostic);
     }
-    return std::make_shared<BuiltinInstance>(dataTypeToken, initValue);
+    return std::make_shared<DataItem>(dataTypeToken, initValue);
 }
 
-std::shared_ptr<InitValue> Parser::parseInitValue()
+std::shared_ptr<InitializerList> Parser::parseInitValues()
 {
     dataInitializerDelimitersStack = {};
-    std::shared_ptr<InitValue> initValue = parseInitializerList();
+    std::shared_ptr<InitializerList> initValue = parseInitializerList();
     if (INVALID(initValue)) {
         return initValue;
     }
@@ -2181,7 +2197,7 @@ std::shared_ptr<InitValue> Parser::parseSingleInitValue()
         Token leftBracket = currentToken;
         dataInitializerDelimitersStack.push(leftBracket);
         advance();
-        std::shared_ptr<InitializerList> fields;
+        std::shared_ptr<InitializerList> fields = std::make_shared<InitializerList>(std::vector<std::shared_ptr<InitValue>>());
         if (match(">")) {
             Token rightBracket = currentToken;
             advance();
@@ -2227,11 +2243,11 @@ std::shared_ptr<InitValue> Parser::parseSingleInitValue()
                 return INVALID_INIT_VALUE(diag);
             }
             dataInitializerDelimitersStack.pop();
-            return std::make_shared<DupOperator>(expr, op, operands);
+            return std::make_shared<DupOperator>(expr, op, leftBracket.value(), operands, rightBracket.value());
         } else {
             // <var var> - can't be
-            if (!dataInitializerDelimitersStack.empty() && !match(TokenType::CloseAngleBracket) &&
-                !match(TokenType::CloseBracket) && !match(TokenType::Comma)) {
+            if (!dataInitializerDelimitersStack.empty() && !match(TokenType::CloseAngleBracket) && !match(TokenType::CloseBracket) &&
+                !match(TokenType::Comma)) {
                 if (match(TokenType::EndOfLine) || match(TokenType::EndOfFile)) {
                     auto diag = reportUnclosedDelimiterInDataInitializer(currentToken);
                     return INVALID_INIT_VALUE(diag);
@@ -2400,8 +2416,7 @@ ExpressionPtr Parser::parseMemberAccessAndIndexingExpression()
 ExpressionPtr Parser::parseHighPrecedenceUnaryExpression()
 {
     std::vector<Token> operators;
-    while (match("LENGTH") || match("LENGTHOF") || match("SIZE") || match("SIZEOF") || match("WIDTH") ||
-           match("MASK")) {
+    while (match("LENGTH") || match("LENGTHOF") || match("SIZE") || match("SIZEOF") || match("WIDTH") || match("MASK")) {
         Token op = currentToken;
         operators.push_back(op);
         advance();
@@ -2450,8 +2465,8 @@ ExpressionPtr Parser::parsePrimaryExpression()
         }
         expressionDelimitersStack.pop();
         return std::make_shared<SquareBrackets>(leftBracket, rightBracket.value(), expr);
-    } else if (match(TokenType::Identifier) || match(TokenType::Number) || match(TokenType::StringLiteral) ||
-               match(TokenType::Register) || match(TokenType::Type) || match(TokenType::Dollar)) {
+    } else if (match(TokenType::Identifier) || match(TokenType::Number) || match(TokenType::StringLiteral) || match(TokenType::Register) ||
+               match(TokenType::Type) || match(TokenType::Dollar)) {
         Token token = currentToken;
         advance();
         std::string curentTokenLexemeUpper = stringToUpper(currentToken.lexeme);
@@ -2461,15 +2476,13 @@ ExpressionPtr Parser::parsePrimaryExpression()
         // or there might be `(` or `[` - implicit plus for index operator
         if (!expressionDelimitersStack.empty() && currentToken.type != TokenType::CloseSquareBracket &&
             currentToken.type != TokenType::CloseBracket && currentToken.type != TokenType::OpenSquareBracket &&
-            currentToken.type != TokenType::OpenBracket && curentTokenLexemeUpper != "+" &&
-            curentTokenLexemeUpper != "-" && curentTokenLexemeUpper != "*" && curentTokenLexemeUpper != "/" &&
-            curentTokenLexemeUpper != "PTR" && curentTokenLexemeUpper != "." && curentTokenLexemeUpper != "MOD" &&
-            curentTokenLexemeUpper != "SHL" && curentTokenLexemeUpper != "SHR") {
+            currentToken.type != TokenType::OpenBracket && curentTokenLexemeUpper != "+" && curentTokenLexemeUpper != "-" &&
+            curentTokenLexemeUpper != "*" && curentTokenLexemeUpper != "/" && curentTokenLexemeUpper != "PTR" && curentTokenLexemeUpper != "." &&
+            curentTokenLexemeUpper != "MOD" && curentTokenLexemeUpper != "SHL" && curentTokenLexemeUpper != "SHR") {
 
             // try to distinct between `(var var` and `(1 + 2` or `(1 + 2,
             // when after var there aren't any vars and only possible closing things and then endofline -
-            if (currentToken.type == TokenType::EndOfLine || currentToken.type == TokenType::EndOfFile ||
-                currentToken.type == TokenType::Comma) {
+            if (currentToken.type == TokenType::EndOfLine || currentToken.type == TokenType::EndOfFile || currentToken.type == TokenType::Comma) {
                 auto diag = reportUnclosedDelimiterError(currentToken);
                 return INVALID_EXPRESSION(diag);
             }
@@ -2542,9 +2555,8 @@ private:
 
     [[nodiscard]] std::shared_ptr<Instruction> parseInstruction();
 
-    [[nodiscard]] std::shared_ptr<DataItem> parseDataItem(const std::optional<Token> &idToken,
-                                            const std::optional<Token> &strucNameToken);
-    [[nodiscard]] std::shared_ptr<InitValue> parseInitValue();
+    [[nodiscard]] std::shared_ptr<DataItem> parseDataItem(const std::optional<Token> &idToken, const std::optional<Token> &strucNameToken);
+    [[nodiscard]] std::shared_ptr<InitializerList> parseInitValues();
     [[nodiscard]] std::shared_ptr<InitValue> parseSingleInitValue();
     [[nodiscard]] std::shared_ptr<InitializerList> parseInitializerList();
 
@@ -3067,7 +3079,11 @@ std::map<int, std::string> SemanticAnalyzer::sizeValueToStr = {{1, "BYTE"}, {2, 
 
 std::map<std::string, int> SemanticAnalyzer::sizeStrToValue = {{"BYTE", 1}, {"WORD", 2}, {"DWORD", 4}, {"QWORD", 8}};
 
+std::map<std::string, std::string> SemanticAnalyzer::dataDirectiveToSizeStr = {{"DB", "BYTE"}, {"DW", "WORD"}, {"DD", "DWORD"}, {"DQ", "QWORD"}};
+
 std::unordered_set<std::string> SemanticAnalyzer::builtinTypes = {"BYTE", "WORD", "DWORD", "QWORD"};
+
+std::unordered_set<std::string> SemanticAnalyzer::dataDirectives = {"DB", "DW", "DD", "DQ"};
 
 SemanticAnalyzer::SemanticAnalyzer(std::shared_ptr<ParseSession> parseSession, ASTPtr ast) : parseSess(std::move(parseSession)), ast(std::move(ast))
 {
@@ -3109,6 +3125,7 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
     for (const auto &operand : instruction->operands) {
         bool success = visitExpression(operand, ExpressionContext(ExprCtxtFlags::AllowRegisters | ExprCtxtFlags::AllowForwardReferences));
         if (!success) {
+            instruction->diagnostic = operand->diagnostic;
             return false;
         }
         if (operand->type == OperandType::UnfinishedMemoryOperand) {
@@ -3129,7 +3146,7 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
             return false;
         }
         labelSymbol->value = -1; // TODO: calculate actual value
-        labelSymbol->wasDefined = false;
+        labelSymbol->wasDefined = true;
     }
 
     if (!instruction->mnemonicToken) {
@@ -3144,11 +3161,10 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
     for (const auto &operand : instruction->operands) {
         if (operand->size) {
             int opSize = operand->size.value().value;
-            if (opSize != 1 && opSize != 2 && opSize != 4) {
+            if (opSize != 1 && opSize != 2 && opSize != 4 && !operand->unresolvedSymbols) {
                 instruction->diagnostic = reportInvalidOperandSize(operand, "{1, 2, 4}", opSize);
                 return false;
             }
-            return false;
         }
     }
 
@@ -3233,6 +3249,25 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
             instruction->diagnostic = reportExpressionMustHaveSize(operand);
             return false;
         }
+    } else if (mnemonic == "INCHAR") {
+        if (instruction->operands.size() != 1) {
+            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, 1);
+            return false;
+        }
+        ExpressionPtr operand = instruction->operands[0];
+        if (operand->type != OperandType::MemoryOperand && operand->type != OperandType::RegisterOperand) {
+            instruction->diagnostic = reportExpressionMustBeMemoryOrRegisterOperand(operand);
+            return false;
+        }
+        if (!operand->size) {
+            instruction->diagnostic = reportExpressionMustHaveSize(operand);
+            return false;
+        }
+        int operandSize = operand->size.value().value;
+        if (operandSize != 1 && !operand->unresolvedSymbols) {
+            instruction->diagnostic = reportInvalidOperandSize(operand, "1", operandSize);
+            return false;
+        }
     }
     return true;
 }
@@ -3264,24 +3299,55 @@ bool SemanticAnalyzer::visitDirective(const std::shared_ptr<Directive> &directiv
 bool SemanticAnalyzer::visitSegDir(const std::shared_ptr<SegDir> &segDir)
 {
     if (segDir->constExpr) {
-        bool success = visitExpression(segDir->constExpr.value(), ExpressionContext(ExprCtxtFlags::MustBeConstant));
+        bool success = visitExpression(segDir->constExpr.value(), ExpressionContext(ExprCtxtFlags::None));
+        // TODO: checl that expr is constant
         if (!success) {
+            segDir->diagnostic = segDir->constExpr.value()->diagnostic;
             return false;
         }
     }
     return true;
 }
 
-bool SemanticAnalyzer::visitDataDir(const std::shared_ptr<DataDir> &dataDir) { return visitDataItem(dataDir->dataItem); }
+bool SemanticAnalyzer::visitDataDir(const std::shared_ptr<DataDir> &dataDir, const std::optional<Token> &strucNameToken)
+{
+    if (dataDir->idToken) {
+        std::string fieldName = dataDir->idToken.value().lexeme;
+        std::shared_ptr<DataVariableSymbol> dataVariableSymbol;
+        if (strucNameToken) {
+            std::shared_ptr<Symbol> symbol = parseSess->symbolTable->findSymbol(strucNameToken.value());
+            auto structSymbol = std::dynamic_pointer_cast<StructSymbol>(symbol);
+            dataVariableSymbol = structSymbol->namedFields[fieldName];
+        } else {
+            std::shared_ptr<Symbol> fieldSymbol = parseSess->symbolTable->findSymbol(fieldName);
+            dataVariableSymbol = std::dynamic_pointer_cast<DataVariableSymbol>(fieldSymbol);
+        }
+        if (!dataVariableSymbol) {
+            LOG_DETAILED_ERROR("no data variable symbol in the symbol table, when should be");
+            return false;
+        }
+        dataVariableSymbol->value = -1; // TODO: calculate actual value
+        dataVariableSymbol->wasDefined = true;
+        return visitDataItem(dataDir->dataItem, dataVariableSymbol);
+    }
+    return visitDataItem(dataDir->dataItem, std::nullopt);
+}
 
 bool SemanticAnalyzer::visitStructDir(const std::shared_ptr<StructDir> &structDir)
 {
+    std::shared_ptr<Symbol> symbol = parseSess->symbolTable->findSymbol(structDir->firstIdToken);
+    auto structSymbol = std::dynamic_pointer_cast<StructSymbol>(symbol);
+    structSymbol->structDir = structDir;
+
     for (const auto &field : structDir->fields) {
         if (INVALID(field)) {
             continue;
         }
-        std::ignore = visitDataDir(field);
+        std::ignore = visitDataDir(field, structDir->firstIdToken);
     }
+
+    structSymbol->size = structSymbol->sizeOf = -1; // TODO: calculate actual value
+    structSymbol->wasDefined = true;
     return true;
 }
 
@@ -3290,89 +3356,287 @@ bool SemanticAnalyzer::visitProcDir(const std::shared_ptr<ProcDir> &procDir)
     for (const auto &instruction : procDir->instructions) {
         std::ignore = visitInstruction(instruction);
     }
+
+    std::shared_ptr<Symbol> symbol = parseSess->symbolTable->findSymbol(procDir->firstIdToken);
+    auto procSymbol = std::dynamic_pointer_cast<ProcSymbol>(symbol);
+    procSymbol->value = -1; // TODO: calculate actual value
+    procSymbol->wasDefined = true;
     return true;
 }
 
-bool SemanticAnalyzer::visitRecordDir(const std::shared_ptr<RecordDir> & /*recordDir*/) { return true; }
+bool SemanticAnalyzer::visitRecordDir(const std::shared_ptr<RecordDir> &recordDir)
+{
+    int32_t width = 0;
+    for (const auto &field : recordDir->fields) {
+        bool success = visitRecordField(field);
+        if (!success) {
+            recordDir->diagnostic = field->diagnostic;
+            return false;
+        }
+        std::shared_ptr<Symbol> symbol = parseSess->symbolTable->findSymbol(field->fieldToken);
+        auto recordFieldSymbol = std::dynamic_pointer_cast<RecordFieldSymbol>(symbol);
+        width += recordFieldSymbol->width;
+    }
 
-bool SemanticAnalyzer::visitRecordField(const std::shared_ptr<RecordField> recordField) { return true; }
+    if (width > 32) {
+        recordDir->diagnostic = reportRecordWidthTooBig(recordDir, width);
+        return false;
+    }
+
+    std::shared_ptr<Symbol> symbol = parseSess->symbolTable->findSymbol(recordDir->idToken);
+    auto recordSymbol = std::dynamic_pointer_cast<RecordSymbol>(symbol);
+    recordSymbol->width = width;
+    recordSymbol->wasDefined = true;
+    // TODO: calculate mask
+
+    return true;
+}
+
+bool SemanticAnalyzer::visitRecordField(const std::shared_ptr<RecordField> &recordField)
+{
+    std::shared_ptr<Symbol> symbol = parseSess->symbolTable->findSymbol(recordField->fieldToken);
+    auto recordFieldSymbol = std::dynamic_pointer_cast<RecordFieldSymbol>(symbol);
+
+    bool success = visitExpression(recordField->width, ExpressionContext(ExprCtxtFlags::None));
+    if (!success) {
+        recordField->diagnostic = recordField->width->diagnostic;
+        return false;
+    }
+
+    if (!recordField->width->constantValue) {
+        recordField->diagnostic = reportExpressionMustBeConstant(recordField->width);
+        return false;
+    }
+
+    int64_t width = recordField->width->constantValue.value();
+    if (width <= 0) {
+        recordField->diagnostic = reportRecordFieldWidthMustBePositive(recordField, width);
+        return false;
+    }
+    if (width > 31) {
+        recordField->diagnostic = reportRecordFieldWidthTooBig(recordField, width);
+        return false;
+    }
+    recordFieldSymbol->width = static_cast<int32_t>(width);
+
+    auto initialValueExpr = recordField->initialValue;
+    if (initialValueExpr) {
+        success = visitExpression(initialValueExpr.value(), ExpressionContext(ExprCtxtFlags::None));
+        if (!success) {
+            recordField->diagnostic = initialValueExpr.value()->diagnostic;
+            return false;
+        }
+
+        if (!initialValueExpr.value()->constantValue) {
+            recordField->diagnostic = reportExpressionMustBeConstant(initialValueExpr.value());
+            return false;
+        }
+        // int64_t initialValue = initialValueExpr.value()->constantValue.value();
+        // TODO: check that initialValue fits into `width` bytes
+    }
+    // TODO: calculate shift & mask
+    recordFieldSymbol->wasDefined = true;
+    return true;
+}
 
 bool SemanticAnalyzer::visitEquDir(const std::shared_ptr<EquDir> &equDir)
 {
     // TODO: can be a string
-    return visitExpression(equDir->value, ExpressionContext(ExprCtxtFlags::MustBeConstant));
+    std::shared_ptr<Symbol> symbol = parseSess->symbolTable->findSymbol(equDir->idToken);
+    auto equSymbol = std::dynamic_pointer_cast<EquVariableSymbol>(symbol);
+    bool success = visitExpression(equDir->value, ExpressionContext(ExprCtxtFlags::None));
+    if (!success) {
+        equDir->diagnostic = equDir->value->diagnostic;
+        return false;
+    }
+    if (!equDir->value->constantValue) {
+        equDir->diagnostic = reportExpressionMustBeConstant(equDir->value);
+        return false;
+    }
+    // TODO: report when is' bigger than 32 bits
+    equSymbol->value = static_cast<int32_t>(equDir->value->constantValue.value());
+    equSymbol->wasDefined = true;
+    return true;
 }
 
 bool SemanticAnalyzer::visitEqualDir(const std::shared_ptr<EqualDir> &equalDir)
 {
-    // handle symbol redefinition
-    return visitExpression(equalDir->value, ExpressionContext(ExprCtxtFlags::MustBeConstant));
+    std::shared_ptr<Symbol> symbol = parseSess->symbolTable->findSymbol(equalDir->idToken);
+    auto equalSymbol = std::dynamic_pointer_cast<EqualVariableSymbol>(symbol);
+    bool success = visitExpression(equalDir->value, ExpressionContext(ExprCtxtFlags::None));
+    if (!success) {
+        equalDir->diagnostic = equalDir->value->diagnostic;
+        return false;
+    }
+    if (!equalDir->value->constantValue) {
+        equalDir->diagnostic = reportExpressionMustBeConstant(equalDir->value);
+        return false;
+    }
+    // TODO: report when is' bigger than 32 bits
+    equalSymbol->value = static_cast<int32_t>(equalDir->value->constantValue.value());
+    equalSymbol->wasDefined = true;
+    return true;
 }
 
 bool SemanticAnalyzer::visitEndDir(const std::shared_ptr<EndDir> &endDir)
 {
     if (endDir->addressExpr) {
-        return visitExpression(endDir->addressExpr.value(), ExpressionContext(ExprCtxtFlags::MustBeConstant));
-    }
-    return true;
-}
-
-bool SemanticAnalyzer::visitDataItem(const std::shared_ptr<DataItem> &dataItem)
-{
-    if (auto builtinInstance = std::dynamic_pointer_cast<BuiltinInstance>(dataItem)) {
-        Token dataTypeToken = builtinInstance->dataTypeToken;
-        std::string dataType = stringToUpper(dataTypeToken.lexeme);
-
-        // Visit initialization values
-        return visitInitValue(builtinInstance->initValues, dataType);
-
-    } else if (auto recordInstance = std::dynamic_pointer_cast<RecordInstance>(dataItem)) {
-        // TODO: Implement record instance processing
-        LOG_DETAILED_ERROR("Record instances are not yet implemented.");
-    } else if (auto structInstance = std::dynamic_pointer_cast<StructInstance>(dataItem)) {
-        // TODO: Implement struct instance processing
-        LOG_DETAILED_ERROR("Struct instances are not yet implemented.");
-    } else {
-        LOG_DETAILED_ERROR("Unknown data item type.");
-    }
-    return true;
-}
-
-bool SemanticAnalyzer::visitInitValue(const std::shared_ptr<InitValue> &initValue, const std::string &dataType)
-{
-    if (auto dupOperator = std::dynamic_pointer_cast<DupOperator>(initValue)) {
-        // Process DUP operator
-        bool success = visitExpression(dupOperator->repeatCount, ExpressionContext(ExprCtxtFlags::MustBeConstant));
+        bool success = visitExpression(endDir->addressExpr.value(), ExpressionContext(ExprCtxtFlags::None));
         if (!success) {
+            endDir->diagnostic = endDir->addressExpr.value()->diagnostic;
+            return false;
+        }
+        // TODO: check it's address expression
+    }
+    return true;
+}
+
+bool SemanticAnalyzer::visitDataItem(const std::shared_ptr<DataItem> &dataItem,
+                                     const std::optional<std::shared_ptr<DataVariableSymbol>> &dataVariableSymbol)
+{
+    Token dataTypeToken = dataItem->dataTypeToken;
+    if (dataDirectives.contains(stringToUpper(dataTypeToken.lexeme))) {
+        if (dataVariableSymbol) {
+            std::string typeStr = dataDirectiveToSizeStr[stringToUpper(dataTypeToken.lexeme)];
+            dataVariableSymbol.value()->dataTypeSize = OperandSize(typeStr, sizeStrToValue[typeStr]);
+        }
+        return visitInitValue(dataItem->initValues, dataVariableSymbol, dataTypeToken);
+    }
+
+    // only STRUC or RECORD from here
+    std::shared_ptr<Symbol> dataTypeSymbol = parseSess->symbolTable->findSymbol(dataTypeToken);
+    if (!dataTypeSymbol) {
+        dataItem->diagnostic = reportUndefinedSymbol(dataTypeToken, false);
+        return false;
+    }
+    if (!dataTypeSymbol->wasDefined) {
+        dataItem->diagnostic = reportUndefinedSymbol(dataTypeToken, true);
+        return false;
+    }
+
+    if (!std::dynamic_pointer_cast<StructSymbol>(dataTypeSymbol) && !std::dynamic_pointer_cast<RecordSymbol>(dataTypeSymbol)) {
+        dataItem->diagnostic = reportInvalidDataType(dataItem);
+        return false;
+    }
+
+    if (dataVariableSymbol) {
+        if (auto structSymbol = std::dynamic_pointer_cast<StructSymbol>(dataTypeSymbol)) {
+            dataVariableSymbol.value()->dataTypeSize = OperandSize(structSymbol->token.lexeme, structSymbol->size);
+        } else if (auto recordSymbol = std::dynamic_pointer_cast<RecordSymbol>(dataTypeSymbol)) {
+            dataVariableSymbol.value()->dataTypeSize = OperandSize(recordSymbol->token.lexeme, 4);
+        }
+    }
+
+    return visitInitValue(dataItem->initValues, dataVariableSymbol, dataTypeToken);
+}
+
+bool SemanticAnalyzer::visitInitValue(const std::shared_ptr<InitValue> &initValue,
+                                      const std::optional<std::shared_ptr<DataVariableSymbol>> &dataVariableSymbol, const Token &expectedTypeToken)
+{
+    dataInitializerDepth = 0;
+    return visitInitValueHelper(initValue, dataVariableSymbol, expectedTypeToken);
+}
+
+bool SemanticAnalyzer::visitInitValueHelper(const std::shared_ptr<InitValue> &initValue,
+                                            const std::optional<std::shared_ptr<DataVariableSymbol>> &dataVariableSymbol,
+                                            const Token &expectedTypeToken)
+{
+    dataInitializerDepth++;
+    if (auto dupOperator = std::dynamic_pointer_cast<DupOperator>(initValue)) {
+        // TODO: dup operator can't be inside <> (<1 dup (2)>)
+        bool success = visitExpression(dupOperator->repeatCount, ExpressionContext(ExprCtxtFlags::None));
+        if (!success) {
+            initValue->diagnostic = dupOperator->repeatCount->diagnostic;
+            return false;
+        }
+        if (!dupOperator->repeatCount->constantValue) {
+            initValue->diagnostic = reportExpressionMustBeConstant(dupOperator->repeatCount);
             return false;
         }
 
-        // Visit operands
-        return visitInitValue(dupOperator->operands, dataType);
+        return visitInitValueHelper(dupOperator->operands, dataVariableSymbol, expectedTypeToken);
 
     } else if (auto questionMarkInitValue = std::dynamic_pointer_cast<QuestionMarkInitValue>(initValue)) {
         // Uninitialized data; no action needed
 
     } else if (auto expressionInitValue = std::dynamic_pointer_cast<ExpressionInitValue>(initValue)) {
-        // Process expression init value
-        return visitExpression(expressionInitValue->expr, ExpressionContext(ExprCtxtFlags::None | ExprCtxtFlags::AllowForwardReferences));
+        if (!dataDirectives.contains(stringToUpper(expectedTypeToken.lexeme))) {
+            initValue->diagnostic = reportExpectedStrucOrRecordDataInitializer(expressionInitValue, expectedTypeToken);
+            return false;
+        }
 
-        // TODO: Implement type checking between expression and data type
+        bool success = visitExpression(expressionInitValue->expr, ExpressionContext(ExprCtxtFlags::AllowForwardReferences));
+        if (!success) {
+            initValue->diagnostic = expressionInitValue->expr->diagnostic;
+            return false;
+        }
+
+        // TODO: check for size
 
     } else if (auto structOrRecordInitValue = std::dynamic_pointer_cast<StructOrRecordInitValue>(initValue)) {
-        // Process struct or record initialization
-        return visitInitValue(structOrRecordInitValue->fields, dataType);
+        if (dataDirectives.contains(stringToUpper(expectedTypeToken.lexeme))) {
+            initValue->diagnostic = reportExpectedSingleItemDataInitializer(structOrRecordInitValue, expectedTypeToken);
+            return false;
+        }
+
+        std::shared_ptr<Symbol> symbol = parseSess->symbolTable->findSymbol(expectedTypeToken);
+
+        if (auto expectedRecordSymbol = std::dynamic_pointer_cast<RecordSymbol>(symbol)) {
+            if (structOrRecordInitValue->initList->fields.size() > expectedRecordSymbol->fields.size()) {
+                initValue->diagnostic = reportTooManyInitialValuesForRecord(structOrRecordInitValue, expectedRecordSymbol);
+                return false;
+            }
+
+            for (const auto &init : structOrRecordInitValue->initList->fields) {
+                std::shared_ptr<ExpressionInitValue> exprInitValue;
+                if (!(exprInitValue = std::dynamic_pointer_cast<ExpressionInitValue>(init))) {
+                    initValue->diagnostic = reportExpectedSingleItemDataInitializer(init, expectedTypeToken);
+                    return false;
+                }
+                // TODO: check that for size
+            }
+        } else if (auto expectedStructSymbol = std::dynamic_pointer_cast<StructSymbol>(symbol)) {
+
+            if (structOrRecordInitValue->initList->fields.size() > expectedStructSymbol->structDir->fields.size()) {
+                initValue->diagnostic = reportTooManyInitialValuesForStruc(structOrRecordInitValue, expectedStructSymbol);
+                return false;
+            }
+            int i = 0;
+            for (const auto &init : structOrRecordInitValue->initList->fields) {
+                Token newExpectedTypeToken = expectedStructSymbol->structDir->fields[i]->dataItem->dataTypeToken;
+
+                if (std::dynamic_pointer_cast<DupOperator>(init)) {
+                    if (dataDirectives.contains(stringToUpper(newExpectedTypeToken.lexeme))) {
+                        initValue->diagnostic = reportExpectedSingleItemDataInitializer(init, newExpectedTypeToken);
+                        return false;
+                    } else {
+                        initValue->diagnostic = reportExpectedStrucOrRecordDataInitializer(init, newExpectedTypeToken);
+                        return false;
+                    }
+                }
+
+                bool success = visitInitValueHelper(init, dataVariableSymbol, newExpectedTypeToken);
+                if (!success) {
+                    initValue->diagnostic = init->diagnostic;
+                    return false;
+                }
+                i += 1;
+            }
+        }
 
     } else if (auto initList = std::dynamic_pointer_cast<InitializerList>(initValue)) {
         for (const auto &init : initList->fields) {
-            bool success = visitInitValue(init, dataType);
+            bool success = visitInitValueHelper(init, dataVariableSymbol, expectedTypeToken);
             if (!success) {
+                initValue->diagnostic = init->diagnostic;
                 return false;
             }
         }
     } else {
         LOG_DETAILED_ERROR("Unknown initialization value type.");
+        return false;
     }
+    dataInitializerDepth--;
     return true;
 }
 
@@ -3409,6 +3673,7 @@ bool SemanticAnalyzer::visitBrackets(const std::shared_ptr<Brackets> &node, cons
 {
     bool success = visitExpressionHelper(node->operand, context);
     if (!success) {
+        node->diagnostic = node->operand->diagnostic;
         return false;
     }
 
@@ -3427,6 +3692,7 @@ bool SemanticAnalyzer::visitSquareBrackets(const std::shared_ptr<SquareBrackets>
 {
     bool success = visitExpressionHelper(node->operand, context);
     if (!success) {
+        node->diagnostic = node->operand->diagnostic;
         return false;
     }
 
@@ -3528,9 +3794,14 @@ bool SemanticAnalyzer::visitSquareBrackets(const std::shared_ptr<SquareBrackets>
 
 bool SemanticAnalyzer::visitImplicitPlusOperator(const std::shared_ptr<ImplicitPlusOperator> &node, const ExpressionContext &context)
 {
-    bool successLeft = visitExpressionHelper(node->left, context);
-    bool successRight = visitExpressionHelper(node->right, context);
-    if (!successLeft || !successRight) {
+    bool success = visitExpressionHelper(node->left, context);
+    if (!success) {
+        node->diagnostic = node->left->diagnostic;
+        return false;
+    }
+    success = visitExpressionHelper(node->right, context);
+    if (!success) {
+        node->diagnostic = node->right->diagnostic;
         return false;
     }
 
@@ -3626,16 +3897,18 @@ bool SemanticAnalyzer::visitBinaryOperator(const std::shared_ptr<BinaryOperator>
 {
     ExpressionContext contextLeft = context;
     ExpressionContext contextRight = context;
-    if (stringToUpper(node->op.lexeme) == "PTR") {
-        contextLeft.isPTROperand = true;
-    }
     if (node->op.lexeme == ".") {
         contextRight.isStructField = true;
     }
 
-    bool successLeft = visitExpressionHelper(node->left, contextLeft);
-    bool successRight = visitExpressionHelper(node->right, contextRight);
-    if (!successLeft || !successRight) {
+    bool success = visitExpressionHelper(node->left, contextLeft);
+    if (!success) {
+        node->diagnostic = node->left->diagnostic;
+        return false;
+    }
+    success = visitExpressionHelper(node->right, contextRight);
+    if (!success) {
+        node->diagnostic = node->right->diagnostic;
         return false;
     }
 
@@ -3658,7 +3931,7 @@ bool SemanticAnalyzer::visitBinaryOperator(const std::shared_ptr<BinaryOperator>
         }
         std::shared_ptr<Leaf> leafRight;
         if (!(leafRight = std::dynamic_pointer_cast<Leaf>(right)) || leafRight->token.type != TokenType::Identifier) {
-            LOG_DETAILED_ERROR("After `.` encountered not identifier! (should be handled in parsing stage)");
+            LOG_DETAILED_ERROR("After `.` encountered not an identifier! (should be handled in the parsing stage)");
             return false;
         }
 
@@ -3668,11 +3941,11 @@ bool SemanticAnalyzer::visitBinaryOperator(const std::shared_ptr<BinaryOperator>
         }
         std::shared_ptr<Symbol> typeSymbol = parseSess->symbolTable->findSymbol(left->size->symbol);
         if (!typeSymbol || !std::dynamic_pointer_cast<StructSymbol>(typeSymbol)) {
-            node->diagnostic = reportDotOperatorTypeNotStruct(node);
+            node->diagnostic = reportDotOperatorTypeNotStruct(node, left->size->symbol);
             return false;
         }
         auto structSymbol = std::dynamic_pointer_cast<StructSymbol>(typeSymbol);
-        if (!structSymbol->fields.contains(leafRight->token.lexeme)) {
+        if (!structSymbol->namedFields.contains(leafRight->token.lexeme)) {
             node->diagnostic = reportDotOperatorFieldDoesntExist(node, structSymbol->token.lexeme, leafRight->token.lexeme);
             return false;
         }
@@ -3680,7 +3953,15 @@ bool SemanticAnalyzer::visitBinaryOperator(const std::shared_ptr<BinaryOperator>
         node->constantValue = std::nullopt;
         node->isRelocatable = left->isRelocatable;
         node->type = OperandType::MemoryOperand;
-        node->size = left->size;
+
+        // Forward references must be allowed (when not allowed, the expression also must be constant and for `.` error expression must be constant
+        // will be emitted)
+        // TODO: test this...
+        if (!structSymbol->wasDefined) {
+            linesForSecondPass.push_back(currentLine);
+            node->unresolvedSymbols = true;
+        }
+        node->size = structSymbol->namedFields[leafRight->token.lexeme]->dataTypeSize;
         node->registers = left->registers;
         return true;
     } else if (op == "PTR") {
@@ -3699,14 +3980,17 @@ bool SemanticAnalyzer::visitBinaryOperator(const std::shared_ptr<BinaryOperator>
             return false;
         }
 
-        std::string typeOperand = stringToUpper(leafLeft->token.lexeme);
+        std::string typeOperand = leafLeft->token.lexeme;
         std::shared_ptr<Symbol> typeSymbol;
-        if (!builtinTypes.contains(typeOperand)) {
+        if (!builtinTypes.contains(stringToUpper(typeOperand))) {
             typeSymbol = parseSess->symbolTable->findSymbol(leafLeft->token);
             if (!typeSymbol || !std::dynamic_pointer_cast<StructSymbol>(typeSymbol)) {
                 node->diagnostic = reportPtrOperatorIncorrectArgument(node);
                 return false;
             }
+        }
+        if (builtinTypes.contains(stringToUpper(typeOperand))) {
+            typeOperand = stringToUpper(typeOperand);
         }
 
         node->constantValue = right->constantValue;
@@ -3939,19 +4223,13 @@ bool SemanticAnalyzer::visitBinaryOperator(const std::shared_ptr<BinaryOperator>
 
 bool SemanticAnalyzer::visitUnaryOperator(const std::shared_ptr<UnaryOperator> &node, const ExpressionContext &context)
 {
-    ExpressionContext contextOperand = context;
-    if (stringToUpper(node->op.lexeme) == "WIDTH" || stringToUpper(node->op.lexeme) == "MASK") {
-        contextOperand.isWidthOrMaskOperand = true;
-    }
-    if (stringToUpper(node->op.lexeme) == "SIZE" || stringToUpper(node->op.lexeme) == "SIZEOF") {
-        contextOperand.isSizeOperand = true;
-    }
-    bool success = visitExpressionHelper(node->operand, contextOperand);
+    std::string op = stringToUpper(node->op.lexeme);
+    bool success = visitExpressionHelper(node->operand, context);
     if (!success) {
+        node->diagnostic = node->operand->diagnostic;
         return false;
     }
 
-    std::string op = stringToUpper(node->op.lexeme);
     auto operand = node->operand;
     node->unresolvedSymbols = operand->unresolvedSymbols;
 
@@ -3975,6 +4253,7 @@ bool SemanticAnalyzer::visitUnaryOperator(const std::shared_ptr<UnaryOperator> &
             return false;
         }
         // TODO: calculate actual length
+        // TODO: check whether symbol was defined
         node->unresolvedSymbols = true;
         node->constantValue = -1;
         node->isRelocatable = false;
@@ -3995,6 +4274,7 @@ bool SemanticAnalyzer::visitUnaryOperator(const std::shared_ptr<UnaryOperator> &
             return false;
         }
         // TODO: calculate actual size
+        // TODO: check whether symbol was defined
         node->unresolvedSymbols = true;
         node->constantValue = -1;
         node->isRelocatable = false;
@@ -4016,6 +4296,7 @@ bool SemanticAnalyzer::visitUnaryOperator(const std::shared_ptr<UnaryOperator> &
             return false;
         }
         // TODO: calculate actual value
+        // TODO: check whether symbol was defined
         node->unresolvedSymbols = true;
         node->constantValue = -1;
         node->isRelocatable = false;
@@ -4076,6 +4357,8 @@ bool SemanticAnalyzer::visitLeaf(const std::shared_ptr<Leaf> &node, const Expres
 
     if (token.type == TokenType::Identifier) {
         if (context.isStructField) {
+            // this is handled higher in the `.`
+            node->type = OperandType::Unspecified;
             return true;
         }
 
@@ -4094,8 +4377,14 @@ bool SemanticAnalyzer::visitLeaf(const std::shared_ptr<Leaf> &node, const Expres
             node->unresolvedSymbols = true;
         }
 
-        if (std::dynamic_pointer_cast<DataVariableSymbol>(symbol) || std::dynamic_pointer_cast<LabelSymbol>(symbol) ||
-            std::dynamic_pointer_cast<ProcSymbol>(symbol)) {
+        if (auto dataVariableSymbol = std::dynamic_pointer_cast<DataVariableSymbol>(symbol)) {
+            std::string dataType = dataVariableSymbol->dataType.lexeme;
+            node->constantValue = std::nullopt;
+            node->isRelocatable = true;
+            node->type = OperandType::MemoryOperand;
+            node->size = dataVariableSymbol->dataTypeSize;
+            node->registers = {};
+        } else if (std::dynamic_pointer_cast<LabelSymbol>(symbol) || std::dynamic_pointer_cast<ProcSymbol>(symbol)) {
             node->constantValue = std::nullopt;
             node->isRelocatable = true;
             node->type = OperandType::MemoryOperand;
@@ -4114,22 +4403,23 @@ bool SemanticAnalyzer::visitLeaf(const std::shared_ptr<Leaf> &node, const Expres
             node->size = std::nullopt;
             node->registers = {};
         } else if (auto structSymbol = std::dynamic_pointer_cast<StructSymbol>(symbol)) {
-            if (!context.isPTROperand && !context.isSizeOperand) {
-                node->diagnostic = reportTypeNotAllowed(token);
-                return false;
-            }
-            node->type = OperandType::Unspecified;
+            node->constantValue = structSymbol->size;
+            node->isRelocatable = false;
+            node->type = OperandType::ImmediateOperand;
+            node->size = std::nullopt;
+            node->registers = {};
         } else if (auto recordSymbol = std::dynamic_pointer_cast<RecordSymbol>(symbol)) {
-            if (!context.isSizeOperand && !context.isWidthOrMaskOperand) {
-                node->diagnostic = reportRecordNotAllowed(token);
-                return false;
-            }
-            node->type = OperandType::Unspecified;
+            node->constantValue = recordSymbol->mask;
+            node->isRelocatable = false;
+            node->type = OperandType::ImmediateOperand;
+            node->size = std::nullopt;
+            node->registers = {};
         } else if (auto recordFieldSymbol = std::dynamic_pointer_cast<RecordFieldSymbol>(symbol)) {
-            if (!context.isWidthOrMaskOperand) {
-                node->diagnostic = reportRecordFieldNotAllowed(token);
-            }
-            node->type = OperandType::Unspecified;
+            node->constantValue = recordFieldSymbol->shift;
+            node->isRelocatable = false;
+            node->type = OperandType::ImmediateOperand;
+            node->size = std::nullopt;
+            node->registers = {};
         }
 
     } else if (token.type == TokenType::Number) {
@@ -4154,7 +4444,7 @@ bool SemanticAnalyzer::visitLeaf(const std::shared_ptr<Leaf> &node, const Expres
         node->unresolvedSymbols = true;
         node->constantValue = -1; // TODO: convert string value to bytes and then to int32_t
         node->isRelocatable = false;
-        node->size = OperandSize("DWORD", 4);
+        node->size = std::nullopt;
         node->type = OperandType::ImmediateOperand;
         node->registers = {};
     } else if (token.type == TokenType::Register) {
@@ -4175,11 +4465,11 @@ bool SemanticAnalyzer::visitLeaf(const std::shared_ptr<Leaf> &node, const Expres
         node->size = OperandSize("DWORD", 4);
         node->registers = {};
     } else if (token.type == TokenType::Type) {
-        if (!context.isPTROperand && !context.isSizeOperand) {
-            node->diagnostic = reportTypeNotAllowed(token);
-            return false;
-        }
-        node->type = OperandType::Unspecified;
+        node->constantValue = sizeStrToValue[stringToUpper(token.lexeme)];
+        node->isRelocatable = false;
+        node->type = OperandType::ImmediateOperand;
+        node->size = std::nullopt;
+        node->registers = {};
     } else {
         LOG_DETAILED_ERROR("Unkown leaf token!");
         return false;
@@ -4202,11 +4492,7 @@ enum class ExprCtxtFlags {
     None = 0,
     AllowRegisters = 1 << 0,
     AllowForwardReferences = 1 << 1,
-    MustBeConstant = 1 << 2,
-    IsStructField = 1 << 3,
-    IsPTROperand = 1 << 4,
-    IsWidthOrMaskOperand = 1 << 5,
-    IsSizeOperand = 1 << 6
+    IsStructField = 1 << 2,
 };
 
 inline ExprCtxtFlags operator|(ExprCtxtFlags a, ExprCtxtFlags b) { return static_cast<ExprCtxtFlags>(static_cast<int>(a) | static_cast<int>(b)); }
@@ -4215,21 +4501,18 @@ inline ExprCtxtFlags operator&(ExprCtxtFlags a, ExprCtxtFlags b) { return static
 
 struct ExpressionContext {
     explicit ExpressionContext(ExprCtxtFlags flags)
-        : allowRegisters(bool(flags & ExprCtxtFlags::AllowRegisters)), mustBeConstant(bool(flags & ExprCtxtFlags::MustBeConstant)),
-          isStructField(bool(flags & ExprCtxtFlags::IsStructField)), isPTROperand(bool(flags & ExprCtxtFlags::IsPTROperand)),
-          isSizeOperand(bool(flags & ExprCtxtFlags::IsSizeOperand)), allowForwardReferences(bool(flags & ExprCtxtFlags::AllowForwardReferences)),
-          isWidthOrMaskOperand(bool(flags & ExprCtxtFlags::IsWidthOrMaskOperand))
+        : allowRegisters(bool(flags & ExprCtxtFlags::AllowRegisters)), isStructField(bool(flags & ExprCtxtFlags::IsStructField)),
+          allowForwardReferences(bool(flags & ExprCtxtFlags::AllowForwardReferences))
+
     {
     }
 
     bool allowRegisters;
-    bool mustBeConstant;
     bool isStructField;
-    bool isPTROperand;
-    bool isSizeOperand;
     bool allowForwardReferences;
-    bool isWidthOrMaskOperand;
 };
+
+using DiagnosticPtr = std::shared_ptr<Diagnostic>;
 
 class SemanticAnalyzer {
 public:
@@ -4245,18 +4528,22 @@ private:
     [[nodiscard]] bool visitDirective(const std::shared_ptr<Directive> &directive);
 
     [[nodiscard]] bool visitSegDir(const std::shared_ptr<SegDir> &segDir);
-    [[nodiscard]] bool visitDataDir(const std::shared_ptr<DataDir> &dataDir);
+    [[nodiscard]] bool visitDataDir(const std::shared_ptr<DataDir> &dataDir, const std::optional<Token> &strucNameToken = std::nullopt);
     [[nodiscard]] bool visitStructDir(const std::shared_ptr<StructDir> &structDir);
     [[nodiscard]] bool visitProcDir(const std::shared_ptr<ProcDir> &procDir);
     [[nodiscard]] bool visitRecordDir(const std::shared_ptr<RecordDir> &recordDir);
-    [[nodiscard]] bool visitRecordField(const std::shared_ptr<RecordField> recordField);
+    [[nodiscard]] bool visitRecordField(const std::shared_ptr<RecordField> &recordField);
     [[nodiscard]] bool visitEquDir(const std::shared_ptr<EquDir> &equDir);
     [[nodiscard]] bool visitEqualDir(const std::shared_ptr<EqualDir> &equalDir);
     [[nodiscard]] bool visitEndDir(const std::shared_ptr<EndDir> &endDir);
 
-    [[nodiscard]] bool visitDataItem(const std::shared_ptr<DataItem> &dataItem);
-    [[nodiscard]] bool visitInitValue(const std::shared_ptr<InitValue> &initValue, const std::string &dataType);
-    [[nodiscard]] bool visitInitializerList(const std::shared_ptr<InitializerList> &initList, const std::string &dataType);
+    [[nodiscard]] bool visitDataItem(const std::shared_ptr<DataItem> &dataItem,
+                                     const std::optional<std::shared_ptr<DataVariableSymbol>> &dataVariableSymbol);
+    [[nodiscard]] bool visitInitValue(const std::shared_ptr<InitValue> &initValue,
+                                      const std::optional<std::shared_ptr<DataVariableSymbol>> &dataVariableSymbol, const Token &expectedTypeToken);
+    [[nodiscard]] bool visitInitValueHelper(const std::shared_ptr<InitValue> &initValue,
+                                            const std::optional<std::shared_ptr<DataVariableSymbol>> &dataVariableSymbol,
+                                            const Token &expectedTypeToken);
 
     // ASTexpression nodes
     [[nodiscard]] bool visitExpression(const ExpressionPtr &node, const ExpressionContext &context);
@@ -4268,55 +4555,72 @@ private:
     [[nodiscard]] bool visitUnaryOperator(const std::shared_ptr<UnaryOperator> &node, const ExpressionContext &context);
     [[nodiscard]] bool visitLeaf(const std::shared_ptr<Leaf> &node, const ExpressionContext &context);
 
-    // Instruction errors
-    [[nodiscard]] std::shared_ptr<Diagnostic> reportInvalidNumberOfOperands(const std::shared_ptr<Instruction> &instruction, int numberOfOps);
-    [[nodiscard]] std::shared_ptr<Diagnostic> reportCantHaveTwoMemoryOperands(const std::shared_ptr<Instruction> &instruction);
-    [[nodiscard]] std::shared_ptr<Diagnostic> reportDestinationOperandCantBeImmediate(const std::shared_ptr<Instruction> &instruction);
-    [[nodiscard]] std::shared_ptr<Diagnostic> reportImmediateOperandTooBig(const std::shared_ptr<Instruction> &instruction, int firstOpSize,
-                                                                           int immediateOpSize);
-    [[nodiscard]] std::shared_ptr<Diagnostic> reportOperandsHaveDifferentSize(const std::shared_ptr<Instruction> &instruction, int firstOpSize,
-                                                                              int secondOpSize);
+    // DataItem errors
+    [[nodiscard]] DiagnosticPtr reportInvalidDataType(const std::shared_ptr<DataItem> &dataItem);
 
-    [[nodiscard]] std::shared_ptr<Diagnostic> reportExpressionMustBeMemoryOrRegisterOperand(const ExpressionPtr &operand);
-    [[nodiscard]] std::shared_ptr<Diagnostic> reportExpressionMustHaveSize(const ExpressionPtr &operand);
-    [[nodiscard]] std::shared_ptr<Diagnostic> reportInvalidOperandSize(const ExpressionPtr &operand, const std::string& expectedSize, int actualSize);
+    // InitValue errors
+    [[nodiscard]] DiagnosticPtr reportExpectedStrucOrRecordDataInitializer(const std::shared_ptr<InitValue> &initValue,
+                                                                           const Token &expectedTypeToken);
+    [[nodiscard]] DiagnosticPtr reportExpectedSingleItemDataInitializer(const std::shared_ptr<InitValue> &initValue, const Token &expectedTypeToken);
+    [[nodiscard]] DiagnosticPtr reportTooManyInitialValuesForRecord(const std::shared_ptr<InitValue> &initValue,
+                                                                    const std::shared_ptr<RecordSymbol> &recordSymbol);
+    [[nodiscard]] DiagnosticPtr reportTooManyInitialValuesForStruc(const std::shared_ptr<InitValue> &initValue,
+                                                                   const std::shared_ptr<StructSymbol> &structSymbol);
+
+    // Instruction errors
+    [[nodiscard]] DiagnosticPtr reportInvalidNumberOfOperands(const std::shared_ptr<Instruction> &instruction, int numberOfOps);
+    [[nodiscard]] DiagnosticPtr reportCantHaveTwoMemoryOperands(const std::shared_ptr<Instruction> &instruction);
+    [[nodiscard]] DiagnosticPtr reportDestinationOperandCantBeImmediate(const std::shared_ptr<Instruction> &instruction);
+    [[nodiscard]] DiagnosticPtr reportImmediateOperandTooBig(const std::shared_ptr<Instruction> &instruction, int firstOpSize, int immediateOpSize);
+    [[nodiscard]] DiagnosticPtr reportOperandsHaveDifferentSize(const std::shared_ptr<Instruction> &instruction, int firstOpSize, int secondOpSize);
+
+    // RecordDir errors
+    [[nodiscard]] DiagnosticPtr reportRecordWidthTooBig(const std::shared_ptr<RecordDir> &recordDir, int32_t width);
+
+    // RecordField errors
+    [[nodiscard]] DiagnosticPtr reportRecordFieldWidthMustBePositive(const std::shared_ptr<RecordField> &recordField, int64_t width);
+    [[nodiscard]] DiagnosticPtr reportRecordFieldWidthTooBig(const std::shared_ptr<RecordField> &recordField, int64_t width);
+
+    [[nodiscard]] DiagnosticPtr reportExpressionMustBeMemoryOrRegisterOperand(const ExpressionPtr &operand);
+    [[nodiscard]] DiagnosticPtr reportExpressionMustHaveSize(const ExpressionPtr &operand);
+    [[nodiscard]] DiagnosticPtr reportInvalidOperandSize(const ExpressionPtr &operand, const std::string &expectedSize, int actualSize);
 
     // Expression errors
-    [[nodiscard]] std::shared_ptr<Diagnostic> reportRecordNotAllowed(const Token &token);
-    [[nodiscard]] std::shared_ptr<Diagnostic> reportRecordFieldNotAllowed(const Token &token);
-    [[nodiscard]] std::shared_ptr<Diagnostic> reportUndefinedSymbol(const Token &token, bool isDefinedLater);
-    [[nodiscard]] std::shared_ptr<Diagnostic> reportTypeNotAllowed(const Token &token);
-    [[nodiscard]] std::shared_ptr<Diagnostic> reportRegisterNotAllowed(const Token &reg);
-    [[nodiscard]] std::shared_ptr<Diagnostic> reportNumberTooLarge(const Token &number);
-    [[nodiscard]] std::shared_ptr<Diagnostic> reportStringTooLarge(const Token &string);
-    [[nodiscard]] std::shared_ptr<Diagnostic> reportUnaryOperatorIncorrectArgument(const std::shared_ptr<UnaryOperator> &node);
+    [[nodiscard]] DiagnosticPtr reportExpressionMustBeConstant(ExpressionPtr &expr);
+    [[nodiscard]] DiagnosticPtr reportUndefinedSymbol(const Token &token, bool isDefinedLater);
+    [[nodiscard]] DiagnosticPtr reportRegisterNotAllowed(const Token &reg);
+    [[nodiscard]] DiagnosticPtr reportNumberTooLarge(const Token &number);
+    [[nodiscard]] DiagnosticPtr reportStringTooLarge(const Token &string);
+    [[nodiscard]] DiagnosticPtr reportUnaryOperatorIncorrectArgument(const std::shared_ptr<UnaryOperator> &node);
 
-    [[nodiscard]] std::shared_ptr<Diagnostic> reportDotOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node);
-    [[nodiscard]] std::shared_ptr<Diagnostic> reportDotOperatorSizeNotSpecified(const std::shared_ptr<BinaryOperator> &node);
-    [[nodiscard]] std::shared_ptr<Diagnostic> reportDotOperatorTypeNotStruct(const std::shared_ptr<BinaryOperator> &node);
-    [[nodiscard]] std::shared_ptr<Diagnostic> reportDotOperatorFieldDoesntExist(const std::shared_ptr<BinaryOperator> &node,
-                                                                                const std::string &strucName, const std::string &fieldName);
+    [[nodiscard]] DiagnosticPtr reportDotOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node);
+    [[nodiscard]] DiagnosticPtr reportDotOperatorSizeNotSpecified(const std::shared_ptr<BinaryOperator> &node);
+    [[nodiscard]] DiagnosticPtr reportDotOperatorTypeNotStruct(const std::shared_ptr<BinaryOperator> &node, const std::string &actualType);
+    [[nodiscard]] DiagnosticPtr reportDotOperatorFieldDoesntExist(const std::shared_ptr<BinaryOperator> &node, const std::string &strucName,
+                                                                  const std::string &fieldName);
 
-    [[nodiscard]] std::shared_ptr<Diagnostic> reportPtrOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node);
+    [[nodiscard]] DiagnosticPtr reportPtrOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node);
 
-    [[nodiscard]] std::shared_ptr<Diagnostic> reportDivisionByZero(const std::shared_ptr<BinaryOperator> &node);
-    [[nodiscard]] std::shared_ptr<Diagnostic> reportInvalidScaleValue(const std::shared_ptr<BinaryOperator> &node);
-    [[nodiscard]] std::shared_ptr<Diagnostic> reportIncorrectIndexRegister(const std::shared_ptr<Leaf> &node);
-    [[nodiscard]] std::shared_ptr<Diagnostic> reportOtherBinaryOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node);
-    [[nodiscard]] std::shared_ptr<Diagnostic> reportCantHaveRegistersInExpression(const ExpressionPtr &node);
-    [[nodiscard]] std::shared_ptr<Diagnostic> reportCantAddVariables(const ExpressionPtr &node, bool implicit);
-    [[nodiscard]] std::shared_ptr<Diagnostic> reportMoreThanTwoRegistersAfterAdd(const ExpressionPtr &node, bool implicit);
-    [[nodiscard]] std::shared_ptr<Diagnostic> reportMoreThanOneScaleAfterAdd(const ExpressionPtr &node, bool implicit);
-    [[nodiscard]] std::shared_ptr<Diagnostic> reportTwoEsp(const ExpressionPtr &node, bool implicit);
-    [[nodiscard]] std::shared_ptr<Diagnostic> reportNon32bitRegister(const ExpressionPtr &node, bool implicit);
-    [[nodiscard]] std::shared_ptr<Diagnostic> reportBinaryMinusOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node);
-    [[nodiscard]] std::shared_ptr<Diagnostic> reportNonRegisterInSquareBrackets(const std::shared_ptr<BinaryOperator> &node);
+    [[nodiscard]] DiagnosticPtr reportDivisionByZero(const std::shared_ptr<BinaryOperator> &node);
+    [[nodiscard]] DiagnosticPtr reportInvalidScaleValue(const std::shared_ptr<BinaryOperator> &node);
+    [[nodiscard]] DiagnosticPtr reportIncorrectIndexRegister(const std::shared_ptr<Leaf> &node);
+    [[nodiscard]] DiagnosticPtr reportOtherBinaryOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node);
+    [[nodiscard]] DiagnosticPtr reportCantHaveRegistersInExpression(const ExpressionPtr &node);
+    [[nodiscard]] DiagnosticPtr reportCantAddVariables(const ExpressionPtr &node, bool implicit);
+    [[nodiscard]] DiagnosticPtr reportMoreThanTwoRegistersAfterAdd(const ExpressionPtr &node, bool implicit);
+    [[nodiscard]] DiagnosticPtr reportMoreThanOneScaleAfterAdd(const ExpressionPtr &node, bool implicit);
+    [[nodiscard]] DiagnosticPtr reportTwoEsp(const ExpressionPtr &node, bool implicit);
+    [[nodiscard]] DiagnosticPtr reportNon32bitRegister(const ExpressionPtr &node, bool implicit);
+    [[nodiscard]] DiagnosticPtr reportBinaryMinusOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node);
+    [[nodiscard]] DiagnosticPtr reportNonRegisterInSquareBrackets(const std::shared_ptr<BinaryOperator> &node);
 
     void warnTypeReturnsZero(const std::shared_ptr<UnaryOperator> &node);
 
     static void findRelocatableVariables(const ExpressionPtr &node, std::optional<Token> &firstVar, std::optional<Token> &secondVar);
 
     static void findInvalidExpressionCause(const ExpressionPtr &node, ExpressionPtr &errorNode);
+
+    static std::string getSymbolType(const std::shared_ptr<Symbol> &symbol);
 
     std::string getOperandType(const ExpressionPtr &node);
 
@@ -4325,6 +4629,7 @@ private:
 
     int pass = 1;
     int expressionDepth = 0;
+    int dataInitializerDepth = 0;
 
     uint32_t currentOffset = 0;
     ASTPtr currentLine;
@@ -4333,7 +4638,9 @@ private:
     static std::map<std::string, int> registerSizes;
     static std::map<int, std::string> sizeValueToStr;
     static std::map<std::string, int> sizeStrToValue;
+    static std::map<std::string, std::string> dataDirectiveToSizeStr;
     static std::unordered_set<std::string> builtinTypes;
+    static std::unordered_set<std::string> dataDirectives;
 };
 
 // TODO: move this function somewhere else
@@ -4459,9 +4766,91 @@ std::string SemanticAnalyzer::getOperandType(const ExpressionPtr &node)
     }
 }
 
+std::string SemanticAnalyzer::getSymbolType(const std::shared_ptr<Symbol> &symbol)
+{
+    if (auto dataVariableSymbol = std::dynamic_pointer_cast<DataVariableSymbol>(symbol)) {
+        return "Data Variable";
+    } else if (auto equVariableSymbol = std::dynamic_pointer_cast<EquVariableSymbol>(symbol)) {
+        return "EQU Variable";
+    } else if (auto equalVariableSymbol = std::dynamic_pointer_cast<EqualVariableSymbol>(symbol)) {
+        return "`=` Variable";
+    } else if (auto labelSymbol = std::dynamic_pointer_cast<LabelSymbol>(symbol)) {
+        return "Label Variable";
+    } else if (auto structSymbol = std::dynamic_pointer_cast<StructSymbol>(symbol)) {
+        return "STRUC";
+    } else if (auto procSymbol = std::dynamic_pointer_cast<ProcSymbol>(symbol)) {
+        return "PROC";
+    } else if (auto recordSymbol = std::dynamic_pointer_cast<RecordSymbol>(symbol)) {
+        return "RECORD";
+    } else if (auto recordFieldSymbol = std::dynamic_pointer_cast<RecordFieldSymbol>(symbol)) {
+        return "RECORD Field";
+    }
+    return "unknown";
+}
+
+// DataItem errors
+DiagnosticPtr SemanticAnalyzer::reportInvalidDataType(const std::shared_ptr<DataItem> &dataItem)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_DATA_TYPE, dataItem->dataTypeToken.lexeme);
+    Token dataTypeToken = dataItem->dataTypeToken;
+    std::shared_ptr<Symbol> dataTypeSymbol = parseSess->symbolTable->findSymbol(dataTypeToken);
+    if (!dataTypeSymbol) {
+        LOG_DETAILED_ERROR("this shouldn't be null");
+        return parseSess->dcx->getLastDiagnostic();
+    }
+    diag.addPrimaryLabel(dataTypeToken.span, fmt::format("Expected a `STRUC` or `RECORD` type, but this is a `{}`", getSymbolType(dataTypeSymbol)));
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+// InitValue errors
+DiagnosticPtr SemanticAnalyzer::reportExpectedStrucOrRecordDataInitializer(const std::shared_ptr<InitValue> &initValue,
+                                                                           const Token &expectedTypeToken)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_DATA_INITIALIZER);
+    std::shared_ptr<Symbol> expectedTypeSymbol = parseSess->symbolTable->findSymbol(expectedTypeToken);
+    if (std::dynamic_pointer_cast<StructSymbol>(expectedTypeSymbol)) {
+        diag.addPrimaryLabel(getInitValueSpan(initValue), fmt::format("expected a `STRUC` data initializer"));
+    } else if (std::dynamic_pointer_cast<RecordSymbol>(expectedTypeSymbol)) {
+        diag.addPrimaryLabel(getInitValueSpan(initValue), fmt::format("expected a `RECORD` data initializer"));
+    } else {
+        LOG_DETAILED_ERROR("should be only record or struc expected type");
+        return parseSess->dcx->getLastDiagnostic();
+    }
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+DiagnosticPtr SemanticAnalyzer::reportExpectedSingleItemDataInitializer(const std::shared_ptr<InitValue> &initValue,
+                                                                        const Token & /*expectedTypeToken*/)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_DATA_INITIALIZER);
+    diag.addPrimaryLabel(getInitValueSpan(initValue), fmt::format("expected a single item data initializer"));
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+DiagnosticPtr SemanticAnalyzer::reportTooManyInitialValuesForRecord(const std::shared_ptr<InitValue> &initValue,
+                                                                    const std::shared_ptr<RecordSymbol> &recordSymbol)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::TOO_MANY_INITIAL_VALUES_FOR_RECORD);
+    diag.addPrimaryLabel(getInitValueSpan(initValue), fmt::format("expected `{}` initial values or less", recordSymbol->fields.size()));
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+DiagnosticPtr SemanticAnalyzer::reportTooManyInitialValuesForStruc(const std::shared_ptr<InitValue> &initValue,
+                                                                   const std::shared_ptr<StructSymbol> &structSymbol)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::TOO_MANY_INITIAL_VALUES_FOR_STRUC);
+    diag.addPrimaryLabel(getInitValueSpan(initValue), fmt::format("expected `{}` initial values or less", structSymbol->structDir->fields.size()));
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
 // Instruction errors
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportInvalidNumberOfOperands(const std::shared_ptr<Instruction> &instruction, int numberOfOps)
+DiagnosticPtr SemanticAnalyzer::reportInvalidNumberOfOperands(const std::shared_ptr<Instruction> &instruction, int numberOfOps)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_NUMBER_OF_OPERANDS);
     Token mnemonicToken = instruction->mnemonicToken.value();
@@ -4470,7 +4859,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportInvalidNumberOfOperands(cons
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportCantHaveTwoMemoryOperands(const std::shared_ptr<Instruction> &instruction)
+DiagnosticPtr SemanticAnalyzer::reportCantHaveTwoMemoryOperands(const std::shared_ptr<Instruction> &instruction)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::CANT_HAVE_TWO_MEMORY_OPERANDS);
     Token mnemonicToken = instruction->mnemonicToken.value();
@@ -4481,7 +4870,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportCantHaveTwoMemoryOperands(co
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportDestinationOperandCantBeImmediate(const std::shared_ptr<Instruction> &instruction)
+DiagnosticPtr SemanticAnalyzer::reportDestinationOperandCantBeImmediate(const std::shared_ptr<Instruction> &instruction)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::DESTINATION_OPERAND_CANT_BE_IMMEDIATE);
     diag.addPrimaryLabel(getExpressionSpan(instruction->operands[0]), "");
@@ -4489,8 +4878,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportDestinationOperandCantBeImme
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportImmediateOperandTooBig(const std::shared_ptr<Instruction> &instruction, int firstOpSize,
-                                                                           int immediateOpSize)
+DiagnosticPtr SemanticAnalyzer::reportImmediateOperandTooBig(const std::shared_ptr<Instruction> &instruction, int firstOpSize, int immediateOpSize)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::IMMEDIATE_OPERAND_TOO_BIG);
     Token mnemonicToken = instruction->mnemonicToken.value();
@@ -4504,8 +4892,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportImmediateOperandTooBig(const
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportOperandsHaveDifferentSize(const std::shared_ptr<Instruction> &instruction, int firstOpSize,
-                                                                              int secondOpSize)
+DiagnosticPtr SemanticAnalyzer::reportOperandsHaveDifferentSize(const std::shared_ptr<Instruction> &instruction, int firstOpSize, int secondOpSize)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::OPERANDS_HAVE_DIFFERENT_SIZE);
     Token mnemonicToken = instruction->mnemonicToken.value();
@@ -4518,7 +4905,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportOperandsHaveDifferentSize(co
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportExpressionMustBeMemoryOrRegisterOperand(const ExpressionPtr &operand)
+DiagnosticPtr SemanticAnalyzer::reportExpressionMustBeMemoryOrRegisterOperand(const ExpressionPtr &operand)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPRESSION_MUST_BE_MEMORY_OR_REGISTER_OPERAND);
     diag.addPrimaryLabel(getExpressionSpan(operand), fmt::format("this has type `{}`", getOperandType(operand)));
@@ -4526,7 +4913,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportExpressionMustBeMemoryOrRegi
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportExpressionMustHaveSize(const ExpressionPtr &operand)
+DiagnosticPtr SemanticAnalyzer::reportExpressionMustHaveSize(const ExpressionPtr &operand)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPRESSION_MUST_HAVE_SIZE);
     diag.addPrimaryLabel(getExpressionSpan(operand), "");
@@ -4534,7 +4921,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportExpressionMustHaveSize(const
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportInvalidOperandSize(const ExpressionPtr &operand, const std::string &expectedSize, int actualSize)
+DiagnosticPtr SemanticAnalyzer::reportInvalidOperandSize(const ExpressionPtr &operand, const std::string &expectedSize, int actualSize)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_OPERAND_SIZE);
     diag.addPrimaryLabel(getExpressionSpan(operand), fmt::format("this operand must have size `{}`, but it has size `{}`", expectedSize, actualSize));
@@ -4542,25 +4929,43 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportInvalidOperandSize(const Exp
     return parseSess->dcx->getLastDiagnostic();
 }
 
+// RecordDir errors
+DiagnosticPtr SemanticAnalyzer::reportRecordWidthTooBig(const std::shared_ptr<RecordDir> &recordDir, int32_t width)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::RECORD_WIDTH_TOO_BIG);
+    Token recordIdToken = recordDir->idToken;
+    diag.addPrimaryLabel(recordIdToken.span, fmt::format("this `RECORD` has total width `{}`", width));
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+// RecordField errors
+DiagnosticPtr SemanticAnalyzer::reportRecordFieldWidthMustBePositive(const std::shared_ptr<RecordField> &recordField, int64_t width)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::RECORD_FIELD_WIDTH_MUST_BE_POSITIVE);
+    diag.addPrimaryLabel(getExpressionSpan(recordField->width), fmt::format("this evaluates to `{}`", width));
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+DiagnosticPtr SemanticAnalyzer::reportRecordFieldWidthTooBig(const std::shared_ptr<RecordField> &recordField, int64_t width)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::RECORD_FIELD_TOO_BIG);
+    diag.addPrimaryLabel(getExpressionSpan(recordField->width), fmt::format("this evaluates to `{}`", width));
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
 // Expression errors
-
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportRecordNotAllowed(const Token &token)
+DiagnosticPtr SemanticAnalyzer::reportExpressionMustBeConstant(ExpressionPtr &expr)
 {
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::RECORD_NOT_ALLOWED, token.lexeme);
-    diag.addPrimaryLabel(token.span, "");
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPRESSION_MUST_BE_CONSTANT);
+    diag.addPrimaryLabel(getExpressionSpan(expr), "");
     parseSess->dcx->addDiagnostic(diag);
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportRecordFieldNotAllowed(const Token &token)
-{
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::RECORD_FIELD_NOT_ALLOWED, token.lexeme);
-    diag.addPrimaryLabel(token.span, "");
-    parseSess->dcx->addDiagnostic(diag);
-    return parseSess->dcx->getLastDiagnostic();
-}
-
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportUndefinedSymbol(const Token &token, bool isDefinedLater)
+DiagnosticPtr SemanticAnalyzer::reportUndefinedSymbol(const Token &token, bool isDefinedLater)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::UNDEFINED_SYMBOL, token.lexeme);
     diag.addPrimaryLabel(token.span, "");
@@ -4576,15 +4981,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportUndefinedSymbol(const Token 
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportTypeNotAllowed(const Token &token)
-{
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::TYPE_NOT_ALLOWED, token.lexeme);
-    diag.addPrimaryLabel(token.span, "");
-    parseSess->dcx->addDiagnostic(diag);
-    return parseSess->dcx->getLastDiagnostic();
-}
-
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportRegisterNotAllowed(const Token &reg)
+DiagnosticPtr SemanticAnalyzer::reportRegisterNotAllowed(const Token &reg)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::REGISTER_NOT_ALLOWED);
     diag.addPrimaryLabel(reg.span, "");
@@ -4592,7 +4989,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportRegisterNotAllowed(const Tok
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportNumberTooLarge(const Token &number)
+DiagnosticPtr SemanticAnalyzer::reportNumberTooLarge(const Token &number)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::CONSTANT_TOO_LARGE);
     diag.addPrimaryLabel(number.span, "");
@@ -4601,7 +4998,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportNumberTooLarge(const Token &
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportStringTooLarge(const Token &string)
+DiagnosticPtr SemanticAnalyzer::reportStringTooLarge(const Token &string)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::CONSTANT_TOO_LARGE);
     diag.addPrimaryLabel(string.span, "");
@@ -4610,7 +5007,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportStringTooLarge(const Token &
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportUnaryOperatorIncorrectArgument(const std::shared_ptr<UnaryOperator> &node)
+DiagnosticPtr SemanticAnalyzer::reportUnaryOperatorIncorrectArgument(const std::shared_ptr<UnaryOperator> &node)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::UNARY_OPERATOR_INCORRECT_ARGUMENT, stringToUpper(node->op.lexeme));
 
@@ -4636,7 +5033,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportUnaryOperatorIncorrectArgume
 }
 
 // Dot Operator
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportDotOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node)
+DiagnosticPtr SemanticAnalyzer::reportDotOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::DOT_OPERATOR_INCORRECT_ARGUMENT);
 
@@ -4657,7 +5054,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportDotOperatorIncorrectArgument
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportDotOperatorSizeNotSpecified(const std::shared_ptr<BinaryOperator> &node)
+DiagnosticPtr SemanticAnalyzer::reportDotOperatorSizeNotSpecified(const std::shared_ptr<BinaryOperator> &node)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::DOT_OPERATOR_INCORRECT_ARGUMENT);
     diag.addPrimaryLabel(node->op.span, "");
@@ -4666,17 +5063,18 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportDotOperatorSizeNotSpecified(
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportDotOperatorTypeNotStruct(const std::shared_ptr<BinaryOperator> &node)
+DiagnosticPtr SemanticAnalyzer::reportDotOperatorTypeNotStruct(const std::shared_ptr<BinaryOperator> &node, const std::string &actualType)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::DOT_OPERATOR_INCORRECT_ARGUMENT);
     diag.addPrimaryLabel(node->op.span, "");
-    diag.addSecondaryLabel(getExpressionSpan(node->left), "this expression must have `STRUC` type");
+    diag.addSecondaryLabel(getExpressionSpan(node->left),
+                           fmt::format("this expression must have `STRUC` type, but it has a builtin type `{}`", actualType));
     parseSess->dcx->addDiagnostic(diag);
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportDotOperatorFieldDoesntExist(const std::shared_ptr<BinaryOperator> &node,
-                                                                                const std::string &strucName, const std::string &fieldName)
+DiagnosticPtr SemanticAnalyzer::reportDotOperatorFieldDoesntExist(const std::shared_ptr<BinaryOperator> &node, const std::string &strucName,
+                                                                  const std::string &fieldName)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::DOT_OPERATOR_FIELD_DOESNT_EXIST, strucName, fieldName);
     diag.addPrimaryLabel(getExpressionSpan(node->right), "");
@@ -4685,7 +5083,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportDotOperatorFieldDoesntExist(
 }
 
 // PTR operator
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportPtrOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node)
+DiagnosticPtr SemanticAnalyzer::reportPtrOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::PTR_OPERATOR_INCORRECT_ARGUMENT);
 
@@ -4708,7 +5106,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportPtrOperatorIncorrectArgument
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportDivisionByZero(const std::shared_ptr<BinaryOperator> &node)
+DiagnosticPtr SemanticAnalyzer::reportDivisionByZero(const std::shared_ptr<BinaryOperator> &node)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::DIVISION_BY_ZERO_IN_EXPRESSION);
 
@@ -4722,7 +5120,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportDivisionByZero(const std::sh
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportInvalidScaleValue(const std::shared_ptr<BinaryOperator> &node)
+DiagnosticPtr SemanticAnalyzer::reportInvalidScaleValue(const std::shared_ptr<BinaryOperator> &node)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_SCALE_VALUE);
 
@@ -4741,7 +5139,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportInvalidScaleValue(const std:
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportIncorrectIndexRegister(const std::shared_ptr<Leaf> &node)
+DiagnosticPtr SemanticAnalyzer::reportIncorrectIndexRegister(const std::shared_ptr<Leaf> &node)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INCORRECT_INDEX_REGISTER);
     diag.addPrimaryLabel(node->token.span, "");
@@ -4749,7 +5147,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportIncorrectIndexRegister(const
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportOtherBinaryOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node)
+DiagnosticPtr SemanticAnalyzer::reportOtherBinaryOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::OTHER_BINARY_OPERATOR_INCORRECT_ARGUMENT, node->op.lexeme);
 
@@ -4778,7 +5176,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportOtherBinaryOperatorIncorrect
 }
 
 // called when there's unfinished memory operand that needs to be finished
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportCantHaveRegistersInExpression(const ExpressionPtr &node)
+DiagnosticPtr SemanticAnalyzer::reportCantHaveRegistersInExpression(const ExpressionPtr &node)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::CANT_HAVE_REGISTERS_IN_EXPRESSION);
 
@@ -4790,10 +5188,10 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportCantHaveRegistersInExpressio
         LOG_DETAILED_ERROR("Can't find invalid expression cause");
     } else {
         if (auto binaryOp = std::dynamic_pointer_cast<BinaryOperator>(errorNode)) {
-            diag.addPrimaryLabel(getExpressionSpan(binaryOp), "can't have registers inside expressions");
+            diag.addPrimaryLabel(getExpressionSpan(binaryOp), "");
 
         } else if (auto implicitPlus = std::dynamic_pointer_cast<ImplicitPlusOperator>(errorNode)) {
-            diag.addPrimaryLabel(getExpressionSpan(implicitPlus), "can't have registers inside expressions");
+            diag.addPrimaryLabel(getExpressionSpan(implicitPlus), "");
         }
     }
 
@@ -4841,7 +5239,7 @@ void SemanticAnalyzer::findInvalidExpressionCause(const ExpressionPtr &node, Exp
     }
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportCantAddVariables(const ExpressionPtr &node, bool implicit)
+DiagnosticPtr SemanticAnalyzer::reportCantAddVariables(const ExpressionPtr &node, bool implicit)
 {
     std::optional<Token> firstVar;
     std::optional<Token> secondVar;
@@ -4918,7 +5316,7 @@ void SemanticAnalyzer::findRelocatableVariables(const ExpressionPtr &node, std::
     }
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportMoreThanTwoRegistersAfterAdd(const ExpressionPtr &node, bool implicit)
+DiagnosticPtr SemanticAnalyzer::reportMoreThanTwoRegistersAfterAdd(const ExpressionPtr &node, bool implicit)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::MORE_THAN_TWO_REGISTERS);
 
@@ -4961,7 +5359,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportMoreThanTwoRegistersAfterAdd
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportMoreThanOneScaleAfterAdd(const ExpressionPtr &node, bool implicit)
+DiagnosticPtr SemanticAnalyzer::reportMoreThanOneScaleAfterAdd(const ExpressionPtr &node, bool implicit)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::MORE_THAN_ONE_SCALE);
 
@@ -5011,7 +5409,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportMoreThanOneScaleAfterAdd(con
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportTwoEsp(const ExpressionPtr &node, bool implicit)
+DiagnosticPtr SemanticAnalyzer::reportTwoEsp(const ExpressionPtr &node, bool implicit)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::TWO_ESP_REGISTERS);
 
@@ -5060,7 +5458,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportTwoEsp(const ExpressionPtr &
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportNon32bitRegister(const ExpressionPtr &node, bool implicit)
+DiagnosticPtr SemanticAnalyzer::reportNon32bitRegister(const ExpressionPtr &node, bool implicit)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::NON_32BIT_REGISTER);
 
@@ -5120,7 +5518,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportNon32bitRegister(const Expre
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportBinaryMinusOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node)
+DiagnosticPtr SemanticAnalyzer::reportBinaryMinusOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::BINARY_MINUS_OPERATOR_INCORRECT_ARGUMENT);
 
@@ -5136,7 +5534,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportBinaryMinusOperatorIncorrect
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportNonRegisterInSquareBrackets(const std::shared_ptr<BinaryOperator> &node)
+DiagnosticPtr SemanticAnalyzer::reportNonRegisterInSquareBrackets(const std::shared_ptr<BinaryOperator> &node)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::NON_REGISTER_IN_SQUARE_BRACKETS);
     diag.addPrimaryLabel(getExpressionSpan(node), "");
@@ -5666,7 +6064,7 @@ void SymbolTable::printSymbols()
             std::cout << "Name: " << name << ", Type: " << "Label Variable" << "\n";
         } else if (auto structSymbol = std::dynamic_pointer_cast<StructSymbol>(symbol)) {
             std::cout << "Name: " << name << ", Type: " << "STRUC" << "\n";
-            for (const auto &[field, variable] : structSymbol->fields) {
+            for (const auto &[field, variable] : structSymbol->namedFields) {
                 std::cout << "  Field name: " << field << "\n";
             }
         } else if (auto procSymbol = std::dynamic_pointer_cast<ProcSymbol>(symbol)) {
@@ -5720,6 +6118,7 @@ struct ProcSymbol : public Symbol {
 struct DataVariableSymbol : public Symbol {
     DataVariableSymbol(Token token, Token dataType) : dataType(std::move(dataType)) { this->token = std::move(token); }
     Token dataType;
+    OperandSize dataTypeSize = OperandSize("", -1);
     int32_t value = -1;
 
     int32_t size = -1;
@@ -5752,7 +6151,8 @@ struct EqualVariableSymbol : public Symbol {
 
 struct StructSymbol : public Symbol {
     StructSymbol(Token token) { this->token = std::move(token); }
-    std::unordered_map<std::string, std::shared_ptr<DataVariableSymbol>> fields;
+    std::shared_ptr<StructDir> structDir;
+    std::unordered_map<std::string, std::shared_ptr<DataVariableSymbol>> namedFields;
 
     int32_t size = -1;
     int32_t sizeOf = -1;
@@ -5764,6 +6164,9 @@ struct RecordSymbol : public Symbol {
     std::vector<std::string> fields;
     std::shared_ptr<RecordDir> recordDir;
 
+    int32_t width = -1;
+    int32_t mask = -1;
+
     int32_t size = 4;
     int32_t sizeOf = 4;
     // length and length of are not allowed
@@ -5771,10 +6174,10 @@ struct RecordSymbol : public Symbol {
 
 struct RecordFieldSymbol : public Symbol {
     RecordFieldSymbol(Token token, std::shared_ptr<RecordField> recordField) : recordField(std::move(recordField)) { this->token = std::move(token); }
-    int32_t width = -1;
-    std::optional<int32_t> initial;
     std::shared_ptr<RecordField> recordField;
 
+    int32_t width = -1;
+    std::optional<int32_t> initial;
     int32_t shift = -1;
     int32_t mask = -1;
 

@@ -327,9 +327,9 @@ void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, const std::string &
             const char c = messageLine[i];
             if (c == '|') {
                 if (primaryLabelIndex && primaryLabelIndex == i) {
-                    coloredLine += format(fg(primaryColor), "{}", "│");
+                    coloredLine += format(fg(primaryColor), "{}", "|");
                 } else {
-                    coloredLine += format(fg(cyanColor), "{}", "│");
+                    coloredLine += format(fg(cyanColor), "{}", "|");
                 }
             } else {
                 coloredLine += c;
@@ -360,9 +360,9 @@ void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, const std::string &
             char c = messageLine[i];
             if (c == '|') {
                 if (primaryLabelIndex && primaryLabelIndex == i) {
-                    coloredLine += format(fg(primaryColor), "{}", "│");
+                    coloredLine += format(fg(primaryColor), "{}", "|");
                 } else {
-                    coloredLine += format(fg(cyanColor), "{}", "│");
+                    coloredLine += format(fg(cyanColor), "{}", "|");
                 }
             } else {
                 coloredLine += c;

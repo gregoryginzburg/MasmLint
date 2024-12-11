@@ -62,9 +62,107 @@ std::string SemanticAnalyzer::getOperandType(const ExpressionPtr &node)
     }
 }
 
+std::string SemanticAnalyzer::getSymbolType(const std::shared_ptr<Symbol> &symbol)
+{
+    if (auto dataVariableSymbol = std::dynamic_pointer_cast<DataVariableSymbol>(symbol)) {
+        return "Data Variable";
+    } else if (auto equVariableSymbol = std::dynamic_pointer_cast<EquVariableSymbol>(symbol)) {
+        return "EQU Variable";
+    } else if (auto equalVariableSymbol = std::dynamic_pointer_cast<EqualVariableSymbol>(symbol)) {
+        return "`=` Variable";
+    } else if (auto labelSymbol = std::dynamic_pointer_cast<LabelSymbol>(symbol)) {
+        return "Label Variable";
+    } else if (auto structSymbol = std::dynamic_pointer_cast<StructSymbol>(symbol)) {
+        return "STRUC";
+    } else if (auto procSymbol = std::dynamic_pointer_cast<ProcSymbol>(symbol)) {
+        return "PROC";
+    } else if (auto recordSymbol = std::dynamic_pointer_cast<RecordSymbol>(symbol)) {
+        return "RECORD";
+    } else if (auto recordFieldSymbol = std::dynamic_pointer_cast<RecordFieldSymbol>(symbol)) {
+        return "RECORD Field";
+    }
+    return "unknown";
+}
+
+// DataItem errors
+DiagnosticPtr SemanticAnalyzer::reportInvalidDataType(const std::shared_ptr<DataItem> &dataItem)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_DATA_TYPE, dataItem->dataTypeToken.lexeme);
+    Token dataTypeToken = dataItem->dataTypeToken;
+    std::shared_ptr<Symbol> dataTypeSymbol = parseSess->symbolTable->findSymbol(dataTypeToken);
+    if (!dataTypeSymbol) {
+        LOG_DETAILED_ERROR("this shouldn't be null");
+        return parseSess->dcx->getLastDiagnostic();
+    }
+    diag.addPrimaryLabel(dataTypeToken.span, fmt::format("Expected a `STRUC` or `RECORD` type, but this is a `{}`", getSymbolType(dataTypeSymbol)));
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+// InitValue errors
+DiagnosticPtr SemanticAnalyzer::reportExpectedStrucOrRecordDataInitializer(const std::shared_ptr<InitValue> &initValue,
+                                                                           const Token &expectedTypeToken)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_DATA_INITIALIZER);
+    std::shared_ptr<Symbol> expectedTypeSymbol = parseSess->symbolTable->findSymbol(expectedTypeToken);
+    if (std::dynamic_pointer_cast<StructSymbol>(expectedTypeSymbol)) {
+        diag.addPrimaryLabel(getInitValueSpan(initValue), fmt::format("expected a `STRUC` data initializer"));
+    } else if (std::dynamic_pointer_cast<RecordSymbol>(expectedTypeSymbol)) {
+        diag.addPrimaryLabel(getInitValueSpan(initValue), fmt::format("expected a `RECORD` data initializer"));
+    } else {
+        LOG_DETAILED_ERROR("should be only record or struc expected type");
+        return parseSess->dcx->getLastDiagnostic();
+    }
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+DiagnosticPtr SemanticAnalyzer::reportExpectedSingleItemDataInitializer(const std::shared_ptr<InitValue> &initValue,
+                                                                        const Token & /*expectedTypeToken*/)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_DATA_INITIALIZER);
+    diag.addPrimaryLabel(getInitValueSpan(initValue), fmt::format("expected a single item data initializer"));
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+DiagnosticPtr SemanticAnalyzer::reportTooManyInitialValuesForRecord(const std::shared_ptr<InitValue> &initValue,
+                                                                    const std::shared_ptr<RecordSymbol> &recordSymbol)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::TOO_MANY_INITIAL_VALUES_FOR_RECORD);
+    diag.addPrimaryLabel(getInitValueSpan(initValue), fmt::format("expected `{}` initial values or less", recordSymbol->fields.size()));
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+DiagnosticPtr SemanticAnalyzer::reportTooManyInitialValuesForStruc(const std::shared_ptr<InitValue> &initValue,
+                                                                   const std::shared_ptr<StructSymbol> &structSymbol)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::TOO_MANY_INITIAL_VALUES_FOR_STRUC);
+    diag.addPrimaryLabel(getInitValueSpan(initValue), fmt::format("expected `{}` initial values or less", structSymbol->structDir->fields.size()));
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+DiagnosticPtr SemanticAnalyzer::reportInitializerTooLargeForSpecifiedSize(const std::shared_ptr<ExpressionInitValue> &initValue,
+                                                                          const Token &/*expectedTypeToken*/, int32_t actualSize)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INITIALIZER_TOO_LARGE_FOR_SPECIFIED_SIZE);
+    ExpressionPtr expr = initValue->expr;
+    if (expr->constantValue) {
+        diag.addPrimaryLabel(getExpressionSpan(expr),
+                             fmt::format("this has value `{}` and needs `{}` bytes", expr->constantValue.value(), actualSize));
+    } else {
+        diag.addPrimaryLabel(getExpressionSpan(expr), fmt::format("this has size `{}`", actualSize));
+    }
+    // TODO: add secondary label for expectedTypeToken?
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
 // Instruction errors
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportInvalidNumberOfOperands(const std::shared_ptr<Instruction> &instruction, int numberOfOps)
+DiagnosticPtr SemanticAnalyzer::reportInvalidNumberOfOperands(const std::shared_ptr<Instruction> &instruction, int numberOfOps)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_NUMBER_OF_OPERANDS);
     Token mnemonicToken = instruction->mnemonicToken.value();
@@ -73,7 +171,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportInvalidNumberOfOperands(cons
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportCantHaveTwoMemoryOperands(const std::shared_ptr<Instruction> &instruction)
+DiagnosticPtr SemanticAnalyzer::reportCantHaveTwoMemoryOperands(const std::shared_ptr<Instruction> &instruction)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::CANT_HAVE_TWO_MEMORY_OPERANDS);
     Token mnemonicToken = instruction->mnemonicToken.value();
@@ -84,7 +182,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportCantHaveTwoMemoryOperands(co
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportDestinationOperandCantBeImmediate(const std::shared_ptr<Instruction> &instruction)
+DiagnosticPtr SemanticAnalyzer::reportDestinationOperandCantBeImmediate(const std::shared_ptr<Instruction> &instruction)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::DESTINATION_OPERAND_CANT_BE_IMMEDIATE);
     diag.addPrimaryLabel(getExpressionSpan(instruction->operands[0]), "");
@@ -92,8 +190,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportDestinationOperandCantBeImme
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportImmediateOperandTooBig(const std::shared_ptr<Instruction> &instruction, int firstOpSize,
-                                                                           int immediateOpSize)
+DiagnosticPtr SemanticAnalyzer::reportImmediateOperandTooBig(const std::shared_ptr<Instruction> &instruction, int firstOpSize, int immediateOpSize)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::IMMEDIATE_OPERAND_TOO_BIG);
     Token mnemonicToken = instruction->mnemonicToken.value();
@@ -107,8 +204,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportImmediateOperandTooBig(const
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportOperandsHaveDifferentSize(const std::shared_ptr<Instruction> &instruction, int firstOpSize,
-                                                                              int secondOpSize)
+DiagnosticPtr SemanticAnalyzer::reportOperandsHaveDifferentSize(const std::shared_ptr<Instruction> &instruction, int firstOpSize, int secondOpSize)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::OPERANDS_HAVE_DIFFERENT_SIZE);
     Token mnemonicToken = instruction->mnemonicToken.value();
@@ -121,7 +217,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportOperandsHaveDifferentSize(co
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportExpressionMustBeMemoryOrRegisterOperand(const ExpressionPtr &operand)
+DiagnosticPtr SemanticAnalyzer::reportExpressionMustBeMemoryOrRegisterOperand(const ExpressionPtr &operand)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPRESSION_MUST_BE_MEMORY_OR_REGISTER_OPERAND);
     diag.addPrimaryLabel(getExpressionSpan(operand), fmt::format("this has type `{}`", getOperandType(operand)));
@@ -129,7 +225,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportExpressionMustBeMemoryOrRegi
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportExpressionMustHaveSize(const ExpressionPtr &operand)
+DiagnosticPtr SemanticAnalyzer::reportExpressionMustHaveSize(const ExpressionPtr &operand)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPRESSION_MUST_HAVE_SIZE);
     diag.addPrimaryLabel(getExpressionSpan(operand), "");
@@ -137,7 +233,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportExpressionMustHaveSize(const
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportInvalidOperandSize(const ExpressionPtr &operand, const std::string &expectedSize, int actualSize)
+DiagnosticPtr SemanticAnalyzer::reportInvalidOperandSize(const ExpressionPtr &operand, const std::string &expectedSize, int actualSize)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_OPERAND_SIZE);
     diag.addPrimaryLabel(getExpressionSpan(operand), fmt::format("this operand must have size `{}`, but it has size `{}`", expectedSize, actualSize));
@@ -146,7 +242,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportInvalidOperandSize(const Exp
 }
 
 // RecordDir errors
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportRecordWidthTooBig(const std::shared_ptr<RecordDir> &recordDir, int32_t width)
+DiagnosticPtr SemanticAnalyzer::reportRecordWidthTooBig(const std::shared_ptr<RecordDir> &recordDir, int32_t width)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::RECORD_WIDTH_TOO_BIG);
     Token recordIdToken = recordDir->idToken;
@@ -156,7 +252,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportRecordWidthTooBig(const std:
 }
 
 // RecordField errors
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportRecordFieldWidthMustBePositive(const std::shared_ptr<RecordField> &recordField, int64_t width)
+DiagnosticPtr SemanticAnalyzer::reportRecordFieldWidthMustBePositive(const std::shared_ptr<RecordField> &recordField, int64_t width)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::RECORD_FIELD_WIDTH_MUST_BE_POSITIVE);
     diag.addPrimaryLabel(getExpressionSpan(recordField->width), fmt::format("this evaluates to `{}`", width));
@@ -164,7 +260,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportRecordFieldWidthMustBePositi
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportRecordFieldWidthTooBig(const std::shared_ptr<RecordField> &recordField, int64_t width)
+DiagnosticPtr SemanticAnalyzer::reportRecordFieldWidthTooBig(const std::shared_ptr<RecordField> &recordField, int64_t width)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::RECORD_FIELD_TOO_BIG);
     diag.addPrimaryLabel(getExpressionSpan(recordField->width), fmt::format("this evaluates to `{}`", width));
@@ -173,7 +269,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportRecordFieldWidthTooBig(const
 }
 
 // Expression errors
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportExpressionMustBeConstant(ExpressionPtr &expr)
+DiagnosticPtr SemanticAnalyzer::reportExpressionMustBeConstant(ExpressionPtr &expr)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPRESSION_MUST_BE_CONSTANT);
     diag.addPrimaryLabel(getExpressionSpan(expr), "");
@@ -181,23 +277,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportExpressionMustBeConstant(Exp
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportRecordNotAllowed(const Token &token)
-{
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::RECORD_NOT_ALLOWED, token.lexeme);
-    diag.addPrimaryLabel(token.span, "");
-    parseSess->dcx->addDiagnostic(diag);
-    return parseSess->dcx->getLastDiagnostic();
-}
-
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportRecordFieldNotAllowed(const Token &token)
-{
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::RECORD_FIELD_NOT_ALLOWED, token.lexeme);
-    diag.addPrimaryLabel(token.span, "");
-    parseSess->dcx->addDiagnostic(diag);
-    return parseSess->dcx->getLastDiagnostic();
-}
-
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportUndefinedSymbol(const Token &token, bool isDefinedLater)
+DiagnosticPtr SemanticAnalyzer::reportUndefinedSymbol(const Token &token, bool isDefinedLater)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::UNDEFINED_SYMBOL, token.lexeme);
     diag.addPrimaryLabel(token.span, "");
@@ -213,15 +293,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportUndefinedSymbol(const Token 
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportTypeNotAllowed(const Token &token)
-{
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::TYPE_NOT_ALLOWED, token.lexeme);
-    diag.addPrimaryLabel(token.span, "");
-    parseSess->dcx->addDiagnostic(diag);
-    return parseSess->dcx->getLastDiagnostic();
-}
-
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportRegisterNotAllowed(const Token &reg)
+DiagnosticPtr SemanticAnalyzer::reportRegisterNotAllowed(const Token &reg)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::REGISTER_NOT_ALLOWED);
     diag.addPrimaryLabel(reg.span, "");
@@ -229,7 +301,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportRegisterNotAllowed(const Tok
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportNumberTooLarge(const Token &number)
+DiagnosticPtr SemanticAnalyzer::reportNumberTooLarge(const Token &number)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::CONSTANT_TOO_LARGE);
     diag.addPrimaryLabel(number.span, "");
@@ -238,7 +310,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportNumberTooLarge(const Token &
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportStringTooLarge(const Token &string)
+DiagnosticPtr SemanticAnalyzer::reportStringTooLarge(const Token &string)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::CONSTANT_TOO_LARGE);
     diag.addPrimaryLabel(string.span, "");
@@ -247,7 +319,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportStringTooLarge(const Token &
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportUnaryOperatorIncorrectArgument(const std::shared_ptr<UnaryOperator> &node)
+DiagnosticPtr SemanticAnalyzer::reportUnaryOperatorIncorrectArgument(const std::shared_ptr<UnaryOperator> &node)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::UNARY_OPERATOR_INCORRECT_ARGUMENT, stringToUpper(node->op.lexeme));
 
@@ -273,7 +345,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportUnaryOperatorIncorrectArgume
 }
 
 // Dot Operator
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportDotOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node)
+DiagnosticPtr SemanticAnalyzer::reportDotOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::DOT_OPERATOR_INCORRECT_ARGUMENT);
 
@@ -294,7 +366,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportDotOperatorIncorrectArgument
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportDotOperatorSizeNotSpecified(const std::shared_ptr<BinaryOperator> &node)
+DiagnosticPtr SemanticAnalyzer::reportDotOperatorSizeNotSpecified(const std::shared_ptr<BinaryOperator> &node)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::DOT_OPERATOR_INCORRECT_ARGUMENT);
     diag.addPrimaryLabel(node->op.span, "");
@@ -303,8 +375,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportDotOperatorSizeNotSpecified(
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportDotOperatorTypeNotStruct(const std::shared_ptr<BinaryOperator> &node,
-                                                                             const std::string &actualType)
+DiagnosticPtr SemanticAnalyzer::reportDotOperatorTypeNotStruct(const std::shared_ptr<BinaryOperator> &node, const std::string &actualType)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::DOT_OPERATOR_INCORRECT_ARGUMENT);
     diag.addPrimaryLabel(node->op.span, "");
@@ -314,8 +385,8 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportDotOperatorTypeNotStruct(con
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportDotOperatorFieldDoesntExist(const std::shared_ptr<BinaryOperator> &node,
-                                                                                const std::string &strucName, const std::string &fieldName)
+DiagnosticPtr SemanticAnalyzer::reportDotOperatorFieldDoesntExist(const std::shared_ptr<BinaryOperator> &node, const std::string &strucName,
+                                                                  const std::string &fieldName)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::DOT_OPERATOR_FIELD_DOESNT_EXIST, strucName, fieldName);
     diag.addPrimaryLabel(getExpressionSpan(node->right), "");
@@ -324,7 +395,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportDotOperatorFieldDoesntExist(
 }
 
 // PTR operator
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportPtrOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node)
+DiagnosticPtr SemanticAnalyzer::reportPtrOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::PTR_OPERATOR_INCORRECT_ARGUMENT);
 
@@ -347,7 +418,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportPtrOperatorIncorrectArgument
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportDivisionByZero(const std::shared_ptr<BinaryOperator> &node)
+DiagnosticPtr SemanticAnalyzer::reportDivisionByZero(const std::shared_ptr<BinaryOperator> &node)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::DIVISION_BY_ZERO_IN_EXPRESSION);
 
@@ -361,7 +432,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportDivisionByZero(const std::sh
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportInvalidScaleValue(const std::shared_ptr<BinaryOperator> &node)
+DiagnosticPtr SemanticAnalyzer::reportInvalidScaleValue(const std::shared_ptr<BinaryOperator> &node)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_SCALE_VALUE);
 
@@ -380,7 +451,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportInvalidScaleValue(const std:
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportIncorrectIndexRegister(const std::shared_ptr<Leaf> &node)
+DiagnosticPtr SemanticAnalyzer::reportIncorrectIndexRegister(const std::shared_ptr<Leaf> &node)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INCORRECT_INDEX_REGISTER);
     diag.addPrimaryLabel(node->token.span, "");
@@ -388,7 +459,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportIncorrectIndexRegister(const
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportOtherBinaryOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node)
+DiagnosticPtr SemanticAnalyzer::reportOtherBinaryOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::OTHER_BINARY_OPERATOR_INCORRECT_ARGUMENT, node->op.lexeme);
 
@@ -417,7 +488,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportOtherBinaryOperatorIncorrect
 }
 
 // called when there's unfinished memory operand that needs to be finished
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportCantHaveRegistersInExpression(const ExpressionPtr &node)
+DiagnosticPtr SemanticAnalyzer::reportCantHaveRegistersInExpression(const ExpressionPtr &node)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::CANT_HAVE_REGISTERS_IN_EXPRESSION);
 
@@ -480,7 +551,7 @@ void SemanticAnalyzer::findInvalidExpressionCause(const ExpressionPtr &node, Exp
     }
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportCantAddVariables(const ExpressionPtr &node, bool implicit)
+DiagnosticPtr SemanticAnalyzer::reportCantAddVariables(const ExpressionPtr &node, bool implicit)
 {
     std::optional<Token> firstVar;
     std::optional<Token> secondVar;
@@ -557,7 +628,7 @@ void SemanticAnalyzer::findRelocatableVariables(const ExpressionPtr &node, std::
     }
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportMoreThanTwoRegistersAfterAdd(const ExpressionPtr &node, bool implicit)
+DiagnosticPtr SemanticAnalyzer::reportMoreThanTwoRegistersAfterAdd(const ExpressionPtr &node, bool implicit)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::MORE_THAN_TWO_REGISTERS);
 
@@ -600,7 +671,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportMoreThanTwoRegistersAfterAdd
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportMoreThanOneScaleAfterAdd(const ExpressionPtr &node, bool implicit)
+DiagnosticPtr SemanticAnalyzer::reportMoreThanOneScaleAfterAdd(const ExpressionPtr &node, bool implicit)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::MORE_THAN_ONE_SCALE);
 
@@ -650,7 +721,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportMoreThanOneScaleAfterAdd(con
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportTwoEsp(const ExpressionPtr &node, bool implicit)
+DiagnosticPtr SemanticAnalyzer::reportTwoEsp(const ExpressionPtr &node, bool implicit)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::TWO_ESP_REGISTERS);
 
@@ -699,7 +770,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportTwoEsp(const ExpressionPtr &
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportNon32bitRegister(const ExpressionPtr &node, bool implicit)
+DiagnosticPtr SemanticAnalyzer::reportNon32bitRegister(const ExpressionPtr &node, bool implicit)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::NON_32BIT_REGISTER);
 
@@ -759,7 +830,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportNon32bitRegister(const Expre
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportBinaryMinusOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node)
+DiagnosticPtr SemanticAnalyzer::reportBinaryMinusOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::BINARY_MINUS_OPERATOR_INCORRECT_ARGUMENT);
 
@@ -775,7 +846,7 @@ std::shared_ptr<Diagnostic> SemanticAnalyzer::reportBinaryMinusOperatorIncorrect
     return parseSess->dcx->getLastDiagnostic();
 }
 
-std::shared_ptr<Diagnostic> SemanticAnalyzer::reportNonRegisterInSquareBrackets(const std::shared_ptr<BinaryOperator> &node)
+DiagnosticPtr SemanticAnalyzer::reportNonRegisterInSquareBrackets(const std::shared_ptr<BinaryOperator> &node)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::NON_REGISTER_IN_SQUARE_BRACKETS);
     diag.addPrimaryLabel(getExpressionSpan(node), "");

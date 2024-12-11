@@ -13,7 +13,11 @@ std::map<int, std::string> SemanticAnalyzer::sizeValueToStr = {{1, "BYTE"}, {2, 
 
 std::map<std::string, int> SemanticAnalyzer::sizeStrToValue = {{"BYTE", 1}, {"WORD", 2}, {"DWORD", 4}, {"QWORD", 8}};
 
+std::map<std::string, std::string> SemanticAnalyzer::dataDirectiveToSizeStr = {{"DB", "BYTE"}, {"DW", "WORD"}, {"DD", "DWORD"}, {"DQ", "QWORD"}};
+
 std::unordered_set<std::string> SemanticAnalyzer::builtinTypes = {"BYTE", "WORD", "DWORD", "QWORD"};
+
+std::unordered_set<std::string> SemanticAnalyzer::dataDirectives = {"DB", "DW", "DD", "DQ"};
 
 SemanticAnalyzer::SemanticAnalyzer(std::shared_ptr<ParseSession> parseSession, ASTPtr ast) : parseSess(std::move(parseSession)), ast(std::move(ast))
 {
@@ -55,6 +59,7 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
     for (const auto &operand : instruction->operands) {
         bool success = visitExpression(operand, ExpressionContext(ExprCtxtFlags::AllowRegisters | ExprCtxtFlags::AllowForwardReferences));
         if (!success) {
+            instruction->diagnostic = operand->diagnostic;
             return false;
         }
         if (operand->type == OperandType::UnfinishedMemoryOperand) {
@@ -231,6 +236,7 @@ bool SemanticAnalyzer::visitSegDir(const std::shared_ptr<SegDir> &segDir)
         bool success = visitExpression(segDir->constExpr.value(), ExpressionContext(ExprCtxtFlags::None));
         // TODO: checl that expr is constant
         if (!success) {
+            segDir->diagnostic = segDir->constExpr.value()->diagnostic;
             return false;
         }
     }
@@ -245,7 +251,7 @@ bool SemanticAnalyzer::visitDataDir(const std::shared_ptr<DataDir> &dataDir, con
         if (strucNameToken) {
             std::shared_ptr<Symbol> symbol = parseSess->symbolTable->findSymbol(strucNameToken.value());
             auto structSymbol = std::dynamic_pointer_cast<StructSymbol>(symbol);
-            dataVariableSymbol = structSymbol->fields[fieldName];
+            dataVariableSymbol = structSymbol->namedFields[fieldName];
         } else {
             std::shared_ptr<Symbol> fieldSymbol = parseSess->symbolTable->findSymbol(fieldName);
             dataVariableSymbol = std::dynamic_pointer_cast<DataVariableSymbol>(fieldSymbol);
@@ -256,20 +262,23 @@ bool SemanticAnalyzer::visitDataDir(const std::shared_ptr<DataDir> &dataDir, con
         }
         dataVariableSymbol->value = -1; // TODO: calculate actual value
         dataVariableSymbol->wasDefined = true;
+        return visitDataItem(dataDir->dataItem, dataVariableSymbol);
     }
-    return visitDataItem(dataDir->dataItem);
+    return visitDataItem(dataDir->dataItem, std::nullopt);
 }
 
 bool SemanticAnalyzer::visitStructDir(const std::shared_ptr<StructDir> &structDir)
 {
+    std::shared_ptr<Symbol> symbol = parseSess->symbolTable->findSymbol(structDir->firstIdToken);
+    auto structSymbol = std::dynamic_pointer_cast<StructSymbol>(symbol);
+
     for (const auto &field : structDir->fields) {
         if (INVALID(field)) {
             continue;
         }
         std::ignore = visitDataDir(field, structDir->firstIdToken);
     }
-    std::shared_ptr<Symbol> symbol = parseSess->symbolTable->findSymbol(structDir->firstIdToken);
-    auto structSymbol = std::dynamic_pointer_cast<StructSymbol>(symbol);
+
     structSymbol->size = structSymbol->sizeOf = -1; // TODO: calculate actual value
     structSymbol->wasDefined = true;
     return true;
@@ -294,6 +303,7 @@ bool SemanticAnalyzer::visitRecordDir(const std::shared_ptr<RecordDir> &recordDi
     for (const auto &field : recordDir->fields) {
         bool success = visitRecordField(field);
         if (!success) {
+            recordDir->diagnostic = field->diagnostic;
             return false;
         }
         std::shared_ptr<Symbol> symbol = parseSess->symbolTable->findSymbol(field->fieldToken);
@@ -310,6 +320,7 @@ bool SemanticAnalyzer::visitRecordDir(const std::shared_ptr<RecordDir> &recordDi
     auto recordSymbol = std::dynamic_pointer_cast<RecordSymbol>(symbol);
     recordSymbol->width = width;
     recordSymbol->wasDefined = true;
+    // TODO: calculate mask
 
     return true;
 }
@@ -321,6 +332,7 @@ bool SemanticAnalyzer::visitRecordField(const std::shared_ptr<RecordField> &reco
 
     bool success = visitExpression(recordField->width, ExpressionContext(ExprCtxtFlags::None));
     if (!success) {
+        recordField->diagnostic = recordField->width->diagnostic;
         return false;
     }
 
@@ -344,6 +356,7 @@ bool SemanticAnalyzer::visitRecordField(const std::shared_ptr<RecordField> &reco
     if (initialValueExpr) {
         success = visitExpression(initialValueExpr.value(), ExpressionContext(ExprCtxtFlags::None));
         if (!success) {
+            recordField->diagnostic = initialValueExpr.value()->diagnostic;
             return false;
         }
 
@@ -354,6 +367,7 @@ bool SemanticAnalyzer::visitRecordField(const std::shared_ptr<RecordField> &reco
         // int64_t initialValue = initialValueExpr.value()->constantValue.value();
         // TODO: check that initialValue fits into `width` bytes
     }
+    // TODO: calculate shift & mask
     recordFieldSymbol->wasDefined = true;
     return true;
 }
@@ -365,6 +379,7 @@ bool SemanticAnalyzer::visitEquDir(const std::shared_ptr<EquDir> &equDir)
     auto equSymbol = std::dynamic_pointer_cast<EquVariableSymbol>(symbol);
     bool success = visitExpression(equDir->value, ExpressionContext(ExprCtxtFlags::None));
     if (!success) {
+        equDir->diagnostic = equDir->value->diagnostic;
         return false;
     }
     if (!equDir->value->constantValue) {
@@ -383,6 +398,7 @@ bool SemanticAnalyzer::visitEqualDir(const std::shared_ptr<EqualDir> &equalDir)
     auto equalSymbol = std::dynamic_pointer_cast<EqualVariableSymbol>(symbol);
     bool success = visitExpression(equalDir->value, ExpressionContext(ExprCtxtFlags::None));
     if (!success) {
+        equalDir->diagnostic = equalDir->value->diagnostic;
         return false;
     }
     if (!equalDir->value->constantValue) {
@@ -400,6 +416,7 @@ bool SemanticAnalyzer::visitEndDir(const std::shared_ptr<EndDir> &endDir)
     if (endDir->addressExpr) {
         bool success = visitExpression(endDir->addressExpr.value(), ExpressionContext(ExprCtxtFlags::None));
         if (!success) {
+            endDir->diagnostic = endDir->addressExpr.value()->diagnostic;
             return false;
         }
         // TODO: check it's address expression
@@ -407,63 +424,183 @@ bool SemanticAnalyzer::visitEndDir(const std::shared_ptr<EndDir> &endDir)
     return true;
 }
 
-bool SemanticAnalyzer::visitDataItem(const std::shared_ptr<DataItem> &dataItem)
+bool SemanticAnalyzer::visitDataItem(const std::shared_ptr<DataItem> &dataItem,
+                                     const std::optional<std::shared_ptr<DataVariableSymbol>> &dataVariableSymbol)
 {
-    if (auto builtinInstance = std::dynamic_pointer_cast<BuiltinInstance>(dataItem)) {
-        Token dataTypeToken = builtinInstance->dataTypeToken;
-        std::string dataType = dataTypeToken.lexeme;
-
-        // Visit initialization values
-        return visitInitValue(builtinInstance->initValues, dataType);
-
-    } else if (auto recordInstance = std::dynamic_pointer_cast<RecordInstance>(dataItem)) {
-        // TODO: Implement record instance processing
-        LOG_DETAILED_ERROR("Record instances are not yet implemented.");
-    } else if (auto structInstance = std::dynamic_pointer_cast<StructInstance>(dataItem)) {
-        // TODO: Implement struct instance processing
-        LOG_DETAILED_ERROR("Struct instances are not yet implemented.");
-    } else {
-        LOG_DETAILED_ERROR("Unknown data item type.");
+    Token dataTypeToken = dataItem->dataTypeToken;
+    if (dataDirectives.contains(stringToUpper(dataTypeToken.lexeme))) {
+        if (dataVariableSymbol) {
+            std::string typeStr = dataDirectiveToSizeStr[stringToUpper(dataTypeToken.lexeme)];
+            dataVariableSymbol.value()->dataTypeSize = OperandSize(typeStr, sizeStrToValue[typeStr]);
+        }
+        return visitInitValue(dataItem->initValues, dataVariableSymbol, dataTypeToken);
     }
-    return true;
+
+    // only STRUC or RECORD from here
+    std::shared_ptr<Symbol> dataTypeSymbol = parseSess->symbolTable->findSymbol(dataTypeToken);
+    if (!dataTypeSymbol) {
+        dataItem->diagnostic = reportUndefinedSymbol(dataTypeToken, false);
+        return false;
+    }
+    if (!dataTypeSymbol->wasDefined) {
+        dataItem->diagnostic = reportUndefinedSymbol(dataTypeToken, true);
+        return false;
+    }
+
+    if (!std::dynamic_pointer_cast<StructSymbol>(dataTypeSymbol) && !std::dynamic_pointer_cast<RecordSymbol>(dataTypeSymbol)) {
+        dataItem->diagnostic = reportInvalidDataType(dataItem);
+        return false;
+    }
+
+    if (dataVariableSymbol) {
+        if (auto structSymbol = std::dynamic_pointer_cast<StructSymbol>(dataTypeSymbol)) {
+            dataVariableSymbol.value()->dataTypeSize = OperandSize(structSymbol->token.lexeme, structSymbol->size);
+        } else if (auto recordSymbol = std::dynamic_pointer_cast<RecordSymbol>(dataTypeSymbol)) {
+            dataVariableSymbol.value()->dataTypeSize = OperandSize(recordSymbol->token.lexeme, 4);
+        }
+    }
+
+    return visitInitValue(dataItem->initValues, dataVariableSymbol, dataTypeToken);
 }
 
-bool SemanticAnalyzer::visitInitValue(const std::shared_ptr<InitValue> &initValue, const std::string &dataType)
+bool SemanticAnalyzer::visitInitValue(const std::shared_ptr<InitValue> &initValue,
+                                      const std::optional<std::shared_ptr<DataVariableSymbol>> &dataVariableSymbol, const Token &expectedTypeToken)
 {
+    dataInitializerDepth = 0;
+    return visitInitValueHelper(initValue, dataVariableSymbol, expectedTypeToken);
+}
+
+bool SemanticAnalyzer::visitInitValueHelper(const std::shared_ptr<InitValue> &initValue,
+                                            const std::optional<std::shared_ptr<DataVariableSymbol>> &dataVariableSymbol,
+                                            const Token &expectedTypeToken)
+{
+    dataInitializerDepth++;
     if (auto dupOperator = std::dynamic_pointer_cast<DupOperator>(initValue)) {
-        // Process DUP operator
+        // TODO: dup operator can't be inside <> (<1 dup (2)>)
         bool success = visitExpression(dupOperator->repeatCount, ExpressionContext(ExprCtxtFlags::None));
         if (!success) {
+            initValue->diagnostic = dupOperator->repeatCount->diagnostic;
             return false;
         }
-        // TODO check repeatCount is constant
+        if (!dupOperator->repeatCount->constantValue) {
+            initValue->diagnostic = reportExpressionMustBeConstant(dupOperator->repeatCount);
+            return false;
+        }
 
-        // Visit operands
-        return visitInitValue(dupOperator->operands, dataType);
+        return visitInitValueHelper(dupOperator->operands, dataVariableSymbol, expectedTypeToken);
 
     } else if (auto questionMarkInitValue = std::dynamic_pointer_cast<QuestionMarkInitValue>(initValue)) {
         // Uninitialized data; no action needed
 
     } else if (auto expressionInitValue = std::dynamic_pointer_cast<ExpressionInitValue>(initValue)) {
-        // Process expression init value
-        return visitExpression(expressionInitValue->expr, ExpressionContext(ExprCtxtFlags::None | ExprCtxtFlags::AllowForwardReferences));
+        if (!dataDirectives.contains(stringToUpper(expectedTypeToken.lexeme))) {
+            initValue->diagnostic = reportExpectedStrucOrRecordDataInitializer(expressionInitValue, expectedTypeToken);
+            return false;
+        }
 
-        // TODO: Implement type checking between expression and data type
+        bool success = visitExpression(expressionInitValue->expr, ExpressionContext(ExprCtxtFlags::AllowForwardReferences));
+        if (!success) {
+            initValue->diagnostic = expressionInitValue->expr->diagnostic;
+            return false;
+        }
+
+        ExpressionPtr expr = expressionInitValue->expr;
+        // find out actual size of constantValue
+        if (expr->constantValue) {
+            int64_t value = expr->constantValue.value();
+            if (value >= INT8_MIN && value <= static_cast<int64_t>(UINT8_MAX)) {
+                expr->size = OperandSize("BYTE", 1);
+            } else if (value >= INT16_MIN && value <= static_cast<int64_t>(UINT16_MAX)) {
+                expr->size = OperandSize("WORD", 2);
+            } else if (value >= INT32_MIN && value <= static_cast<int64_t>(UINT32_MAX)) {
+                expr->size = OperandSize("DWORD", 4);
+            } else {
+                expr->size = OperandSize("DWORD", 8);
+            }
+        } else if (auto leaf = std::dynamic_pointer_cast<Leaf>(expr)) {
+            if (leaf->token.type == TokenType::StringLiteral) {
+                // TODO: how to handle???
+            }
+        } else {
+            expr->size = OperandSize("DWORD", 4); // override, because labels are always 32 bits in data definition
+        }
+
+        std::string expectedSizeStr = dataDirectiveToSizeStr[stringToUpper(expectedTypeToken.lexeme)];
+        OperandSize expectedSize = OperandSize(expectedSizeStr, sizeStrToValue[expectedSizeStr]);
+        if (!expr->size) {
+            LOG_DETAILED_ERROR("no size can't happen without registers");
+            return false;
+        }
+
+        if (expectedSize.value < expr->size->value) {
+            initValue->diagnostic = reportInitializerTooLargeForSpecifiedSize(expressionInitValue, expectedTypeToken, expr->size->value);
+            return false;
+        }
 
     } else if (auto structOrRecordInitValue = std::dynamic_pointer_cast<StructOrRecordInitValue>(initValue)) {
-        // Process struct or record initialization
-        return visitInitValue(structOrRecordInitValue->fields, dataType);
+        if (dataDirectives.contains(stringToUpper(expectedTypeToken.lexeme))) {
+            initValue->diagnostic = reportExpectedSingleItemDataInitializer(structOrRecordInitValue, expectedTypeToken);
+            return false;
+        }
+
+        std::shared_ptr<Symbol> symbol = parseSess->symbolTable->findSymbol(expectedTypeToken);
+
+        if (auto expectedRecordSymbol = std::dynamic_pointer_cast<RecordSymbol>(symbol)) {
+            if (structOrRecordInitValue->initList->fields.size() > expectedRecordSymbol->fields.size()) {
+                initValue->diagnostic = reportTooManyInitialValuesForRecord(structOrRecordInitValue, expectedRecordSymbol);
+                return false;
+            }
+
+            for (const auto &init : structOrRecordInitValue->initList->fields) {
+                std::shared_ptr<ExpressionInitValue> exprInitValue;
+                if (!(exprInitValue = std::dynamic_pointer_cast<ExpressionInitValue>(init))) {
+                    initValue->diagnostic = reportExpectedSingleItemDataInitializer(init, expectedTypeToken);
+                    return false;
+                }
+                // TODO: check that for size
+            }
+        } else if (auto expectedStructSymbol = std::dynamic_pointer_cast<StructSymbol>(symbol)) {
+
+            if (structOrRecordInitValue->initList->fields.size() > expectedStructSymbol->structDir->fields.size()) {
+                initValue->diagnostic = reportTooManyInitialValuesForStruc(structOrRecordInitValue, expectedStructSymbol);
+                return false;
+            }
+            int i = 0;
+            for (const auto &init : structOrRecordInitValue->initList->fields) {
+                Token newExpectedTypeToken = expectedStructSymbol->structDir->fields[i]->dataItem->dataTypeToken;
+
+                if (std::dynamic_pointer_cast<DupOperator>(init)) {
+                    if (dataDirectives.contains(stringToUpper(newExpectedTypeToken.lexeme))) {
+                        initValue->diagnostic = reportExpectedSingleItemDataInitializer(init, newExpectedTypeToken);
+                        return false;
+                    } else {
+                        initValue->diagnostic = reportExpectedStrucOrRecordDataInitializer(init, newExpectedTypeToken);
+                        return false;
+                    }
+                }
+
+                bool success = visitInitValueHelper(init, dataVariableSymbol, newExpectedTypeToken);
+                if (!success) {
+                    initValue->diagnostic = init->diagnostic;
+                    return false;
+                }
+                i += 1;
+            }
+        }
 
     } else if (auto initList = std::dynamic_pointer_cast<InitializerList>(initValue)) {
         for (const auto &init : initList->fields) {
-            bool success = visitInitValue(init, dataType);
+            bool success = visitInitValueHelper(init, dataVariableSymbol, expectedTypeToken);
             if (!success) {
+                initValue->diagnostic = init->diagnostic;
                 return false;
             }
         }
     } else {
         LOG_DETAILED_ERROR("Unknown initialization value type.");
+        return false;
     }
+    dataInitializerDepth--;
     return true;
 }
 
@@ -500,6 +637,7 @@ bool SemanticAnalyzer::visitBrackets(const std::shared_ptr<Brackets> &node, cons
 {
     bool success = visitExpressionHelper(node->operand, context);
     if (!success) {
+        node->diagnostic = node->operand->diagnostic;
         return false;
     }
 
@@ -518,6 +656,7 @@ bool SemanticAnalyzer::visitSquareBrackets(const std::shared_ptr<SquareBrackets>
 {
     bool success = visitExpressionHelper(node->operand, context);
     if (!success) {
+        node->diagnostic = node->operand->diagnostic;
         return false;
     }
 
@@ -619,9 +758,14 @@ bool SemanticAnalyzer::visitSquareBrackets(const std::shared_ptr<SquareBrackets>
 
 bool SemanticAnalyzer::visitImplicitPlusOperator(const std::shared_ptr<ImplicitPlusOperator> &node, const ExpressionContext &context)
 {
-    bool successLeft = visitExpressionHelper(node->left, context);
-    bool successRight = visitExpressionHelper(node->right, context);
-    if (!successLeft || !successRight) {
+    bool success = visitExpressionHelper(node->left, context);
+    if (!success) {
+        node->diagnostic = node->left->diagnostic;
+        return false;
+    }
+    success = visitExpressionHelper(node->right, context);
+    if (!success) {
+        node->diagnostic = node->right->diagnostic;
         return false;
     }
 
@@ -717,16 +861,18 @@ bool SemanticAnalyzer::visitBinaryOperator(const std::shared_ptr<BinaryOperator>
 {
     ExpressionContext contextLeft = context;
     ExpressionContext contextRight = context;
-    if (stringToUpper(node->op.lexeme) == "PTR") {
-        contextLeft.isPTROperand = true;
-    }
     if (node->op.lexeme == ".") {
         contextRight.isStructField = true;
     }
 
-    bool successLeft = visitExpressionHelper(node->left, contextLeft);
-    bool successRight = visitExpressionHelper(node->right, contextRight);
-    if (!successLeft || !successRight) {
+    bool success = visitExpressionHelper(node->left, contextLeft);
+    if (!success) {
+        node->diagnostic = node->left->diagnostic;
+        return false;
+    }
+    success = visitExpressionHelper(node->right, contextRight);
+    if (!success) {
+        node->diagnostic = node->right->diagnostic;
         return false;
     }
 
@@ -749,7 +895,7 @@ bool SemanticAnalyzer::visitBinaryOperator(const std::shared_ptr<BinaryOperator>
         }
         std::shared_ptr<Leaf> leafRight;
         if (!(leafRight = std::dynamic_pointer_cast<Leaf>(right)) || leafRight->token.type != TokenType::Identifier) {
-            LOG_DETAILED_ERROR("After `.` encountered not identifier! (should be handled in parsing stage)");
+            LOG_DETAILED_ERROR("After `.` encountered not an identifier! (should be handled in the parsing stage)");
             return false;
         }
 
@@ -763,7 +909,7 @@ bool SemanticAnalyzer::visitBinaryOperator(const std::shared_ptr<BinaryOperator>
             return false;
         }
         auto structSymbol = std::dynamic_pointer_cast<StructSymbol>(typeSymbol);
-        if (!structSymbol->fields.contains(leafRight->token.lexeme)) {
+        if (!structSymbol->namedFields.contains(leafRight->token.lexeme)) {
             node->diagnostic = reportDotOperatorFieldDoesntExist(node, structSymbol->token.lexeme, leafRight->token.lexeme);
             return false;
         }
@@ -771,7 +917,15 @@ bool SemanticAnalyzer::visitBinaryOperator(const std::shared_ptr<BinaryOperator>
         node->constantValue = std::nullopt;
         node->isRelocatable = left->isRelocatable;
         node->type = OperandType::MemoryOperand;
-        node->size = left->size;
+
+        // Forward references must be allowed (when not allowed, the expression also must be constant
+        // and for `.` error expression must be constant will be emitted)
+        // TODO: test this...
+        if (!structSymbol->wasDefined) {
+            linesForSecondPass.push_back(currentLine);
+            node->unresolvedSymbols = true;
+        }
+        node->size = structSymbol->namedFields[leafRight->token.lexeme]->dataTypeSize;
         node->registers = left->registers;
         return true;
     } else if (op == "PTR") {
@@ -1033,16 +1187,10 @@ bool SemanticAnalyzer::visitBinaryOperator(const std::shared_ptr<BinaryOperator>
 
 bool SemanticAnalyzer::visitUnaryOperator(const std::shared_ptr<UnaryOperator> &node, const ExpressionContext &context)
 {
-    ExpressionContext contextOperand = context;
     std::string op = stringToUpper(node->op.lexeme);
-    if (op == "WIDTH" || op == "MASK") {
-        contextOperand.isWidthOrMaskOperand = true;
-    }
-    if (op == "SIZE" || op == "SIZEOF") {
-        contextOperand.isSizeOperand = true;
-    }
-    bool success = visitExpressionHelper(node->operand, contextOperand);
+    bool success = visitExpressionHelper(node->operand, context);
     if (!success) {
+        node->diagnostic = node->operand->diagnostic;
         return false;
     }
 
@@ -1069,6 +1217,7 @@ bool SemanticAnalyzer::visitUnaryOperator(const std::shared_ptr<UnaryOperator> &
             return false;
         }
         // TODO: calculate actual length
+        // TODO: check whether symbol was defined
         node->unresolvedSymbols = true;
         node->constantValue = -1;
         node->isRelocatable = false;
@@ -1089,6 +1238,7 @@ bool SemanticAnalyzer::visitUnaryOperator(const std::shared_ptr<UnaryOperator> &
             return false;
         }
         // TODO: calculate actual size
+        // TODO: check whether symbol was defined
         node->unresolvedSymbols = true;
         node->constantValue = -1;
         node->isRelocatable = false;
@@ -1110,6 +1260,7 @@ bool SemanticAnalyzer::visitUnaryOperator(const std::shared_ptr<UnaryOperator> &
             return false;
         }
         // TODO: calculate actual value
+        // TODO: check whether symbol was defined
         node->unresolvedSymbols = true;
         node->constantValue = -1;
         node->isRelocatable = false;
@@ -1170,9 +1321,8 @@ bool SemanticAnalyzer::visitLeaf(const std::shared_ptr<Leaf> &node, const Expres
 
     if (token.type == TokenType::Identifier) {
         if (context.isStructField) {
-            // CRITICAL TODO: check whether this symbol is actually defined
+            // this is handled higher in the `.`
             node->type = OperandType::Unspecified;
-            node->unresolvedSymbols = true;
             return true;
         }
 
@@ -1196,22 +1346,7 @@ bool SemanticAnalyzer::visitLeaf(const std::shared_ptr<Leaf> &node, const Expres
             node->constantValue = std::nullopt;
             node->isRelocatable = true;
             node->type = OperandType::MemoryOperand;
-            if (stringToUpper(dataType) == "DB") {
-                node->size = OperandSize("BYTE", 1);
-            } else if (stringToUpper(dataType) == "DW") {
-                node->size = OperandSize("WORD", 2);
-            } else if (stringToUpper(dataType) == "DD") {
-                node->size = OperandSize("DWORD", 4);
-            } else if (stringToUpper(dataType) == "DQ") {
-                node->size = OperandSize("QWORD", 8);
-            } else {
-                symbol = parseSess->symbolTable->findSymbol(token);
-                if (auto structSymbol = std::dynamic_pointer_cast<StructSymbol>(symbol)) {
-                    node->size = OperandSize(structSymbol->token.lexeme, structSymbol->size);
-                } else if (auto recordSymbol = std::dynamic_pointer_cast<RecordSymbol>(symbol)) {
-                    node->size = OperandSize(recordSymbol->token.lexeme, 4);
-                }
-            }
+            node->size = dataVariableSymbol->dataTypeSize;
             node->registers = {};
         } else if (std::dynamic_pointer_cast<LabelSymbol>(symbol) || std::dynamic_pointer_cast<ProcSymbol>(symbol)) {
             node->constantValue = std::nullopt;
@@ -1232,22 +1367,23 @@ bool SemanticAnalyzer::visitLeaf(const std::shared_ptr<Leaf> &node, const Expres
             node->size = std::nullopt;
             node->registers = {};
         } else if (auto structSymbol = std::dynamic_pointer_cast<StructSymbol>(symbol)) {
-            if (!context.isPTROperand && !context.isSizeOperand) {
-                node->diagnostic = reportTypeNotAllowed(token);
-                return false;
-            }
-            node->type = OperandType::Unspecified;
+            node->constantValue = structSymbol->size;
+            node->isRelocatable = false;
+            node->type = OperandType::ImmediateOperand;
+            node->size = std::nullopt;
+            node->registers = {};
         } else if (auto recordSymbol = std::dynamic_pointer_cast<RecordSymbol>(symbol)) {
-            if (!context.isSizeOperand && !context.isWidthOrMaskOperand) {
-                node->diagnostic = reportRecordNotAllowed(token);
-                return false;
-            }
-            node->type = OperandType::Unspecified;
+            node->constantValue = recordSymbol->mask;
+            node->isRelocatable = false;
+            node->type = OperandType::ImmediateOperand;
+            node->size = std::nullopt;
+            node->registers = {};
         } else if (auto recordFieldSymbol = std::dynamic_pointer_cast<RecordFieldSymbol>(symbol)) {
-            if (!context.isWidthOrMaskOperand) {
-                node->diagnostic = reportRecordFieldNotAllowed(token);
-            }
-            node->type = OperandType::Unspecified;
+            node->constantValue = recordFieldSymbol->shift;
+            node->isRelocatable = false;
+            node->type = OperandType::ImmediateOperand;
+            node->size = std::nullopt;
+            node->registers = {};
         }
 
     } else if (token.type == TokenType::Number) {
@@ -1270,9 +1406,14 @@ bool SemanticAnalyzer::visitLeaf(const std::shared_ptr<Leaf> &node, const Expres
             return false;
         }
         node->unresolvedSymbols = true;
-        node->constantValue = -1; // TODO: convert string value to bytes and then to int32_t
+        if (!context.allowRegisters && expressionDepth == 1) {
+            node->constantValue = std::nullopt;
+            node->size = OperandSize("BYTE", 1);
+        } else {
+            node->constantValue = -1; // TODO: convert string value to bytes and then to int32_t
+            node->size = std::nullopt;
+        }
         node->isRelocatable = false;
-        node->size = std::nullopt;
         node->type = OperandType::ImmediateOperand;
         node->registers = {};
     } else if (token.type == TokenType::Register) {
@@ -1293,11 +1434,11 @@ bool SemanticAnalyzer::visitLeaf(const std::shared_ptr<Leaf> &node, const Expres
         node->size = OperandSize("DWORD", 4);
         node->registers = {};
     } else if (token.type == TokenType::Type) {
-        if (!context.isPTROperand && !context.isSizeOperand) {
-            node->diagnostic = reportTypeNotAllowed(token);
-            return false;
-        }
-        node->type = OperandType::Unspecified;
+        node->constantValue = sizeStrToValue[stringToUpper(token.lexeme)];
+        node->isRelocatable = false;
+        node->type = OperandType::ImmediateOperand;
+        node->size = std::nullopt;
+        node->registers = {};
     } else {
         LOG_DETAILED_ERROR("Unkown leaf token!");
         return false;

@@ -53,7 +53,7 @@ public:
     AST(AST &&) = default;
     AST &operator=(AST &&) = default;
 
-    std::optional<std::shared_ptr<Diagnostic>> diagnostic;
+    mutable std::optional<std::shared_ptr<Diagnostic>> diagnostic;
 };
 
 class Program : public AST {
@@ -79,13 +79,16 @@ public:
 
 class DupOperator : public InitValue {
 public:
-    DupOperator(ExpressionPtr repeatCount, Token op, std::shared_ptr<InitializerList> operands)
-        : repeatCount(std::move(repeatCount)), op(std::move(op)), operands(std::move(operands))
+    DupOperator(ExpressionPtr repeatCount, Token op, Token leftBracket, std::shared_ptr<InitializerList> operands, Token rightBracket)
+        : repeatCount(std::move(repeatCount)), op(std::move(op)), leftBracket(std::move(leftBracket)), operands(std::move(operands)),
+          rightBracket(std::move(rightBracket))
     {
     }
     ExpressionPtr repeatCount;
     Token op;
+    Token leftBracket;
     std::shared_ptr<InitializerList> operands;
+    Token rightBracket;
 };
 
 class QuestionMarkInitValue : public InitValue {
@@ -103,12 +106,12 @@ public:
 class StructOrRecordInitValue : public InitValue {
 public:
     StructOrRecordInitValue(Token leftBracket, Token rightBracket, std::shared_ptr<InitializerList> fields)
-        : fields(std::move(fields)), leftBracket(std::move(leftBracket)), rightBracket(std::move(rightBracket))
+        : initList(std::move(fields)), leftBracket(std::move(leftBracket)), rightBracket(std::move(rightBracket))
     {
     }
     Token leftBracket;
     Token rightBracket;
-    std::shared_ptr<InitializerList> fields;
+    std::shared_ptr<InitializerList> initList;
 };
 
 class InitializerList : public InitValue {
@@ -122,35 +125,15 @@ public:
 // Define data (data items)
 class DataItem : public AST {
 public:
+    Token dataTypeToken;
+    std::shared_ptr<InitializerList> initValues;
+
     DataItem() = default;
     DataItem(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
-};
-
-class BuiltinInstance : public DataItem {
-public:
-    Token dataTypeToken;
-    std::shared_ptr<InitValue> initValues;
-
-    BuiltinInstance(Token dataTypeToken, std::shared_ptr<InitValue> initValues)
+    DataItem(Token dataTypeToken, std::shared_ptr<InitializerList> initValues)
         : dataTypeToken(std::move(dataTypeToken)), initValues(std::move(initValues))
     {
     }
-};
-
-class RecordInstance : public DataItem {
-public:
-    Token idToken;
-    std::shared_ptr<InitValue> initValues;
-
-    RecordInstance(Token idToken, std::shared_ptr<InitValue> initValues) : idToken(std::move(idToken)), initValues(std::move(initValues)) {}
-};
-
-class StructInstance : public DataItem {
-public:
-    Token idToken;
-    std::shared_ptr<InitValue> initValues;
-
-    StructInstance(Token idToken, std::shared_ptr<InitValue> initValues) : idToken(std::move(idToken)), initValues(std::move(initValues)) {}
 };
 
 // Directives
@@ -479,24 +462,11 @@ inline void printAST(const ASTPtr &node, size_t indent)
             std::cout << indentation << "Unhandled Directive Type\n";
         }
     } else if (auto dataItem = std::dynamic_pointer_cast<DataItem>(node)) {
-        if (auto builtinInstance = std::dynamic_pointer_cast<BuiltinInstance>(dataItem)) {
-            std::cout << indentation << "Builtin Instance\n";
-            std::cout << indentation << "Data Type Token: " << builtinInstance->dataTypeToken.lexeme << "\n";
-            std::cout << indentation << "Init Values:\n";
-            printAST(builtinInstance->initValues, indent + 2);
-        } else if (auto recordInstance = std::dynamic_pointer_cast<RecordInstance>(dataItem)) {
-            std::cout << indentation << "Record Instance\n";
-            std::cout << indentation << "Identifier Token: " << recordInstance->idToken.lexeme << "\n";
-            std::cout << indentation << "Init Values:\n";
-            printAST(recordInstance->initValues, indent + 2);
-        } else if (auto structInstance = std::dynamic_pointer_cast<StructInstance>(dataItem)) {
-            std::cout << indentation << "Struct Instance\n";
-            std::cout << indentation << "Identifier Token: " << structInstance->idToken.lexeme << "\n";
-            std::cout << indentation << "Init Values:\n";
-            printAST(structInstance->initValues, indent + 2);
-        } else {
-            std::cout << indentation << "Unhandled DataItem Type\n";
-        }
+        std::cout << indentation << "Builtin Instance\n";
+        std::cout << indentation << "Data Type Token: " << dataItem->dataTypeToken.lexeme << "\n";
+        std::cout << indentation << "Init Values:\n";
+        printAST(dataItem->initValues, indent + 2);
+
     } else if (auto initValue = std::dynamic_pointer_cast<InitValue>(node)) {
         if (auto dupOperator = std::dynamic_pointer_cast<DupOperator>(initValue)) {
             std::cout << indentation << "Dup Operator\n";
@@ -519,7 +489,7 @@ inline void printAST(const ASTPtr &node, size_t indent)
             std::cout << indentation << "Left Bracket: " << structOrRecord->leftBracket.lexeme << "\n";
             std::cout << indentation << "Right Bracket: " << structOrRecord->rightBracket.lexeme << "\n";
             std::cout << indentation << "Fields:\n";
-            printAST(structOrRecord->fields, indent + 2);
+            printAST(structOrRecord->initList, indent + 2);
         } else if (auto initList = std::dynamic_pointer_cast<InitializerList>(initValue)) {
             std::cout << indentation << "Initializer List\n";
             for (const auto &operand : initList->fields) {
@@ -597,4 +567,43 @@ inline Span getExpressionSpan(const ExpressionPtr &node)
         LOG_DETAILED_ERROR("Unknown Expression Node!\n");
         return {0, 0, nullptr};
     }
+}
+
+inline Span getInitValueSpan(const std::shared_ptr<InitValue> &node)
+{
+    if (node->diagnostic) {
+        return {0, 0, nullptr};
+    }
+
+    if (auto dupOperator = std::dynamic_pointer_cast<DupOperator>(node)) {
+        Span span = getExpressionSpan(dupOperator->repeatCount);
+        span = Span::merge(span, dupOperator->rightBracket.span);
+        return span;
+    }
+
+    if (auto questionMarkInitValue = std::dynamic_pointer_cast<QuestionMarkInitValue>(node)) {
+        return questionMarkInitValue->token.span;
+    }
+
+    if (auto expressionInitValue = std::dynamic_pointer_cast<ExpressionInitValue>(node)) {
+        return getExpressionSpan(expressionInitValue->expr);
+    }
+
+    if (auto structOrRecord = std::dynamic_pointer_cast<StructOrRecordInitValue>(node)) {
+        Span span = Span::merge(structOrRecord->leftBracket.span, structOrRecord->rightBracket.span);
+        return span;
+    }
+
+    if (auto initList = std::dynamic_pointer_cast<InitializerList>(node)) {
+        if (initList->fields.size() == 0) {
+            LOG_DETAILED_ERROR("Initalizer list length can't be 0");
+            return {0, 0, nullptr};
+        }
+
+        Span result = Span::merge(getInitValueSpan(initList->fields[0]), getInitValueSpan(initList->fields.back()));
+        return result;
+    }
+
+    LOG_DETAILED_ERROR("Unknown InitValue node!\n");
+    return {0, 0, nullptr};
 }

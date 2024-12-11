@@ -80,6 +80,17 @@ DEFINE_ERROR(EXPECTED_IDENTIFIER, "Expected identifier, found `{}`")
 
 // Semantic errors
 
+// DataItem errors
+DEFINE_ERROR(INVALID_DATA_TYPE, "Invalid data type `{}`")
+
+// InitValue errors
+DEFINE_ERROR(INVALID_DATA_INITIALIZER, "Invalid data initializer")
+// EXPECTED_STRUC_OR_RECORD_DATA_INITIALIZER = INVALID_DATA_INITIALIZER
+// EXPECTED_SINGLE_ITEM_DATA_INITIALIZER = INVALID_DATA_INITIALIZER
+DEFINE_ERROR(TOO_MANY_INITIAL_VALUES_FOR_RECORD, "Too many initial values for `RECORD`")
+DEFINE_ERROR(TOO_MANY_INITIAL_VALUES_FOR_STRUC, "Too many initial values for `STRUC`")
+DEFINE_ERROR(INITIALIZER_TOO_LARGE_FOR_SPECIFIED_SIZE, "Initializer is too large for the specified size")
+
 // Instruction errors
 DEFINE_ERROR(INVALID_NUMBER_OF_OPERANDS, "Invalid number of operands in the instruction")
 DEFINE_ERROR(CANT_HAVE_TWO_MEMORY_OPERANDS, "Can't have 2 memory operands")
@@ -100,10 +111,7 @@ DEFINE_ERROR(RECORD_FIELD_TOO_BIG, "`RECORD` field width exceeds 31 bits")
 
 // Expression errors
 DEFINE_ERROR(EXPRESSION_MUST_BE_CONSTANT, "Expression must be constant")
-DEFINE_ERROR(RECORD_NOT_ALLOWED, "Record `{}` is not allowed outside of `WIDTH` or `MASK` or `SIZE(OF)` operand")
-DEFINE_ERROR(RECORD_FIELD_NOT_ALLOWED, "Record field `{}` is not allowed outside of `WIDTH` or `MASK` operand")
 DEFINE_ERROR(UNDEFINED_SYMBOL, "Undefined symbol `{}`")
-DEFINE_ERROR(TYPE_NOT_ALLOWED, "Type `{}` is not allowed outside of `PTR` first argument or as `SIZE(OF)` operand")
 DEFINE_ERROR(REGISTER_NOT_ALLOWED, "Register is not allowed outside of instruction operands")
 DEFINE_ERROR(CONSTANT_TOO_LARGE, "Constant too large")
 DEFINE_ERROR(UNARY_OPERATOR_INCORRECT_ARGUMENT, "Incorrect argument in the unary operator `{}`")

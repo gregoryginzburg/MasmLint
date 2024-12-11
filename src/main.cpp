@@ -31,7 +31,7 @@ int main(int argc, char *argv[])
 {
     setupConsoleForUtf8();
 
-    std::filesystem::path filename = "examples/test1.asm";
+    std::filesystem::path filename = "examples/test3.asm";
     bool jsonOutput = false;
     bool readFromStdin = false;
     for (int i = 1; i < argc; ++i) {

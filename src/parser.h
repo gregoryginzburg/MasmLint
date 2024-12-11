@@ -38,12 +38,11 @@ private:
     bool lookaheadMatch(size_t n, const std::string &value) const;
     bool lookaheadMatch(size_t n, const std::unordered_set<std::string> &values) const;
     bool lookaheadMatch(size_t n, TokenType type) const;
-    bool lookaheadNextLineMatch(const std::string &value) const;
 
     [[nodiscard]] std::shared_ptr<Statement> parseStatement();
 
     [[nodiscard]] std::shared_ptr<SegDir> parseSegDir();
-    [[nodiscard]] std::shared_ptr<DataDir> parseDataDir(const std::optional<Token> &strucNameToken = std::nullopt);
+    [[nodiscard]] std::shared_ptr<DataDir> parseDataDir(std::shared_ptr<std::unordered_map<std::string, std::shared_ptr<DataVariableSymbol>>> namedFields = nullptr);
     [[nodiscard]] std::shared_ptr<StructDir> parseStructDir();
     [[nodiscard]] std::shared_ptr<ProcDir> parseProcDir();
     [[nodiscard]] std::shared_ptr<RecordDir> parseRecordDir();
@@ -54,9 +53,8 @@ private:
 
     [[nodiscard]] std::shared_ptr<Instruction> parseInstruction();
 
-    [[nodiscard]] std::shared_ptr<DataItem> parseDataItem(const std::optional<Token> &idToken,
-                                            const std::optional<Token> &strucNameToken);
-    [[nodiscard]] std::shared_ptr<InitValue> parseInitValue();
+    [[nodiscard]] std::shared_ptr<DataItem> parseDataItem(const std::optional<Token> &idToken, std::shared_ptr<std::unordered_map<std::string, std::shared_ptr<DataVariableSymbol>>> namedFields);
+    [[nodiscard]] std::shared_ptr<InitializerList> parseInitValues();
     [[nodiscard]] std::shared_ptr<InitValue> parseSingleInitValue();
     [[nodiscard]] std::shared_ptr<InitializerList> parseInitializerList();
 

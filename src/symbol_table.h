@@ -37,6 +37,7 @@ struct ProcSymbol : public Symbol {
 struct DataVariableSymbol : public Symbol {
     DataVariableSymbol(Token token, Token dataType) : dataType(std::move(dataType)) { this->token = std::move(token); }
     Token dataType;
+    OperandSize dataTypeSize = OperandSize("", -1);
     int32_t value = -1;
 
     int32_t size = -1;
@@ -68,8 +69,13 @@ struct EqualVariableSymbol : public Symbol {
 };
 
 struct StructSymbol : public Symbol {
-    StructSymbol(Token token) { this->token = std::move(token); }
-    std::unordered_map<std::string, std::shared_ptr<DataVariableSymbol>> fields;
+    StructSymbol(Token token, std::shared_ptr<StructDir> structDir, std::unordered_map<std::string, std::shared_ptr<DataVariableSymbol>> namedFields)
+        : structDir(std::move(structDir)), namedFields(std::move(namedFields))
+    {
+        this->token = std::move(token);
+    }
+    std::shared_ptr<StructDir> structDir;
+    std::unordered_map<std::string, std::shared_ptr<DataVariableSymbol>> namedFields;
 
     int32_t size = -1;
     int32_t sizeOf = -1;
@@ -82,6 +88,7 @@ struct RecordSymbol : public Symbol {
     std::shared_ptr<RecordDir> recordDir;
 
     int32_t width = -1;
+    int32_t mask = -1;
 
     int32_t size = 4;
     int32_t sizeOf = 4;
@@ -94,8 +101,8 @@ struct RecordFieldSymbol : public Symbol {
 
     int32_t width = -1;
     std::optional<int32_t> initial;
-    // int32_t shift = -1;
-    // int32_t mask = -1;
+    int32_t shift = -1;
+    int32_t mask = -1;
 
     // size, sizeof, length, lengthof are not allowed
 };
@@ -103,6 +110,8 @@ struct RecordFieldSymbol : public Symbol {
 class SymbolTable {
 public:
     void addSymbol(const std::shared_ptr<Symbol> &symbol);
+
+    void removeSymbol(const std::shared_ptr<Symbol> &symbol);
     std::shared_ptr<Symbol> findSymbol(const Token &token);
     std::shared_ptr<Symbol> findSymbol(const std::string &name);
     void printSymbols();
