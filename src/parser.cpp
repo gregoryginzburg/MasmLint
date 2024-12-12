@@ -26,9 +26,23 @@ void Parser::advance()
     currentToken = tokens[++currentIndex];
 }
 
-void Parser::synchronize()
+void Parser::synchronizeLine()
 {
     while (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
+        advance();
+    }
+}
+
+void Parser::synchronizeProcDir()
+{
+    while (!match("ENDP") && !match(TokenType::EndOfFile)) {
+        advance();
+    }
+}
+
+void Parser::synchronizeStrucDir()
+{
+    while (!match("ENDS") && !match(TokenType::EndOfFile)) {
         advance();
     }
 }
@@ -120,12 +134,17 @@ ASTPtr Parser::parse()
             std::shared_ptr<Statement> statement;
             statement = parseStatement();
             if (INVALID(statement)) {
-                synchronize();
+                if (std::dynamic_pointer_cast<StructDir>(statement)) {
+                    synchronizeStrucDir();
+                } else if (std::dynamic_pointer_cast<ProcDir>(statement)) {
+                    synchronizeProcDir();
+                }
+                synchronizeLine();
             } else {
                 // remove and handle everyhting in parseStatement()?
                 if (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
                     std::ignore = reportExpectedEndOfLine(currentToken);
-                    synchronize();
+                    synchronizeLine();
                     // continue parsing after synchronize
                 }
             }
@@ -224,6 +243,7 @@ std::shared_ptr<SegDir> Parser::parseSegDir()
         if (INVALID(expr)) {
             return INVALID_SEG_DIR(expr->diagnostic);
         }
+        expression = expr;
     }
     return std::make_shared<SegDir>(directiveToken, expression);
 }
@@ -299,12 +319,12 @@ std::shared_ptr<StructDir> Parser::parseStructDir()
             std::shared_ptr<DataDir> dataDir;
             dataDir = parseDataDir(namedFields);
             if (INVALID(dataDir)) {
-                synchronize();
+                synchronizeLine();
             } else {
                 // remove and handle everyhting in parseStatement()?
                 if (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
                     std::ignore = reportExpectedEndOfLine(currentToken);
-                    synchronize();
+                    synchronizeLine();
                     // continue parsing after synchronize
                 }
             }
@@ -441,6 +461,7 @@ std::shared_ptr<ProcDir> Parser::parseProcDir()
     Token firstIdToken, secondIdToken;
     Token directiveToken, endpDirToken;
     std::vector<std::shared_ptr<Instruction>> fields;
+
     if (!match(TokenType::Identifier)) {
         auto diag = reportExpectedIdentifierInProcDir(currentToken);
         return INVALID_PROC_DIR(diag);
@@ -464,16 +485,25 @@ std::shared_ptr<ProcDir> Parser::parseProcDir()
     }
     consume(TokenType::EndOfLine);
 
+    if (!currentSegment) {
+        auto diag = reportProcMustBeInSegmentBlock(firstIdToken, directiveToken);
+        return INVALID_PROC_DIR(diag);
+    }
+    if (currentSegment.value() != ".CODE") {
+        auto diag = reportMustBeInCodeSegment(firstIdToken, directiveToken);
+        return INVALID_PROC_DIR(diag);
+    }
+
     while (!match("ENDP") && !lookaheadMatch(1, "ENDP") && !match(TokenType::EndOfFile)) {
         if (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
             std::shared_ptr<Instruction> instruction;
             instruction = parseInstruction();
             if (INVALID(instruction)) {
-                synchronize();
+                synchronizeLine();
             } else {
                 if (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
                     std::ignore = reportExpectedEndOfLine(currentToken);
-                    synchronize();
+                    synchronizeLine();
                     // continue parsing after synchronize
                 }
             }

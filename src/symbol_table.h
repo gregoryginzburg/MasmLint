@@ -9,6 +9,7 @@
 
 struct Symbol {
     Token token{};
+    bool wasVisited = false;
     bool wasDefined = false; // when it's defined, its value is evaluated, also avoid visiting ExpressionPtr twice
     // bool wasEvaluated = false; // when error happens
     virtual ~Symbol() = default;
@@ -21,7 +22,7 @@ struct LabelSymbol : public Symbol {
     int32_t size = 4;
     int32_t sizeOf = 4;
     int32_t length = 1;
-    int32_t lengthof = 1;
+    int32_t lengthOf = 1;
 };
 
 struct ProcSymbol : public Symbol {
@@ -31,7 +32,7 @@ struct ProcSymbol : public Symbol {
     int32_t size = 4;
     int32_t sizeOf = 4;
     int32_t length = 1;
-    int32_t lengthof = 1;
+    int32_t lengthOf = 1;
 };
 
 struct DataVariableSymbol : public Symbol {
@@ -43,7 +44,7 @@ struct DataVariableSymbol : public Symbol {
     int32_t size = -1;
     int32_t sizeOf = -1;
     int32_t length = -1;
-    int32_t lengthof = -1;
+    int32_t lengthOf = -1;
 };
 
 struct EquVariableSymbol : public Symbol {
@@ -54,7 +55,7 @@ struct EquVariableSymbol : public Symbol {
     int32_t size = 4;
     int32_t sizeOf = 4;
     int32_t length = 1;
-    int32_t lengthof = 1;
+    int32_t lengthOf = 1;
 };
 
 struct EqualVariableSymbol : public Symbol {
@@ -65,7 +66,7 @@ struct EqualVariableSymbol : public Symbol {
     int32_t size = 4;
     int32_t sizeOf = 4;
     int32_t length = 1;
-    int32_t lengthof = 1;
+    int32_t lengthOf = 1;
 };
 
 struct StructSymbol : public Symbol {

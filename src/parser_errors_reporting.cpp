@@ -2,6 +2,8 @@
 #include "log.h"
 #include "token.h"
 
+// std::string
+
 // General
 std::shared_ptr<Diagnostic> Parser::reportSymbolRedefinition(const Token &token, const Token &firstDefinedToken)
 {
@@ -43,6 +45,26 @@ std::shared_ptr<Diagnostic> Parser::reportMustBeInSegmentBlock(const Token &firs
     return parseSess->dcx->getLastDiagnostic();
 }
 
+std::shared_ptr<Diagnostic> Parser::reportProcMustBeInSegmentBlock(const Token &firstToken, const Token &lastToken)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::PROC_MUST_BE_IN_SEGMENT_BLOCK);
+    Span span = Span::merge(firstToken.span, lastToken.span);
+    diag.addPrimaryLabel(span, "");
+    parseSess->dcx->addDiagnostic(diag);
+
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+std::shared_ptr<Diagnostic> Parser::reportMustBeInCodeSegment(const Token &firstToken, const Token &lastToken)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::MUST_BE_IN_CODE_SEGMENT);
+    Span span = Span::merge(firstToken.span, lastToken.span);
+    diag.addPrimaryLabel(span, "");
+    parseSess->dcx->addDiagnostic(diag);
+
+    return parseSess->dcx->getLastDiagnostic();
+}
+
 // SegDir
 
 // DataDir
@@ -51,7 +73,7 @@ std::shared_ptr<Diagnostic> Parser::reportExpectedIdentifierInDataDir(const Toke
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_IDENTIFIER, token.lexeme);
 
     if (isReservedWord(token)) {
-        diag.addPrimaryLabel(token.span, fmt::format("`{}` is a reserved word", token.lexeme));
+        diag.addPrimaryLabel(token.span, fmt::format("`{}` is a reserved word for `{}`", token.lexeme, tokenTypeToStr(token.type)));
 
     } else {
         diag.addPrimaryLabel(token.span, "");
@@ -75,7 +97,7 @@ std::shared_ptr<Diagnostic> Parser::reportExpectedIdentifierInStrucDir(const Tok
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_IDENTIFIER, token.lexeme);
 
     if (isReservedWord(token)) {
-        diag.addPrimaryLabel(token.span, fmt::format("`{}` is a reserved word", token.lexeme));
+        diag.addPrimaryLabel(token.span, fmt::format("`{}` is a reserved word for `{}`", token.lexeme, tokenTypeToStr(token.type)));
 
     } else {
         diag.addPrimaryLabel(token.span, "");
@@ -126,7 +148,7 @@ std::shared_ptr<Diagnostic> Parser::reportExpectedIdentifierInProcDir(const Toke
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_IDENTIFIER, token.lexeme);
 
     if (isReservedWord(token)) {
-        diag.addPrimaryLabel(token.span, fmt::format("`{}` is a reserved word", token.lexeme));
+        diag.addPrimaryLabel(token.span, fmt::format("`{}` is a reserved word for `{}`", token.lexeme, tokenTypeToStr(token.type)));
 
     } else {
         diag.addPrimaryLabel(token.span, "");
@@ -169,7 +191,7 @@ std::shared_ptr<Diagnostic> Parser::reportExpectedIdentifierInRecordDir(const To
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_IDENTIFIER, token.lexeme);
 
     if (isReservedWord(token)) {
-        diag.addPrimaryLabel(token.span, fmt::format("`{}` is a reserved word", token.lexeme));
+        diag.addPrimaryLabel(token.span, fmt::format("`{}` is a reserved word for `{}`", token.lexeme, tokenTypeToStr(token.type)));
 
     } else {
         diag.addPrimaryLabel(token.span, "");
@@ -201,7 +223,7 @@ std::shared_ptr<Diagnostic> Parser::reportExpectedIdentifierInEquDir(const Token
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_IDENTIFIER, token.lexeme);
 
     if (isReservedWord(token)) {
-        diag.addPrimaryLabel(token.span, fmt::format("`{}` is a reserved word", token.lexeme));
+        diag.addPrimaryLabel(token.span, fmt::format("`{}` is a reserved word for `{}`", token.lexeme, tokenTypeToStr(token.type)));
 
     } else {
         diag.addPrimaryLabel(token.span, "");
@@ -225,7 +247,7 @@ std::shared_ptr<Diagnostic> Parser::reportExpectedIdentifierInEqualDir(const Tok
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_IDENTIFIER, token.lexeme);
 
     if (isReservedWord(token)) {
-        diag.addPrimaryLabel(token.span, fmt::format("`{}` is a reserved word", token.lexeme));
+        diag.addPrimaryLabel(token.span, fmt::format("`{}` is a reserved word for `{}`", token.lexeme, tokenTypeToStr(token.type)));
 
     } else {
         diag.addPrimaryLabel(token.span, "");
@@ -273,7 +295,7 @@ std::shared_ptr<Diagnostic> Parser::reportExpectedIdentifierInLabel(const Token 
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_IDENTIFIER, token.lexeme);
 
     if (isReservedWord(token)) {
-        diag.addPrimaryLabel(token.span, fmt::format("`{}` is a reserved word", token.lexeme));
+        diag.addPrimaryLabel(token.span, fmt::format("`{}` is a reserved word for `{}`", token.lexeme, tokenTypeToStr(token.type)));
 
     } else {
         diag.addPrimaryLabel(token.span, "");

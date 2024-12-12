@@ -25,6 +25,8 @@ DEFINE_ERROR(EXPECTED_END_DIR, "All files must end with the `END` directive")
 
 // Statement
 DEFINE_ERROR(MUST_BE_IN_SEGMENT_BLOCK, "Instructions and data definitions must be in segment blocks (`.CODE` or `.DATA`)")
+DEFINE_ERROR(PROC_MUST_BE_IN_SEGMENT_BLOCK, "`PROC` definition must be in segment block")
+DEFINE_ERROR(MUST_BE_IN_CODE_SEGMENT, "`PROC` definition must be in `.CODE` segment")
 
 // SegDir
 

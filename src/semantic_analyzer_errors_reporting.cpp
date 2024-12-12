@@ -145,7 +145,7 @@ DiagnosticPtr SemanticAnalyzer::reportTooManyInitialValuesForStruc(const std::sh
 }
 
 DiagnosticPtr SemanticAnalyzer::reportInitializerTooLargeForSpecifiedSize(const std::shared_ptr<ExpressionInitValue> &initValue,
-                                                                          const Token &/*expectedTypeToken*/, int32_t actualSize)
+                                                                          const Token & /*expectedTypeToken*/, int32_t actualSize)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INITIALIZER_TOO_LARGE_FOR_SPECIFIED_SIZE);
     ExpressionPtr expr = initValue->expr;

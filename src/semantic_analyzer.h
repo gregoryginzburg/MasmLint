@@ -62,7 +62,7 @@ private:
                                       const std::optional<std::shared_ptr<DataVariableSymbol>> &dataVariableSymbol, const Token &expectedTypeToken);
     [[nodiscard]] bool visitInitValueHelper(const std::shared_ptr<InitValue> &initValue,
                                             const std::optional<std::shared_ptr<DataVariableSymbol>> &dataVariableSymbol,
-                                            const Token &expectedTypeToken);
+                                            const Token &expectedTypeToken, int dupMultiplier);
 
     // ASTexpression nodes
     [[nodiscard]] bool visitExpression(const ExpressionPtr &node, const ExpressionContext &context);
@@ -142,6 +142,8 @@ private:
     static void findInvalidExpressionCause(const ExpressionPtr &node, ExpressionPtr &errorNode);
 
     static std::string getSymbolType(const std::shared_ptr<Symbol> &symbol);
+
+    OperandSize getSizeFromToken(const Token &dataTypeToken);
 
     std::string getOperandType(const ExpressionPtr &node);
 
