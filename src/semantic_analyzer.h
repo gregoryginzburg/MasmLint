@@ -92,8 +92,15 @@ private:
     [[nodiscard]] DiagnosticPtr reportInvalidNumberOfOperands(const std::shared_ptr<Instruction> &instruction, int numberOfOps);
     [[nodiscard]] DiagnosticPtr reportCantHaveTwoMemoryOperands(const std::shared_ptr<Instruction> &instruction);
     [[nodiscard]] DiagnosticPtr reportDestinationOperandCantBeImmediate(const std::shared_ptr<Instruction> &instruction);
-    [[nodiscard]] DiagnosticPtr reportImmediateOperandTooBig(const std::shared_ptr<Instruction> &instruction, int firstOpSize, int immediateOpSize);
+    [[nodiscard]] DiagnosticPtr reportImmediateOperandTooBigForOperand(const std::shared_ptr<Instruction> &instruction, int firstOpSize,
+                                                                       int immediateOpSize);
     [[nodiscard]] DiagnosticPtr reportOperandsHaveDifferentSize(const std::shared_ptr<Instruction> &instruction, int firstOpSize, int secondOpSize);
+    [[nodiscard]] DiagnosticPtr reportOperandMustBeMemoryOrRegisterOperand(const ExpressionPtr &operand);
+    [[nodiscard]] DiagnosticPtr reportOperandMustHaveSize(const ExpressionPtr &operand);
+    [[nodiscard]] DiagnosticPtr reportInvalidOperandSize(const ExpressionPtr &operand, const std::string &expectedSize, int actualSize);
+    [[nodiscard]] DiagnosticPtr reportOperandMustBeAddressExpression(const ExpressionPtr &expr);
+    [[nodiscard]] DiagnosticPtr reportOperandMustBeRegister(const ExpressionPtr &expr);
+    [[nodiscard]] DiagnosticPtr reportOperandMustBeMemoryOperand(const ExpressionPtr &expr);
 
     // RecordDir errors
     [[nodiscard]] DiagnosticPtr reportRecordWidthTooBig(const std::shared_ptr<RecordDir> &recordDir, int32_t width);
@@ -101,10 +108,6 @@ private:
     // RecordField errors
     [[nodiscard]] DiagnosticPtr reportRecordFieldWidthMustBePositive(const std::shared_ptr<RecordField> &recordField, int64_t width);
     [[nodiscard]] DiagnosticPtr reportRecordFieldWidthTooBig(const std::shared_ptr<RecordField> &recordField, int64_t width);
-
-    [[nodiscard]] DiagnosticPtr reportExpressionMustBeMemoryOrRegisterOperand(const ExpressionPtr &operand);
-    [[nodiscard]] DiagnosticPtr reportExpressionMustHaveSize(const ExpressionPtr &operand);
-    [[nodiscard]] DiagnosticPtr reportInvalidOperandSize(const ExpressionPtr &operand, const std::string &expectedSize, int actualSize);
 
     // Expression errors
     [[nodiscard]] DiagnosticPtr reportExpressionMustBeConstant(ExpressionPtr &expr);
@@ -144,6 +147,7 @@ private:
     static std::string getSymbolType(const std::shared_ptr<Symbol> &symbol);
 
     OperandSize getSizeFromToken(const Token &dataTypeToken);
+    OperandSize getMinimumSizeForConstant(int64_t value);
 
     std::string getOperandType(const ExpressionPtr &node);
 
@@ -151,10 +155,11 @@ private:
     ASTPtr ast;
 
     int pass = 1;
-    int expressionDepth = 0;
-    int dataInitializerDepth = 0;
+    int expressionDepth = 0;      // TODO: pass this using function arguments
+    int dataInitializerDepth = 0; // TODO: pass this using function arguments
 
     uint32_t currentOffset = 0;
+    uint32_t dataInitializerSize = 0; // TODO: pass this using function arguments
     ASTPtr currentLine;
     std::vector<ASTPtr> linesForSecondPass;
 

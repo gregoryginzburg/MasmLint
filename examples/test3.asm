@@ -3,6 +3,7 @@
     var = 1
 
     anothervar db 2
+    mov db 1
 
     var1 = 2
     var1 = 5
@@ -45,7 +46,11 @@ x AnotherStruc <>
 
 .CODE
 start:
+    mov eax, AnotherStruc PTR [eax]
     mov eax, x[ebx].a[esi]
+
+    mov eax, 1 / var5
+    var5 = 0
 
     mov [eax].s, 1
 

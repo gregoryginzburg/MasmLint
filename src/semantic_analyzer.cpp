@@ -46,11 +46,39 @@ OperandSize SemanticAnalyzer::getSizeFromToken(const Token &dataTypeToken)
     return OperandSize("", -1);
 }
 
+OperandSize SemanticAnalyzer::getMinimumSizeForConstant(int64_t value)
+{
+    if (value >= INT8_MIN && value <= static_cast<int64_t>(UINT8_MAX)) {
+        return OperandSize("BYTE", 1);
+    } else if (value >= INT16_MIN && value <= static_cast<int64_t>(UINT16_MAX)) {
+        return OperandSize("WORD", 2);
+    } else if (value >= INT32_MIN && value <= static_cast<int64_t>(UINT32_MAX)) {
+        return OperandSize("DWORD", 4);
+    } else {
+        return OperandSize("DWORD", 8);
+    }
+}
+
 SemanticAnalyzer::SemanticAnalyzer(std::shared_ptr<ParseSession> parseSession, ASTPtr ast) : parseSess(std::move(parseSession)), ast(std::move(ast))
 {
 }
 
-void SemanticAnalyzer::analyze() { visit(ast); }
+void SemanticAnalyzer::analyze()
+{
+    visit(ast);
+    // Do the second pass
+    pass = 2;
+    for (const auto &line : linesForSecondPass) {
+        if (auto instruction = std::dynamic_pointer_cast<Instruction>(line)) {
+            std::ignore = visitInstruction(instruction);
+        } else if (auto dataDir = std::dynamic_pointer_cast<DataDir>(line)) {
+            std::ignore = visitDataDir(dataDir);
+        } else {
+            LOG_DETAILED_ERROR(
+                "lines for second pass can only be those with possible forward references - thus only instructions or datadir or enddir");
+        }
+    }
+}
 
 void SemanticAnalyzer::visit(const ASTPtr &node)
 {
@@ -109,6 +137,7 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
             return false;
         }
         labelSymbol->value = currentOffset;
+        labelSymbol->wasVisited = true;
         labelSymbol->wasDefined = true;
     }
 
@@ -117,6 +146,8 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
         return true;
     }
     // TODO: finish all possible instructions (dont forget about unresolvedSymbols)
+    // When checking for something, keep in mind on pass == 1 constantValue or size of expr can be undefined
+    // so dont emit errors based on that
     Token mnemonicToken = instruction->mnemonicToken.value();
     std::string mnemonic = stringToUpper(mnemonicToken.lexeme);
 
@@ -131,7 +162,8 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
         }
     }
 
-    if (mnemonic == "ADC" || mnemonic == "ADD" || mnemonic == "AND" || mnemonic == "CMP" || mnemonic == "MOV") {
+    if (mnemonic == "ADC" || mnemonic == "ADD" || mnemonic == "AND" || mnemonic == "CMP" || mnemonic == "MOV" || mnemonic == "OR" ||
+        mnemonic == "SBB" || mnemonic == "SUB" || mnemonic == "TEST" || mnemonic == "XOR") {
         if (instruction->operands.size() != 2) {
             instruction->diagnostic = reportInvalidNumberOfOperands(instruction, 2);
             return false;
@@ -150,15 +182,7 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
         // find out actual size of constantValue
         if (secondOp->constantValue) {
             int64_t value = secondOp->constantValue.value();
-            if (value >= INT8_MIN && value <= static_cast<int64_t>(UINT8_MAX)) {
-                secondOp->size = OperandSize("BYTE", 1);
-            } else if (value >= INT16_MIN && value <= static_cast<int64_t>(UINT16_MAX)) {
-                secondOp->size = OperandSize("WORD", 2);
-            } else if (value >= INT32_MIN && value <= static_cast<int64_t>(UINT32_MAX)) {
-                secondOp->size = OperandSize("DWORD", 4);
-            } else {
-                secondOp->size = OperandSize("DWORD", 8);
-            }
+            secondOp->size = getMinimumSizeForConstant(value);
         }
 
         // !firstOp->size && !secondOp->size - shouldn't happen, because then it's two memory operands
@@ -166,7 +190,7 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
             int firstOpSize = firstOp->size.value().value;
             int secondOpSize = secondOp->size.value().value;
             if (secondOp->constantValue && firstOpSize < secondOpSize && !(firstOp->unresolvedSymbols || secondOp->unresolvedSymbols)) {
-                instruction->diagnostic = reportImmediateOperandTooBig(instruction, firstOpSize, secondOpSize);
+                instruction->diagnostic = reportImmediateOperandTooBigForOperand(instruction, firstOpSize, secondOpSize);
                 return false;
             }
             if (!secondOp->constantValue && firstOpSize != secondOpSize && !(firstOp->unresolvedSymbols || secondOp->unresolvedSymbols)) {
@@ -174,18 +198,18 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
                 return false;
             }
         }
-    } else if (mnemonic == "CALL") {
+    } else if (mnemonic == "CALL" || mnemonic == "JMP" || mnemonic == "POP") {
         if (instruction->operands.size() != 1) {
             instruction->diagnostic = reportInvalidNumberOfOperands(instruction, 1);
             return false;
         }
         ExpressionPtr operand = instruction->operands[0];
         if (operand->type != OperandType::MemoryOperand && operand->type != OperandType::RegisterOperand) {
-            instruction->diagnostic = reportExpressionMustBeMemoryOrRegisterOperand(operand);
+            instruction->diagnostic = reportOperandMustBeMemoryOrRegisterOperand(operand);
             return false;
         }
         if (!operand->size) {
-            instruction->diagnostic = reportExpressionMustHaveSize(operand);
+            instruction->diagnostic = reportOperandMustHaveSize(operand);
             return false;
         }
         int operandSize = operand->size.value().value;
@@ -193,25 +217,86 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
             instruction->diagnostic = reportInvalidOperandSize(operand, "4", operandSize);
             return false;
         }
-    } else if (mnemonic == "CBW" || mnemonic == "CDQ" || mnemonic == "CWD") {
+    } else if (mnemonic == "CBW" || mnemonic == "CDQ" || mnemonic == "CWD" || mnemonic == "POPFD" || mnemonic == "PUSHFD") {
         if (instruction->operands.size() != 0) {
             instruction->diagnostic = reportInvalidNumberOfOperands(instruction, 0);
             return false;
         }
-    } else if (mnemonic == "DEC" || mnemonic == "DIV" || mnemonic == "IDIV") {
+    } else if (mnemonic == "DEC" || mnemonic == "DIV" || mnemonic == "IDIV" || mnemonic == "IMUL" || mnemonic == "INC" || mnemonic == "MUL" ||
+               mnemonic == "NEG" || mnemonic == "NOT") {
         if (instruction->operands.size() != 1) {
             instruction->diagnostic = reportInvalidNumberOfOperands(instruction, 1);
             return false;
         }
         ExpressionPtr operand = instruction->operands[0];
         if (operand->type != OperandType::MemoryOperand && operand->type != OperandType::RegisterOperand) {
-            instruction->diagnostic = reportExpressionMustBeMemoryOrRegisterOperand(operand);
+            instruction->diagnostic = reportOperandMustBeMemoryOrRegisterOperand(operand);
             return false;
         }
         if (!operand->size) {
-            instruction->diagnostic = reportExpressionMustHaveSize(operand);
+            instruction->diagnostic = reportOperandMustHaveSize(operand);
             return false;
         }
+    } else if (mnemonic == "JA" || mnemonic == "JAE" || mnemonic == "JB" || mnemonic == "JBE" || mnemonic == "JC" || mnemonic == "JE" ||
+               mnemonic == "JECXZ" || mnemonic == "JG" || mnemonic == "JGE" || mnemonic == "JL" || mnemonic == "JLE" || mnemonic == "JNC" ||
+               mnemonic == "JNE" || mnemonic == "JNZ" || mnemonic == "JZ" || mnemonic == "LOOP") {
+        if (instruction->operands.size() != 1) {
+            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, 1);
+            return false;
+        }
+        ExpressionPtr operand = instruction->operands[0];
+        if (operand->type != OperandType::MemoryOperand || !operand->registers.empty()) {
+            instruction->diagnostic = reportOperandMustBeAddressExpression(operand);
+            return false;
+        }
+    } else if (mnemonic == "LEA") {
+        if (instruction->operands.size() != 2) {
+            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, 2);
+            return false;
+        }
+        ExpressionPtr firstOp = instruction->operands[0];
+        ExpressionPtr secondOp = instruction->operands[1];
+        if (firstOp->type != OperandType::RegisterOperand) {
+            instruction->diagnostic = reportOperandMustBeRegister(firstOp);
+            return false;
+        }
+        if (firstOp->size.value().value != 4) {
+            instruction->diagnostic = reportInvalidOperandSize(firstOp, "4", firstOp->size.value().value);
+            return false;
+        }
+        if (secondOp->type != OperandType::MemoryOperand) {
+            instruction->diagnostic = reportOperandMustBeMemoryOperand(secondOp);
+            return false;
+        }
+    } else if (mnemonic == "MOVSX" || mnemonic == "MOVZX") {
+        // TODO
+    } else if (mnemonic == "PUSH") {
+        if (instruction->operands.size() != 1) {
+            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, 1);
+            return false;
+        }
+        ExpressionPtr operand = instruction->operands[0];
+        if (operand->constantValue) {
+            int64_t value = operand->constantValue.value();
+            operand->size = getMinimumSizeForConstant(value);
+        }
+
+        if (!operand->size) {
+            instruction->diagnostic = reportOperandMustHaveSize(operand);
+            return false;
+        }
+
+        int operandSize = operand->size.value().value;
+        if (operandSize != 4 && !operand->unresolvedSymbols) {
+            instruction->diagnostic = reportInvalidOperandSize(operand, "4", operandSize);
+            return false;
+        }
+    } else if (mnemonic == "RCL" || mnemonic == "RCR" || mnemonic == "ROL" || mnemonic == "ROR" || mnemonic == "SHL" || mnemonic == "SHR") {
+        // TODO
+    } else if (mnemonic == "RET") {
+        // TODO 0 or 1 arguments, immediate 16 bits
+    } else if (mnemonic == "XCHG") {
+
     } else if (mnemonic == "INCHAR") {
         if (instruction->operands.size() != 1) {
             instruction->diagnostic = reportInvalidNumberOfOperands(instruction, 1);
@@ -219,13 +304,81 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
         }
         ExpressionPtr operand = instruction->operands[0];
         if (operand->type != OperandType::MemoryOperand && operand->type != OperandType::RegisterOperand) {
-            instruction->diagnostic = reportExpressionMustBeMemoryOrRegisterOperand(operand);
+            instruction->diagnostic = reportOperandMustBeMemoryOrRegisterOperand(operand);
             return false;
         }
         if (!operand->size) {
-            instruction->diagnostic = reportExpressionMustHaveSize(operand);
+            instruction->diagnostic = reportOperandMustHaveSize(operand);
             return false;
         }
+        int operandSize = operand->size.value().value;
+        if (operandSize != 1 && !operand->unresolvedSymbols) {
+            instruction->diagnostic = reportInvalidOperandSize(operand, "1", operandSize);
+            return false;
+        }
+    } else if (mnemonic == "ININT") { // like `CALL`
+        if (instruction->operands.size() != 1) {
+            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, 1);
+            return false;
+        }
+        ExpressionPtr operand = instruction->operands[0];
+        if (operand->type != OperandType::MemoryOperand && operand->type != OperandType::RegisterOperand) {
+            instruction->diagnostic = reportOperandMustBeMemoryOrRegisterOperand(operand);
+            return false;
+        }
+        if (!operand->size) {
+            instruction->diagnostic = reportOperandMustHaveSize(operand);
+            return false;
+        }
+        int operandSize = operand->size.value().value;
+        if (operandSize != 4 && !operand->unresolvedSymbols) {
+            instruction->diagnostic = reportInvalidOperandSize(operand, "4", operandSize);
+            return false;
+        }
+    } else if (mnemonic == "EXIT" || mnemonic == "NEWLINE") {
+        if (instruction->operands.size() != 0) {
+            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, 0);
+            return false;
+        }
+    } else if (mnemonic == "OUTI" || mnemonic == "OUTU") { // like `PUSH`
+        if (instruction->operands.size() != 1) {
+            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, 1);
+            return false;
+        }
+        ExpressionPtr operand = instruction->operands[0];
+        if (operand->constantValue) {
+            int64_t value = operand->constantValue.value();
+            operand->size = getMinimumSizeForConstant(value);
+        }
+
+        if (!operand->size) {
+            instruction->diagnostic = reportOperandMustHaveSize(operand); // Remove this?
+            return false;
+        }
+
+        int operandSize = operand->size.value().value;
+        if (operandSize != 4 && !operand->unresolvedSymbols) {
+            instruction->diagnostic = reportInvalidOperandSize(operand, "4", operandSize);
+            return false;
+        }
+    } else if (mnemonic == "OUTSTR") {
+        // TODO
+    } else if (mnemonic == "OUTCHAR") { // like `PUSH` with 8 bit
+        if (instruction->operands.size() != 1) {
+            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, 1);
+            return false;
+        }
+        ExpressionPtr operand = instruction->operands[0];
+        if (operand->constantValue) {
+            int64_t value = operand->constantValue.value();
+            operand->size = getMinimumSizeForConstant(value);
+        }
+
+        if (!operand->size) {
+            instruction->diagnostic = reportOperandMustHaveSize(operand); // Remove this?
+            return false;
+        }
+
         int operandSize = operand->size.value().value;
         if (operandSize != 1 && !operand->unresolvedSymbols) {
             instruction->diagnostic = reportInvalidOperandSize(operand, "1", operandSize);
@@ -515,17 +668,17 @@ bool SemanticAnalyzer::visitDataItem(const std::shared_ptr<DataItem> &dataItem,
             dataVariableSymbol.value()->dataTypeSize = getSizeFromToken(dataTypeToken);
         }
     }
-    uint32_t startOffset = currentOffset;
     bool success = visitInitValue(dataItem->initValues, dataVariableSymbol, dataTypeToken);
     if (!success) {
         dataItem->diagnostic = dataItem->initValues->diagnostic;
         return false;
     }
-    uint32_t endOffset = currentOffset;
+    uint32_t initValueSize = dataInitializerSize;
+    currentOffset += initValueSize;
 
     int32_t dataTypeSizeInt = getSizeFromToken(dataTypeToken).value;
     if (dataVariableSymbol) {
-        dataVariableSymbol.value()->sizeOf = endOffset - startOffset;
+        dataVariableSymbol.value()->sizeOf = initValueSize;
         if (dataTypeSizeInt == 0) {
             dataVariableSymbol.value()->lengthOf =
                 0; // when dataTypeSizeInt = 0, then sizeof = 0 -> lengthof = 0 (but in masm empty STRUC cannot be instatiated)
@@ -540,6 +693,7 @@ bool SemanticAnalyzer::visitInitValue(const std::shared_ptr<InitValue> &initValu
                                       const std::optional<std::shared_ptr<DataVariableSymbol>> &dataVariableSymbol, const Token &expectedTypeToken)
 {
     dataInitializerDepth = 0;
+    dataInitializerSize = 0;
     return visitInitValueHelper(initValue, dataVariableSymbol, expectedTypeToken, 1);
 }
 
@@ -562,7 +716,7 @@ bool SemanticAnalyzer::visitInitValueHelper(const std::shared_ptr<InitValue> &in
         return visitInitValueHelper(dupOperator->operands, dataVariableSymbol, expectedTypeToken, dupMultiplier);
 
     } else if (auto questionMarkInitValue = std::dynamic_pointer_cast<QuestionMarkInitValue>(initValue)) {
-        currentOffset += getSizeFromToken(expectedTypeToken).value * dupMultiplier;
+        dataInitializerSize += getSizeFromToken(expectedTypeToken).value * dupMultiplier;
     } else if (auto expressionInitValue = std::dynamic_pointer_cast<ExpressionInitValue>(initValue)) {
         if (!dataDirectives.contains(stringToUpper(expectedTypeToken.lexeme))) {
             initValue->diagnostic = reportExpectedStrucOrRecordDataInitializer(expressionInitValue, expectedTypeToken);
@@ -607,7 +761,13 @@ bool SemanticAnalyzer::visitInitValueHelper(const std::shared_ptr<InitValue> &in
             initValue->diagnostic = reportInitializerTooLargeForSpecifiedSize(expressionInitValue, expectedTypeToken, expr->size->value);
             return false;
         }
-        currentOffset += getSizeFromToken(expectedTypeToken).value * dupMultiplier;
+        std::shared_ptr<Leaf> leaf;
+        if ((leaf = std::dynamic_pointer_cast<Leaf>(expr)) && leaf->token.type == TokenType::StringLiteral) {
+            dataInitializerSize += static_cast<int32_t>((leaf->token.lexeme.size() - 2)) * dupMultiplier;
+        } else {
+            dataInitializerSize += getSizeFromToken(expectedTypeToken).value * dupMultiplier;
+        }
+
     } else if (auto structOrRecordInitValue = std::dynamic_pointer_cast<StructOrRecordInitValue>(initValue)) {
         if (dataDirectives.contains(stringToUpper(expectedTypeToken.lexeme))) {
             initValue->diagnostic = reportExpectedSingleItemDataInitializer(structOrRecordInitValue, expectedTypeToken);
@@ -633,7 +793,7 @@ bool SemanticAnalyzer::visitInitValueHelper(const std::shared_ptr<InitValue> &in
             }
             // add currentOffset for not initialized fields
             for (; i < structOrRecordInitValue->initList->fields.size(); ++i) {
-                currentOffset += 4 * dupMultiplier;
+                dataInitializerSize += 4 * dupMultiplier;
             }
 
         } else if (auto expectedStructSymbol = std::dynamic_pointer_cast<StructSymbol>(symbol)) {
@@ -665,20 +825,20 @@ bool SemanticAnalyzer::visitInitValueHelper(const std::shared_ptr<InitValue> &in
             // add currentOffset for not initialized fields
             for (; i < structOrRecordInitValue->initList->fields.size(); ++i) {
                 Token newExpectedTypeToken = expectedStructSymbol->structDir->fields[i]->dataItem->dataTypeToken;
-                currentOffset += getSizeFromToken(newExpectedTypeToken).value * dupMultiplier;
+                dataInitializerSize += getSizeFromToken(newExpectedTypeToken).value * dupMultiplier;
             }
         }
 
     } else if (auto initList = std::dynamic_pointer_cast<InitializerList>(initValue)) {
         bool first = true;
         for (const auto &init : initList->fields) {
-            uint32_t startOffset = currentOffset;
+            uint32_t startOffset = dataInitializerSize;
             bool success = visitInitValueHelper(init, dataVariableSymbol, expectedTypeToken, dupMultiplier);
             if (!success) {
                 initValue->diagnostic = init->diagnostic;
                 return false;
             }
-            uint32_t endOffset = currentOffset;
+            uint32_t endOffset = dataInitializerSize;
             if (dataInitializerDepth == 1 && first && dataVariableSymbol) {
                 dataVariableSymbol.value()->size = endOffset - startOffset;
                 if (getSizeFromToken(expectedTypeToken).value == 0) {
@@ -1015,9 +1175,11 @@ bool SemanticAnalyzer::visitBinaryOperator(const std::shared_ptr<BinaryOperator>
         // Forward references must be allowed (when not allowed, the expression also must be constant
         // and for `.` error expression must be constant will be emitted)
         // TODO: test this...
-        if (!structSymbol->wasDefined) {
+        if (!structSymbol->wasDefined && pass == 1) {
             linesForSecondPass.push_back(currentLine);
             node->unresolvedSymbols = true;
+        } else {
+            node->unresolvedSymbols = false;
         }
         node->size = structSymbol->namedFields[leafRight->token.lexeme]->dataTypeSize;
         node->registers = left->registers;
@@ -1458,9 +1620,11 @@ bool SemanticAnalyzer::visitLeaf(const std::shared_ptr<Leaf> &node, const Expres
             return false;
         }
 
-        if (!symbol->wasDefined) {
+        if (!symbol->wasDefined && pass == 1) {
             linesForSecondPass.push_back(currentLine);
             node->unresolvedSymbols = true;
+        } else {
+            node->unresolvedSymbols = false;
         }
 
         if (auto dataVariableSymbol = std::dynamic_pointer_cast<DataVariableSymbol>(symbol)) {
@@ -1527,7 +1691,6 @@ bool SemanticAnalyzer::visitLeaf(const std::shared_ptr<Leaf> &node, const Expres
             node->diagnostic = reportStringTooLarge(token);
             return false;
         }
-        node->unresolvedSymbols = true;
         if (!context.allowRegisters && expressionDepth == 1) {
             node->constantValue = std::nullopt;
             node->size = OperandSize("BYTE", 1);

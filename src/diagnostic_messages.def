@@ -97,12 +97,15 @@ DEFINE_ERROR(INITIALIZER_TOO_LARGE_FOR_SPECIFIED_SIZE, "Initializer is too large
 DEFINE_ERROR(INVALID_NUMBER_OF_OPERANDS, "Invalid number of operands in the instruction")
 DEFINE_ERROR(CANT_HAVE_TWO_MEMORY_OPERANDS, "Can't have 2 memory operands")
 DEFINE_ERROR(DESTINATION_OPERAND_CANT_BE_IMMEDIATE, "Destination operand can't be immediate")
-DEFINE_ERROR(IMMEDIATE_OPERAND_TOO_BIG, "Immediate operand is too big for the destination operand")
+DEFINE_ERROR(IMMEDIATE_OPERAND_TOO_BIG_FOR_OPERAND, "Immediate operand is too big for the destination operand")
 DEFINE_ERROR(OPERANDS_HAVE_DIFFERENT_SIZE, "Operands have different size")
-
-DEFINE_ERROR(EXPRESSION_MUST_BE_MEMORY_OR_REGISTER_OPERAND, "Operand must be a memory or a register operand")
-DEFINE_ERROR(EXPRESSION_MUST_HAVE_SIZE, "Operand must have a size")
+DEFINE_ERROR(OPERAND_MUST_BE_MEMORY_OR_REGISTER_OPERAND, "Operand must be a memory operand or a register")
+DEFINE_ERROR(OPERAND_MUST_HAVE_SIZE, "Operand must have a size")
 DEFINE_ERROR(INVALID_OPERAND_SIZE, "Invalid operand size")
+DEFINE_ERROR(OPERAND_MUST_BE_ADDRESS_EXPRESSION, "Operand must be an address expression")
+DEFINE_ERROR(OPERAND_MUST_BE_REGISTER, "Operand must be a register")
+DEFINE_ERROR(OPERAND_MUST_BE_MEMORY_OPERAND, "Operand must be memory operand")
+DEFINE_ERROR(IMMEDIATE_OPERAND_TOO_BIG, "Immediate operand is too big")
 
 // RecordDir errors
 DEFINE_ERROR(RECORD_WIDTH_TOO_BIG, "`RECORD` total width exceeds 32 bits")

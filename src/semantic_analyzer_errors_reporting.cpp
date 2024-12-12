@@ -190,7 +190,8 @@ DiagnosticPtr SemanticAnalyzer::reportDestinationOperandCantBeImmediate(const st
     return parseSess->dcx->getLastDiagnostic();
 }
 
-DiagnosticPtr SemanticAnalyzer::reportImmediateOperandTooBig(const std::shared_ptr<Instruction> &instruction, int firstOpSize, int immediateOpSize)
+DiagnosticPtr SemanticAnalyzer::reportImmediateOperandTooBigForOperand(const std::shared_ptr<Instruction> &instruction, int firstOpSize,
+                                                                       int immediateOpSize)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::IMMEDIATE_OPERAND_TOO_BIG);
     Token mnemonicToken = instruction->mnemonicToken.value();
@@ -217,17 +218,17 @@ DiagnosticPtr SemanticAnalyzer::reportOperandsHaveDifferentSize(const std::share
     return parseSess->dcx->getLastDiagnostic();
 }
 
-DiagnosticPtr SemanticAnalyzer::reportExpressionMustBeMemoryOrRegisterOperand(const ExpressionPtr &operand)
+DiagnosticPtr SemanticAnalyzer::reportOperandMustBeMemoryOrRegisterOperand(const ExpressionPtr &operand)
 {
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPRESSION_MUST_BE_MEMORY_OR_REGISTER_OPERAND);
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::OPERAND_MUST_BE_MEMORY_OR_REGISTER_OPERAND);
     diag.addPrimaryLabel(getExpressionSpan(operand), fmt::format("this has type `{}`", getOperandType(operand)));
     parseSess->dcx->addDiagnostic(diag);
     return parseSess->dcx->getLastDiagnostic();
 }
 
-DiagnosticPtr SemanticAnalyzer::reportExpressionMustHaveSize(const ExpressionPtr &operand)
+DiagnosticPtr SemanticAnalyzer::reportOperandMustHaveSize(const ExpressionPtr &operand)
 {
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPRESSION_MUST_HAVE_SIZE);
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::OPERAND_MUST_HAVE_SIZE);
     diag.addPrimaryLabel(getExpressionSpan(operand), "");
     parseSess->dcx->addDiagnostic(diag);
     return parseSess->dcx->getLastDiagnostic();
@@ -240,6 +241,32 @@ DiagnosticPtr SemanticAnalyzer::reportInvalidOperandSize(const ExpressionPtr &op
     parseSess->dcx->addDiagnostic(diag);
     return parseSess->dcx->getLastDiagnostic();
 }
+
+DiagnosticPtr SemanticAnalyzer::reportOperandMustBeAddressExpression(const ExpressionPtr &expr)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::OPERAND_MUST_BE_ADDRESS_EXPRESSION);
+    diag.addPrimaryLabel(getExpressionSpan(expr), fmt::format("this has type `{}`", getOperandType(expr)));
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+DiagnosticPtr SemanticAnalyzer::reportOperandMustBeRegister(const ExpressionPtr &expr)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::OPERAND_MUST_BE_REGISTER);
+    diag.addPrimaryLabel(getExpressionSpan(expr), fmt::format("this has type `{}`", getOperandType(expr)));
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+DiagnosticPtr SemanticAnalyzer::reportOperandMustBeMemoryOperand(const ExpressionPtr &expr)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::OPERAND_MUST_BE_MEMORY_OPERAND);
+    diag.addPrimaryLabel(getExpressionSpan(expr), fmt::format("this has type `{}`", getOperandType(expr)));
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+
 
 // RecordDir errors
 DiagnosticPtr SemanticAnalyzer::reportRecordWidthTooBig(const std::shared_ptr<RecordDir> &recordDir, int32_t width)
@@ -269,6 +296,7 @@ DiagnosticPtr SemanticAnalyzer::reportRecordFieldWidthTooBig(const std::shared_p
 }
 
 // Expression errors
+
 DiagnosticPtr SemanticAnalyzer::reportExpressionMustBeConstant(ExpressionPtr &expr)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPRESSION_MUST_BE_CONSTANT);
