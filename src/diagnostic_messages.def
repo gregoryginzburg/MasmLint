@@ -14,7 +14,7 @@ DEFINE_ERROR(LINE_CONTINUATION_NOT_SUPPORTED, "Line continuations are not suppor
 DEFINE_ERROR(INVALID_NUMBER_FORMAT, "Invalid number format")
 DEFINE_ERROR(UNTERMINATED_STRING_LITERAL, "Unterminated string literal")
 
-// Syntax errors
+// Parser errors
 // General
 
 DEFINE_ERROR(SYMBOL_REDEFINITION, "Symbol redefinition: `{}`")
@@ -78,7 +78,7 @@ DEFINE_ERROR(UNCLOSED_DELIMITER, "This line contains an unclosed delimiter: `{}`
 DEFINE_ERROR(EXPECTED_EXPRESSION, "Expected expression, found `{}`")
 DEFINE_ERROR(UNEXPECTED_CLOSING_DELIMITER, "Unexpected closing delimiter: `{}`")
 DEFINE_ERROR(EXCPECTED_OPERATOR_OR_CLOSING_DELIMITER, "Expected operator or `)` or `]`")
-DEFINE_ERROR(EXPECTED_IDENTIFIER, "Expected identifier, found `{}`")
+DEFINE_ERROR(EXPECTED_IDENTIFIER, "Expected name, found `{}`")
 
 // Semantic errors
 
@@ -98,14 +98,14 @@ DEFINE_ERROR(INVALID_NUMBER_OF_OPERANDS, "Invalid number of operands in the inst
 DEFINE_ERROR(CANT_HAVE_TWO_MEMORY_OPERANDS, "Can't have 2 memory operands")
 DEFINE_ERROR(DESTINATION_OPERAND_CANT_BE_IMMEDIATE, "Destination operand can't be immediate")
 DEFINE_ERROR(IMMEDIATE_OPERAND_TOO_BIG_FOR_OPERAND, "Immediate operand is too big for the destination operand")
+DEFINE_ERROR(ONE_OF_OPERANDS_MUST_HAVE_SIZE, "At least 1 of the operands must have a specified size")
 DEFINE_ERROR(OPERANDS_HAVE_DIFFERENT_SIZE, "Operands have different size")
-DEFINE_ERROR(OPERAND_MUST_BE_MEMORY_OR_REGISTER_OPERAND, "Operand must be a memory operand or a register")
-DEFINE_ERROR(OPERAND_MUST_HAVE_SIZE, "Operand must have a size")
+DEFINE_ERROR(OPERAND_MUST_BE_MEMORY_OR_REGISTER_OPERAND, "Operand must be a memory or a register")
+DEFINE_ERROR(OPERAND_MUST_HAVE_SIZE, "Operand must have a specified size")
 DEFINE_ERROR(INVALID_OPERAND_SIZE, "Invalid operand size")
 DEFINE_ERROR(OPERAND_MUST_BE_ADDRESS_EXPRESSION, "Operand must be an address expression")
 DEFINE_ERROR(OPERAND_MUST_BE_REGISTER, "Operand must be a register")
-DEFINE_ERROR(OPERAND_MUST_BE_MEMORY_OPERAND, "Operand must be memory operand")
-DEFINE_ERROR(IMMEDIATE_OPERAND_TOO_BIG, "Immediate operand is too big")
+DEFINE_ERROR(OPERAND_MUST_BE_MEMORY_OPERAND, "Operand must be a memory")
 
 // RecordDir errors
 DEFINE_ERROR(RECORD_WIDTH_TOO_BIG, "`RECORD` total width exceeds 32 bits")

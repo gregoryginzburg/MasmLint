@@ -1,12 +1,10 @@
-.DATA
 
-; x db 3 dup (1, 2, 3)
-x dd 1
+MyStruc STRUC
+MyStruc ENDS
+.DATA
+var dd 4
 
 .CODE
-    push [eax]
-    push byte ptr [eax]
-    push ax
-    push ffffffffffh
-    push eax
+start:
+mov eax, TYPE [eax]
 END

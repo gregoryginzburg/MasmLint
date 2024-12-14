@@ -28,6 +28,7 @@ MyStruc ENDS
     anothervar 2
     MyStruc <2>
     MyStruc < <3> >
+    MyStruc 1
     MyStruc <1 dup (2)>
 
     MyRec <>
@@ -38,7 +39,7 @@ MyRec1 RECORD x1:31, x2:31
 MyRec2 RECORD x3:-1
 
 AnotherStruc STRUC
-    a db 1
+    a db 1 dup (2)
 AnotherStruc ENDS
 
 
@@ -46,6 +47,7 @@ x AnotherStruc <>
 
 .CODE
 start:
+    mov eax, byte
     mov eax, AnotherStruc PTR [eax]
     mov eax, x[ebx].a[esi]
 
@@ -95,12 +97,39 @@ start:
     dec 1
     dec offset anothervar
 
+    ja [eax]
+
+    lea [eax], [eax]
+    lea ax, [eax]
+    lea eax, 2
+    lea eax, [ebx]
+
+    push [eax]
+    push byte ptr [eax]
+    push ax
+    push ffffffffffh
+    push eax
+
     inchar al
     inchar eax
     inchar 2
     inchar [eax]
     inchar byte ptr [eax]
 
+    outi [eax]
+    outi byte ptr [eax]
+    outi ax
+    outi ffffffffffh
+    outi eax
+
+    outchar [eax]
+    outchar byte ptr [eax]
+    outchar ax
+    outchar ffffffffffh
+    outchar eax
+
+    NEWLINE 1
+    EXIT 2
 
 
 END start

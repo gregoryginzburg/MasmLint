@@ -6,60 +6,39 @@
 // dont rely on this in code
 std::string SemanticAnalyzer::getOperandType(const ExpressionPtr &node)
 {
+    // std::string
     std::shared_ptr<Leaf> leaf;
+    std::shared_ptr<Symbol> symbol;
     if ((leaf = std::dynamic_pointer_cast<Leaf>(node))) {
-        switch (leaf->token.type) {
-        case TokenType::Identifier: {
-            if (!parseSess->symbolTable->findSymbol(leaf->token)) {
-                return "undefined identifier";
-            }
-            std::shared_ptr<Symbol> symbol = parseSess->symbolTable->findSymbol(leaf->token);
-            if (auto dataVariableSymbol = std::dynamic_pointer_cast<DataVariableSymbol>(symbol)) {
-                return "data variable";
-            } else if (auto equVariableSymbol = std::dynamic_pointer_cast<EquVariableSymbol>(symbol)) {
-                return "`EQU` variable";
-            } else if (auto equalVariableSymbol = std::dynamic_pointer_cast<EqualVariableSymbol>(symbol)) {
-                return "`=` variable";
-            } else if (auto labelSymbol = std::dynamic_pointer_cast<LabelSymbol>(symbol)) {
-                return "label variable";
-            } else if (auto structSymbol = std::dynamic_pointer_cast<StructSymbol>(symbol)) {
-                return "`STRUC` symbol";
-            } else if (auto procSymbol = std::dynamic_pointer_cast<ProcSymbol>(symbol)) {
-                return "`PROC` variable";
-            } else if (auto recordSymbol = std::dynamic_pointer_cast<RecordSymbol>(symbol)) {
-                return "`RECORD` symbol";
-            } else if (auto recordFieldSymbol = std::dynamic_pointer_cast<RecordFieldSymbol>(symbol)) {
-                return "`RECORD` field symbol";
-            }
-        }
-        case TokenType::Number:
-        case TokenType::StringLiteral:
-            return "constant";
-        case TokenType::Type:
-            return "builtin type";
-        default:
-            return "error";
+        if (leaf->token.type == TokenType::Identifier) {
+            symbol = parseSess->symbolTable->findSymbol(leaf->token);
         }
     }
 
-    if (node->constantValue) {
-        return "constant expression";
+    std::string identifierInfo = "";
+    if (symbol) {
+        identifierInfo = " (" + getSymbolType(symbol) + ")";
     }
+
     if (node->type == OperandType::RegisterOperand) {
         return "register";
-    }
-    if (node->type == OperandType::ImmediateOperand) {
-        return "immediate operand"; // = relocatable constant expression
-    }
-    if (node->type == OperandType::UnfinishedMemoryOperand) {
+    } else if (node->type == OperandType::ImmediateOperand) {
+        if (node->constantValue) {
+            return fmt::format("immediate (constant expression){}", identifierInfo);
+        } else {
+            return fmt::format("immediate{}", identifierInfo);
+        }
+    } else if (node->type == OperandType::MemoryOperand) {
+        if (node->registers.empty()) {
+            return fmt::format("memory (address expression){}", identifierInfo);
+        } else {
+            return fmt::format("memory (address expression with modificators){}", identifierInfo);
+        }
+    } else if (node->type == OperandType::UnfinishedMemoryOperand) {
         return "invalid expression"; // shouldn't have to display this to user, should catch it earlier!
         // return "address expression without []";
     }
-    if (node->registers.empty()) {
-        return "address expression";
-    } else {
-        return "address expression with modificators";
-    }
+    return "";
 }
 
 std::string SemanticAnalyzer::getSymbolType(const std::shared_ptr<Symbol> &symbol)
@@ -71,7 +50,7 @@ std::string SemanticAnalyzer::getSymbolType(const std::shared_ptr<Symbol> &symbo
     } else if (auto equalVariableSymbol = std::dynamic_pointer_cast<EqualVariableSymbol>(symbol)) {
         return "`=` Variable";
     } else if (auto labelSymbol = std::dynamic_pointer_cast<LabelSymbol>(symbol)) {
-        return "Label Variable";
+        return "Label";
     } else if (auto structSymbol = std::dynamic_pointer_cast<StructSymbol>(symbol)) {
         return "STRUC";
     } else if (auto procSymbol = std::dynamic_pointer_cast<ProcSymbol>(symbol)) {
@@ -193,7 +172,7 @@ DiagnosticPtr SemanticAnalyzer::reportDestinationOperandCantBeImmediate(const st
 DiagnosticPtr SemanticAnalyzer::reportImmediateOperandTooBigForOperand(const std::shared_ptr<Instruction> &instruction, int firstOpSize,
                                                                        int immediateOpSize)
 {
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::IMMEDIATE_OPERAND_TOO_BIG);
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::IMMEDIATE_OPERAND_TOO_BIG_FOR_OPERAND);
     Token mnemonicToken = instruction->mnemonicToken.value();
     diag.addPrimaryLabel(mnemonicToken.span, "");
 
@@ -201,6 +180,19 @@ DiagnosticPtr SemanticAnalyzer::reportImmediateOperandTooBigForOperand(const std
     diag.addSecondaryLabel(
         getExpressionSpan(instruction->operands[1]),
         fmt::format("immediate operand has value `{}` and needs `{}` bytes", instruction->operands[1]->constantValue.value(), immediateOpSize));
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+DiagnosticPtr SemanticAnalyzer::reportOneOfOperandsMustHaveSize(const std::shared_ptr<Instruction> &instruction)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::ONE_OF_OPERANDS_MUST_HAVE_SIZE);
+    Token mnemonicToken = instruction->mnemonicToken.value();
+    diag.addPrimaryLabel(mnemonicToken.span, "");
+
+    diag.addSecondaryLabel(getExpressionSpan(instruction->operands[0]), "this operand doesn't have a size");
+    diag.addSecondaryLabel(getExpressionSpan(instruction->operands[1]), "this operand doesn't have a size");
+
     parseSess->dcx->addDiagnostic(diag);
     return parseSess->dcx->getLastDiagnostic();
 }
@@ -266,8 +258,6 @@ DiagnosticPtr SemanticAnalyzer::reportOperandMustBeMemoryOperand(const Expressio
     return parseSess->dcx->getLastDiagnostic();
 }
 
-
-
 // RecordDir errors
 DiagnosticPtr SemanticAnalyzer::reportRecordWidthTooBig(const std::shared_ptr<RecordDir> &recordDir, int32_t width)
 {
@@ -300,7 +290,7 @@ DiagnosticPtr SemanticAnalyzer::reportRecordFieldWidthTooBig(const std::shared_p
 DiagnosticPtr SemanticAnalyzer::reportExpressionMustBeConstant(ExpressionPtr &expr)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPRESSION_MUST_BE_CONSTANT);
-    diag.addPrimaryLabel(getExpressionSpan(expr), "");
+    diag.addPrimaryLabel(getExpressionSpan(expr), fmt::format("this has type `{}`", getOperandType(expr)));
     parseSess->dcx->addDiagnostic(diag);
     return parseSess->dcx->getLastDiagnostic();
 }
@@ -333,7 +323,7 @@ DiagnosticPtr SemanticAnalyzer::reportNumberTooLarge(const Token &number)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::CONSTANT_TOO_LARGE);
     diag.addPrimaryLabel(number.span, "");
-    diag.addNoteMessage("maximum allowed size is 32 bits");
+    diag.addNoteMessage("maximum allowed size is 64 bits");
     parseSess->dcx->addDiagnostic(diag);
     return parseSess->dcx->getLastDiagnostic();
 }
@@ -353,10 +343,12 @@ DiagnosticPtr SemanticAnalyzer::reportUnaryOperatorIncorrectArgument(const std::
 
     std::string op = stringToUpper(node->op.lexeme);
     std::string expectedStr;
-    if (op == "LENGTH" || op == "LENGTHOF" || op == "SIZE" || op == "SIZEOF") {
-        expectedStr = "expected `data label`"; // TODO: change this?
+    if (op == "LENGTH" || op == "LENGTHOF") {
+        expectedStr = "expected `data variable` name";
+    } else if (op == "SIZE" || op == "SIZEOF") {
+        expectedStr = "expected `data variable` name";
     } else if (op == "WIDTH" || op == "MASK") {
-        expectedStr = "expected `RECORD symbol` or `RECORD field symbol";
+        expectedStr = "expected `RECORD symbol` or `RECORD field` symbol";
     } else if (op == "OFFSET") {
         expectedStr = "expected `address expression`";
     } else if (op == "TYPE") {
@@ -384,7 +376,7 @@ DiagnosticPtr SemanticAnalyzer::reportDotOperatorIncorrectArgument(const std::sh
 
     std::shared_ptr<Leaf> leaf;
     if (left->constantValue || left->type == OperandType::RegisterOperand) {
-        diag.addSecondaryLabel(getExpressionSpan(left), fmt::format("expected `address expression`, found `{}`", getOperandType(left)));
+        diag.addSecondaryLabel(getExpressionSpan(left), fmt::format("expected `memory`, found `{}`", getOperandType(left)));
     }
     if (!(leaf = std::dynamic_pointer_cast<Leaf>(right)) || leaf->token.type != TokenType::Identifier) {
         diag.addSecondaryLabel(getExpressionSpan(right), fmt::format("expected `identifier`, found `{}`", getOperandType(right)));
@@ -433,13 +425,22 @@ DiagnosticPtr SemanticAnalyzer::reportPtrOperatorIncorrectArgument(const std::sh
     diag.addPrimaryLabel(node->op.span, "");
 
     std::shared_ptr<Leaf> leaf;
-    // CRITICAL TODO: left can also be identifier, if it's a type symbol
-    if (!(leaf = std::dynamic_pointer_cast<Leaf>(left)) || leaf->token.type != TokenType::Type /* !=TokenType::Identifier */) {
+    if (!(leaf = std::dynamic_pointer_cast<Leaf>(left)) || !(leaf->token.type == TokenType::Type || leaf->token.type == TokenType::Identifier)) {
         diag.addSecondaryLabel(getExpressionSpan(left), fmt::format("expected `type`, found `{}`", getOperandType(left)));
     }
+    if (auto leafLeft = std::dynamic_pointer_cast<Leaf>(left)) {
+        std::string typeOperand = leafLeft->token.lexeme;
+        std::shared_ptr<Symbol> typeSymbol;
+        if (!builtinTypes.contains(stringToUpper(typeOperand))) {
+            typeSymbol = parseSess->symbolTable->findSymbol(leafLeft->token);
+            if (!typeSymbol || !std::dynamic_pointer_cast<StructSymbol>(typeSymbol)) {
+                diag.addSecondaryLabel(getExpressionSpan(left), fmt::format("expected `type`, found `{}`", getOperandType(left)));
+            }
+        }
+    }
+
     if (right->type == OperandType::UnfinishedMemoryOperand || right->type == OperandType::RegisterOperand) {
-        // Change that we can expect also constants?
-        diag.addSecondaryLabel(getExpressionSpan(right), fmt::format("expected `address expression`, found `{}`", getOperandType(right)));
+        diag.addSecondaryLabel(getExpressionSpan(right), fmt::format("expected `memory`, found `{}`", getOperandType(right)));
     }
 
     parseSess->dcx->addDiagnostic(diag);

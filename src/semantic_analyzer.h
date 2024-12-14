@@ -94,6 +94,7 @@ private:
     [[nodiscard]] DiagnosticPtr reportDestinationOperandCantBeImmediate(const std::shared_ptr<Instruction> &instruction);
     [[nodiscard]] DiagnosticPtr reportImmediateOperandTooBigForOperand(const std::shared_ptr<Instruction> &instruction, int firstOpSize,
                                                                        int immediateOpSize);
+    [[nodiscard]] DiagnosticPtr reportOneOfOperandsMustHaveSize(const std::shared_ptr<Instruction> &instruction);
     [[nodiscard]] DiagnosticPtr reportOperandsHaveDifferentSize(const std::shared_ptr<Instruction> &instruction, int firstOpSize, int secondOpSize);
     [[nodiscard]] DiagnosticPtr reportOperandMustBeMemoryOrRegisterOperand(const ExpressionPtr &operand);
     [[nodiscard]] DiagnosticPtr reportOperandMustHaveSize(const ExpressionPtr &operand);

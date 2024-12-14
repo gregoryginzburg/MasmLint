@@ -179,13 +179,17 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
             return false;
         }
 
+        if (!firstOp->size && !secondOp->size) {
+            instruction->diagnostic = reportOneOfOperandsMustHaveSize(instruction);
+            return false;
+        }
+
         // find out actual size of constantValue
         if (secondOp->constantValue) {
             int64_t value = secondOp->constantValue.value();
             secondOp->size = getMinimumSizeForConstant(value);
         }
 
-        // !firstOp->size && !secondOp->size - shouldn't happen, because then it's two memory operands
         if (firstOp->size && secondOp->size) {
             int firstOpSize = firstOp->size.value().value;
             int secondOpSize = secondOp->size.value().value;
@@ -287,7 +291,11 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
         }
 
         int operandSize = operand->size.value().value;
-        if (operandSize != 4 && !operand->unresolvedSymbols) {
+        if (operand->constantValue && operandSize > 4 && !operand->unresolvedSymbols) {
+            instruction->diagnostic = reportInvalidOperandSize(operand, "4", operandSize); // TODO: change this too immediate operand two big?
+            return false;
+        }
+        if (!operand->constantValue && operandSize != 4 && !operand->unresolvedSymbols) {
             instruction->diagnostic = reportInvalidOperandSize(operand, "4", operandSize);
             return false;
         }
@@ -312,8 +320,12 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
             return false;
         }
         int operandSize = operand->size.value().value;
-        if (operandSize != 1 && !operand->unresolvedSymbols) {
-            instruction->diagnostic = reportInvalidOperandSize(operand, "1", operandSize);
+        if (operand->constantValue && operandSize > 1 && !operand->unresolvedSymbols) {
+            instruction->diagnostic = reportInvalidOperandSize(operand, "4", operandSize); // TODO: change this too immediate operand two big?
+            return false;
+        }
+        if (!operand->constantValue && operandSize != 1 && !operand->unresolvedSymbols) {
+            instruction->diagnostic = reportInvalidOperandSize(operand, "4", operandSize);
             return false;
         }
     } else if (mnemonic == "ININT") { // like `CALL`
@@ -331,7 +343,11 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
             return false;
         }
         int operandSize = operand->size.value().value;
-        if (operandSize != 4 && !operand->unresolvedSymbols) {
+        if (operand->constantValue && operandSize > 4 && !operand->unresolvedSymbols) {
+            instruction->diagnostic = reportInvalidOperandSize(operand, "4", operandSize); // TODO: change this too immediate operand two big?
+            return false;
+        }
+        if (!operand->constantValue && operandSize != 4 && !operand->unresolvedSymbols) {
             instruction->diagnostic = reportInvalidOperandSize(operand, "4", operandSize);
             return false;
         }
@@ -712,6 +728,7 @@ bool SemanticAnalyzer::visitInitValueHelper(const std::shared_ptr<InitValue> &in
             initValue->diagnostic = reportExpressionMustBeConstant(dupOperator->repeatCount);
             return false;
         }
+        // TODO: check that repeatCount is positive (or not negative)
         dupMultiplier = dupMultiplier * static_cast<int32_t>(dupOperator->repeatCount->constantValue.value());
         return visitInitValueHelper(dupOperator->operands, dataVariableSymbol, expectedTypeToken, dupMultiplier);
 
@@ -930,6 +947,7 @@ bool SemanticAnalyzer::visitSquareBrackets(const std::shared_ptr<SquareBrackets>
         if ((binOp = std::dynamic_pointer_cast<BinaryOperator>(operand))) {
             implicit = false;
             // Check that we have [eax * 5] in []
+            // TODO: change this error to checking whether we have more than 1 register and report that?
             if (binOp->op.lexeme == "+") {
                 bool firstIsRegisterWithOptionalScale = binOp->left->type == OperandType::RegisterOperand;
                 if (auto binOpLeft = std::dynamic_pointer_cast<BinaryOperator>(binOp->left)) {
@@ -1204,6 +1222,7 @@ bool SemanticAnalyzer::visitBinaryOperator(const std::shared_ptr<BinaryOperator>
         std::shared_ptr<Symbol> typeSymbol;
         if (!builtinTypes.contains(stringToUpper(typeOperand))) {
             typeSymbol = parseSess->symbolTable->findSymbol(leafLeft->token);
+            // TODO: allow RecordSymbol too? (if so don't forget to change reportPtrOperatorIncorrectArgument(...) function)
             if (!typeSymbol || !std::dynamic_pointer_cast<StructSymbol>(typeSymbol)) {
                 node->diagnostic = reportPtrOperatorIncorrectArgument(node);
                 return false;
@@ -1483,7 +1502,7 @@ bool SemanticAnalyzer::visitUnaryOperator(const std::shared_ptr<UnaryOperator> &
                 node->constantValue = dataVariableSymbol->lengthOf;
             }
         } else {
-            node->constantValue = operand->constantValue;
+            node->constantValue = operand->constantValue; // TODO: warn about this?
         }
 
         node->isRelocatable = false;
@@ -1510,7 +1529,7 @@ bool SemanticAnalyzer::visitUnaryOperator(const std::shared_ptr<UnaryOperator> &
                 node->constantValue = dataVariableSymbol->sizeOf;
             }
         } else {
-            node->constantValue = operand->constantValue;
+            node->constantValue = operand->constantValue; // TODO: warn about this?
         }
         node->isRelocatable = false;
         node->type = OperandType::ImmediateOperand;
@@ -1631,13 +1650,18 @@ bool SemanticAnalyzer::visitLeaf(const std::shared_ptr<Leaf> &node, const Expres
             std::string dataType = dataVariableSymbol->dataType.lexeme;
             node->constantValue = std::nullopt;
             node->isRelocatable = true;
-            node->type = OperandType::MemoryOperand;
-            node->size = dataVariableSymbol->dataTypeSize;
+            if (context.allowRegisters) {
+                node->type = OperandType::MemoryOperand; // data variable in instruction setting is a memory operand
+                node->size = dataVariableSymbol->dataTypeSize;
+            } else {
+                node->type = OperandType::ImmediateOperand; // data variable in any other setting is immediate with size = 4
+                node->size = OperandSize("DWORD", 4);
+            }
             node->registers = {};
         } else if (std::dynamic_pointer_cast<LabelSymbol>(symbol) || std::dynamic_pointer_cast<ProcSymbol>(symbol)) {
             node->constantValue = std::nullopt;
             node->isRelocatable = true;
-            node->type = OperandType::MemoryOperand;
+            node->type = OperandType::ImmediateOperand;
             node->size = OperandSize("DWORD", 4);
             node->registers = {};
         } else if (auto equVariableSymbol = std::dynamic_pointer_cast<EquVariableSymbol>(symbol)) {

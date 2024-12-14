@@ -84,8 +84,8 @@ struct StructSymbol : public Symbol {
 };
 
 struct RecordSymbol : public Symbol {
-    RecordSymbol(Token token, std::shared_ptr<RecordDir> recordDir) : recordDir(std::move(recordDir)) { this->token = std::move(token); }
-    std::vector<std::string> fields;
+    RecordSymbol(Token token, std::shared_ptr<RecordDir> recordDir, std::vector<std::shared_ptr<RecordField>> fields) : recordDir(std::move(recordDir)), fields(std::move(fields)) { this->token = std::move(token); }
+    std::vector<std::shared_ptr<RecordField>> fields;
     std::shared_ptr<RecordDir> recordDir;
 
     int32_t width = -1;

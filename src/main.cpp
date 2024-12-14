@@ -7,6 +7,7 @@
 #include "ast.h"
 #include "semantic_analyzer.h"
 #include "tokenize.h"
+#include "timer.h"
 
 #include <iostream>
 #include <memory>
@@ -64,7 +65,10 @@ int main(int argc, char *argv[])
         sourceFile = parseSess->sourceMap->loadFile(filename);
     }
 
+    float totalTime = 0;
+
     if (sourceFile) {
+        Timer timer;
         Tokenizer tokenizer(parseSess, sourceFile->getSource());
         std::vector<Token> tokens = tokenizer.tokenize();
 
@@ -75,8 +79,9 @@ int main(int argc, char *argv[])
         ASTPtr ast = parser.parse();
 
         SemanticAnalyzer semanticAnalyzer(parseSess, ast);
-        // add step for creating a symbol table
         semanticAnalyzer.analyze();
+
+        totalTime = timer.elapsed();
 
         if (!jsonOutput) {
             printAST(ast, 0);
@@ -93,7 +98,9 @@ int main(int argc, char *argv[])
             parseSess->dcx->emitJsonDiagnostics();
 
         } else {
+            std::cout << "\n"; // todo: remove
             parseSess->dcx->emitDiagnostics();
+            std::cout << "\n"; // todo: remove
         }
     } else {
         if (jsonOutput) {
@@ -102,5 +109,7 @@ int main(int argc, char *argv[])
             fmt::print("Parsing completed successfully with no errors.\n");
         }
     }
+
+    std::cerr << "Total time: " << totalTime << " seconds \n";
     return 0;
 }

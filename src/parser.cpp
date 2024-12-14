@@ -414,7 +414,7 @@ std::shared_ptr<RecordDir> Parser::parseRecordDir()
         return INVALID_RECORD_DIR(diag);
     }
     auto recordDir = std::make_shared<RecordDir>(idToken, directiveToken, fields);
-    parseSess->symbolTable->addSymbol(std::make_shared<RecordSymbol>(idToken, recordDir));
+    parseSess->symbolTable->addSymbol(std::make_shared<RecordSymbol>(idToken, recordDir, fields));
 
     return recordDir;
 }
