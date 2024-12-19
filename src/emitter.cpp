@@ -64,9 +64,9 @@ std::string Emitter::formatErrorCode(Diagnostic::Level level, ErrorCode code)
     case Diagnostic::Level::Error:
         return format(fmt::emphasis::bold | fg(redColor), "[E{:02d}]", static_cast<int>(code));
     case Diagnostic::Level::Warning:
-        return format(fmt::emphasis::bold | fg(yellowColor), "[E{:02d}]", static_cast<int>(code));
+        return format(fmt::emphasis::bold | fg(yellowColor), "[W{:02d}]", static_cast<int>(code));
     case Diagnostic::Level::Note:
-        return format(fmt::emphasis::bold | fg(cyanColor), "[E{:02d}]", static_cast<int>(code));
+        return format(fmt::emphasis::bold | fg(cyanColor), "[N{:02d}]", static_cast<int>(code));
     }
 
     return "unknown";
@@ -83,8 +83,7 @@ void Emitter::printDiagnosticBody(const std::shared_ptr<Diagnostic> &diag)
     std::filesystem::path primaryFilePath;
     std::size_t primaryLineNumberZeroBased = 0, primaryColumnNumberZeroBased = 0;
     sourceMap->spanToLocation(primarySpan, primaryFilePath, primaryLineNumberZeroBased, primaryColumnNumberZeroBased);
-    labelsMapping[primaryFilePath][primaryLineNumberZeroBased] =
-        std::vector<LabelType>(1, LabelType(primarySpan, primaryLabelMsg));
+    labelsMapping[primaryFilePath][primaryLineNumberZeroBased] = std::vector<LabelType>(1, LabelType(primarySpan, primaryLabelMsg));
     maxLineNumber = std::max(maxLineNumber, primaryLineNumberZeroBased + 1);
 
     // secondary labels
@@ -104,9 +103,8 @@ void Emitter::printDiagnosticBody(const std::shared_ptr<Diagnostic> &diag)
     fmt::memory_buffer buffer;
     int primaryLineNumberWidth = calculateDisplayWidth(std::to_string(primaryLineNumberZeroBased + 1));
     // Print the location header
-    fmt::format_to(std::back_inserter(buffer), "{}{} {}:{}:{}\n", std::string(spaceCount, ' '),
-                   format(fg(cyanColor), "-->"), primaryFilePath.string(), primaryLineNumberZeroBased + 1,
-                   primaryColumnNumberZeroBased + 1);
+    fmt::format_to(std::back_inserter(buffer), "{}{} {}:{}:{}\n", std::string(spaceCount, ' '), format(fg(cyanColor), "-->"),
+                   primaryFilePath.string(), primaryLineNumberZeroBased + 1, primaryColumnNumberZeroBased + 1);
 
     // print empty line
     fmt::format_to(std::back_inserter(buffer), "{} {}\n", std::string(spaceCount, ' '), format(fg(cyanColor), "|"));
@@ -114,10 +112,8 @@ void Emitter::printDiagnosticBody(const std::shared_ptr<Diagnostic> &diag)
     // print primary string
     auto primarySourceFile = sourceMap->getSourceFile(primaryFilePath);
     std::string primaryLineContent = primarySourceFile->getLine(primaryLineNumberZeroBased);
-    fmt::format_to(std::back_inserter(buffer), "{}{} {} {}\n",
-                   std::string(spaceCount - static_cast<size_t>(primaryLineNumberWidth), ' '),
-                   format(fg(cyanColor), "{}", primaryLineNumberZeroBased + 1), format(fg(cyanColor), "|"),
-                   primaryLineContent);
+    fmt::format_to(std::back_inserter(buffer), "{}{} {} {}\n", std::string(spaceCount - static_cast<size_t>(primaryLineNumberWidth), ' '),
+                   format(fg(cyanColor), "{}", primaryLineNumberZeroBased + 1), format(fg(cyanColor), "|"), primaryLineContent);
 
     // print labels in primary string
     printLabelsForLine(buffer, primaryLineContent, primaryLineNumberZeroBased, LabelType(primarySpan, primaryLabelMsg),
@@ -129,19 +125,17 @@ void Emitter::printDiagnosticBody(const std::shared_ptr<Diagnostic> &diag)
             continue;
         }
         // print "..."
-        fmt::format_to(std::back_inserter(buffer), "{}{}\n", std::string(spaceCount, ' '),
-                       format(fg(cyanColor), "..."));
+        fmt::format_to(std::back_inserter(buffer), "{}{}\n", std::string(spaceCount, ' '), format(fg(cyanColor), "..."));
         // print empty line
         fmt::format_to(std::back_inserter(buffer), "{} {}\n", std::string(spaceCount, ' '), format(fg(cyanColor), "|"));
 
         // print string
         std::string lineContent = primarySourceFile->getLine(lineNumberZeroBased);
         int lineNumberWidth = calculateDisplayWidth(std::to_string(lineNumberZeroBased + 1));
-        fmt::format_to(std::back_inserter(buffer), "{}{} {} {}\n",
-                       std::string(spaceCount - static_cast<size_t>(lineNumberWidth), ' '),
+        fmt::format_to(std::back_inserter(buffer), "{}{} {} {}\n", std::string(spaceCount - static_cast<size_t>(lineNumberWidth), ' '),
                        format(fg(cyanColor), "{}", lineNumberZeroBased + 1), format(fg(cyanColor), "|"), lineContent);
-        printLabelsForLine(buffer, lineContent, lineNumberZeroBased, std::nullopt,
-                           labelsMapping[primaryFilePath][lineNumberZeroBased], diag->getLevel());
+        printLabelsForLine(buffer, lineContent, lineNumberZeroBased, std::nullopt, labelsMapping[primaryFilePath][lineNumberZeroBased],
+                           diag->getLevel());
     }
 
     // print all other files and labels
@@ -152,8 +146,7 @@ void Emitter::printDiagnosticBody(const std::shared_ptr<Diagnostic> &diag)
         // print location
         // print all lines
         // TODO: finish this
-        fmt::format_to(std::back_inserter(buffer), "{}\n",
-                       format(fg(redColor), "Labels in different files not implemented!"));
+        fmt::format_to(std::back_inserter(buffer), "{}\n", format(fg(redColor), "Labels in different files not implemented!"));
     }
 
     out.write(buffer.data(), static_cast<std::streamsize>(buffer.size()));
@@ -167,8 +160,7 @@ int Emitter::calculateDisplayWidth(const std::string &text)
     utf8proc_ssize_t idx = 0;
     utf8proc_int32_t codepoint = 0;
     while (idx < len) {
-        utf8proc_ssize_t charLen =
-            utf8proc_iterate(reinterpret_cast<const utf8proc_uint8_t *>(str + idx), len - idx, &codepoint);
+        utf8proc_ssize_t charLen = utf8proc_iterate(reinterpret_cast<const utf8proc_uint8_t *>(str + idx), len - idx, &codepoint);
         if (charLen <= 0) {
             LOG_DETAILED_ERROR("Invalid utf-8 formatting in calculateDisplayWidth");
             break;
@@ -188,8 +180,7 @@ int Emitter::calculateCodePoints(const std::string &text)
     utf8proc_ssize_t idx = 0;
     utf8proc_int32_t codepoint = 0;
     while (idx < len) {
-        utf8proc_ssize_t charLen =
-            utf8proc_iterate(reinterpret_cast<const utf8proc_uint8_t *>(str + idx), len - idx, &codepoint);
+        utf8proc_ssize_t charLen = utf8proc_iterate(reinterpret_cast<const utf8proc_uint8_t *>(str + idx), len - idx, &codepoint);
         if (charLen <= 0) {
             LOG_DETAILED_ERROR("Invalid utf-8 formatting in calculateCodePoints");
             break;
@@ -201,8 +192,7 @@ int Emitter::calculateCodePoints(const std::string &text)
 }
 
 void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, const std::string &lineContent, size_t lineNumberZeroBased,
-                                 const std::optional<LabelType> &primaryLabel, std::vector<LabelType> &labels,
-                                 Diagnostic::Level level)
+                                 const std::optional<LabelType> &primaryLabel, std::vector<LabelType> &labels, Diagnostic::Level level)
 {
     fmt::rgb primaryColor;
     switch (level) {
@@ -297,8 +287,7 @@ void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, const std::string &
         coloredMarkerLine += format(fg(primaryColor), "{}", labelMessageToAdd);
     }
 
-    fmt::format_to(std::back_inserter(buffer), "{} {} {}\n", std::string(spaceCount, ' '), format(fg(cyanColor), "|"),
-                   coloredMarkerLine);
+    fmt::format_to(std::back_inserter(buffer), "{} {} {}\n", std::string(spaceCount, ' '), format(fg(cyanColor), "|"), coloredMarkerLine);
 
     if (labelMessagesToPrint.empty()) {
         return;
@@ -335,8 +324,7 @@ void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, const std::string &
                 coloredLine += c;
             }
         }
-        fmt::format_to(std::back_inserter(buffer), "{} {} {}\n", std::string(spaceCount, ' '),
-                       format(fg(cyanColor), "|"), coloredLine);
+        fmt::format_to(std::back_inserter(buffer), "{} {} {}\n", std::string(spaceCount, ' '), format(fg(cyanColor), "|"), coloredLine);
     }
 
     // then print all the messages
@@ -375,8 +363,7 @@ void Emitter::printLabelsForLine(fmt::memory_buffer &buffer, const std::string &
             coloredLine += format(fg(cyanColor), "{}", labelMessage);
         }
 
-        fmt::format_to(std::back_inserter(buffer), "{} {} {}\n", std::string(spaceCount, ' '),
-                       format(fg(cyanColor), "|"), coloredLine);
+        fmt::format_to(std::back_inserter(buffer), "{} {} {}\n", std::string(spaceCount, ' '), format(fg(cyanColor), "|"), coloredLine);
     }
 }
 

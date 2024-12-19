@@ -12,9 +12,15 @@
 class Preprocessor {
 public:
     Preprocessor(const std::shared_ptr<ParseSession> &parseSess, const std::vector<Token> &tokens);
-    std::vector<Token> preprocess() const;
+    std::vector<Token> preprocess();
+
+    void advance();
+    bool match(TokenType type) const;
+    bool match(const std::string &value) const;
 
 private:
     std::shared_ptr<ParseSession> parseSess;
     const std::vector<Token> &tokens;
+    size_t currentIndex = 0;
+    Token currentToken;
 };

@@ -8,13 +8,14 @@
 #include <deque>
 #include <unordered_set>
 
-
 class Tokenizer {
 public:
     Tokenizer(const std::shared_ptr<ParseSession> &psess, const std::string &src) : psess(psess), src(src) {}
     std::vector<Token> tokenize();
 
 private:
+    void advance();
+    int getSymbolLength(size_t symbolPos);
     void skipWhitespace();
     Token getNextToken();
     Token getNumberToken();
@@ -40,4 +41,3 @@ private:
     std::size_t pos = 0;
     std::vector<Token> tokens;
 };
-

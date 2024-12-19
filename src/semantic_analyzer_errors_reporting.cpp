@@ -2,8 +2,6 @@
 #include "log.h"
 #include "token.h"
 
-// TODO: think more about naming types for users
-// dont rely on this in code
 std::string SemanticAnalyzer::getOperandType(const ExpressionPtr &node)
 {
     // std::string
@@ -44,21 +42,21 @@ std::string SemanticAnalyzer::getOperandType(const ExpressionPtr &node)
 std::string SemanticAnalyzer::getSymbolType(const std::shared_ptr<Symbol> &symbol)
 {
     if (auto dataVariableSymbol = std::dynamic_pointer_cast<DataVariableSymbol>(symbol)) {
-        return "Data Variable";
+        return "data variable";
     } else if (auto equVariableSymbol = std::dynamic_pointer_cast<EquVariableSymbol>(symbol)) {
-        return "EQU Variable";
+        return "EQU variable";
     } else if (auto equalVariableSymbol = std::dynamic_pointer_cast<EqualVariableSymbol>(symbol)) {
-        return "`=` Variable";
+        return "`=` variable";
     } else if (auto labelSymbol = std::dynamic_pointer_cast<LabelSymbol>(symbol)) {
-        return "Label";
+        return "label";
     } else if (auto structSymbol = std::dynamic_pointer_cast<StructSymbol>(symbol)) {
-        return "STRUC";
+        return "STRUC name";
     } else if (auto procSymbol = std::dynamic_pointer_cast<ProcSymbol>(symbol)) {
-        return "PROC";
+        return "PROC name";
     } else if (auto recordSymbol = std::dynamic_pointer_cast<RecordSymbol>(symbol)) {
-        return "RECORD";
+        return "RECORD name";
     } else if (auto recordFieldSymbol = std::dynamic_pointer_cast<RecordFieldSymbol>(symbol)) {
-        return "RECORD Field";
+        return "RECORD field name";
     }
     return "unknown";
 }
@@ -234,26 +232,26 @@ DiagnosticPtr SemanticAnalyzer::reportInvalidOperandSize(const ExpressionPtr &op
     return parseSess->dcx->getLastDiagnostic();
 }
 
-DiagnosticPtr SemanticAnalyzer::reportOperandMustBeAddressExpression(const ExpressionPtr &expr)
+DiagnosticPtr SemanticAnalyzer::reportOperandMustBeAddressExpression(const ExpressionPtr &operand)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::OPERAND_MUST_BE_ADDRESS_EXPRESSION);
-    diag.addPrimaryLabel(getExpressionSpan(expr), fmt::format("this has type `{}`", getOperandType(expr)));
+    diag.addPrimaryLabel(getExpressionSpan(operand), fmt::format("this has type `{}`", getOperandType(operand)));
     parseSess->dcx->addDiagnostic(diag);
     return parseSess->dcx->getLastDiagnostic();
 }
 
-DiagnosticPtr SemanticAnalyzer::reportOperandMustBeRegister(const ExpressionPtr &expr)
+DiagnosticPtr SemanticAnalyzer::reportOperandMustBeRegister(const ExpressionPtr &operand)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::OPERAND_MUST_BE_REGISTER);
-    diag.addPrimaryLabel(getExpressionSpan(expr), fmt::format("this has type `{}`", getOperandType(expr)));
+    diag.addPrimaryLabel(getExpressionSpan(operand), fmt::format("this has type `{}`", getOperandType(operand)));
     parseSess->dcx->addDiagnostic(diag);
     return parseSess->dcx->getLastDiagnostic();
 }
 
-DiagnosticPtr SemanticAnalyzer::reportOperandMustBeMemoryOperand(const ExpressionPtr &expr)
+DiagnosticPtr SemanticAnalyzer::reportOperandMustBeMemoryOperand(const ExpressionPtr &operand)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::OPERAND_MUST_BE_MEMORY_OPERAND);
-    diag.addPrimaryLabel(getExpressionSpan(expr), fmt::format("this has type `{}`", getOperandType(expr)));
+    diag.addPrimaryLabel(getExpressionSpan(operand), fmt::format("this has type `{}`", getOperandType(operand)));
     parseSess->dcx->addDiagnostic(diag);
     return parseSess->dcx->getLastDiagnostic();
 }
@@ -280,10 +278,18 @@ DiagnosticPtr SemanticAnalyzer::reportOperandMustBeImmediateOrCLRegister(const E
     return parseSess->dcx->getLastDiagnostic();
 }
 
-DiagnosticPtr SemanticAnalyzer::reportOperandMustBeImmediate(const ExpressionPtr &expr)
+DiagnosticPtr SemanticAnalyzer::reportOperandMustBeImmediate(const ExpressionPtr &operand)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::OPERAND_MUST_BE_IMMEDIATE);
-    diag.addPrimaryLabel(getExpressionSpan(expr), fmt::format("this has type `{}`", getOperandType(expr)));
+    diag.addPrimaryLabel(getExpressionSpan(operand), fmt::format("this has type `{}`", getOperandType(operand)));
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+DiagnosticPtr SemanticAnalyzer::reportOperandMustBeLabel(const ExpressionPtr &operand)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::OPERAND_MUST_BE_LABEL);
+    diag.addPrimaryLabel(getExpressionSpan(operand), fmt::format("this has type `{}`", getOperandType(operand)));
     parseSess->dcx->addDiagnostic(diag);
     return parseSess->dcx->getLastDiagnostic();
 }

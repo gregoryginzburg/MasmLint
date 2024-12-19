@@ -9,6 +9,8 @@
 #include <unordered_set>
 #include <string>
 
+#include <utf8proc.h>
+
 static const std::unordered_set<std::string> directives = {"=",      ".CODE", ".DATA", ".STACK", "DB",     "DW",     "DD",    "DQ",     "ELSE",
                                                            "ELSEIF", "END",   "ENDIF", "ENDM",   "ENDP",   "ENDS",   "EQU",   "FOR",    "FORC",
                                                            "IF",     "IFE",   "IFB",   "IFNB",   "IFDIF",  "IFDIFI", "IFIDN", "IFIDNI", "LOCAL",
@@ -31,6 +33,29 @@ static const std::unordered_set<std::string> instructions = {
 static const std::unordered_set<std::string> registers = {"AL", "AX",  "EAX", "BL",  "BX", "EBX", "CL", "CX",  "ECX", "DL",
                                                           "DX", "EDX", "SI",  "ESI", "DI", "EDI", "BP", "EBP", "SP",  "ESP"};
 
+void Tokenizer::advance()
+{
+    int len = getSymbolLength(pos);
+    if (len < 0) {
+        addDiagnostic(pos, pos + 1, ErrorCode::INVALID_UTF8_ENCODING);
+        pos += 1;
+    } else {
+        pos += len;
+    }
+}
+
+int Tokenizer::getSymbolLength(size_t symbolPos)
+{
+    const char *str = src.c_str();
+    auto len = static_cast<utf8proc_ssize_t>(src.size());
+    utf8proc_ssize_t idx = symbolPos;
+    utf8proc_int32_t codepoint = 0;
+
+    utf8proc_ssize_t charLen = utf8proc_iterate(reinterpret_cast<const utf8proc_uint8_t *>(str + idx), len - idx, &codepoint);
+
+    return static_cast<int>(charLen);
+}
+
 std::vector<Token> Tokenizer::tokenize()
 {
     size_t length = src.size();
@@ -44,7 +69,7 @@ std::vector<Token> Tokenizer::tokenize()
 
         if (src[pos] == '\n') {
             tokens.emplace_back(Token{TokenType::EndOfLine, "", Span(pos, pos + 1, nullptr)});
-            ++pos;
+            advance();
             continue; // Skip calling getNextToken() after processing '\n'
         }
 
@@ -62,21 +87,13 @@ std::vector<Token> Tokenizer::tokenize()
     // to be able to underline EndOfFile correctly
     tokens.emplace_back(Token{TokenType::EndOfFile, "", Span(pos - 1, pos, nullptr)});
 
-    // TODO: remove testing code
-    // Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_NUMBER_FORMAT);
-    // diag.addSecondaryLabel(Span(0, 1, nullptr), "pr");
-    // diag.addPrimaryLabel(Span(2, 3, nullptr), "hey");
-    // diag.addSecondaryLabel(Span(4, 5, nullptr), "hi");
-    // diag.addPrimaryLabel(Span(pos - 1, pos, nullptr), "nice");
-    // psess->dcx->addDiagnostic(diag);
-
     return tokens;
 }
 
 void Tokenizer::skipWhitespace()
 {
     while (pos < src.size() && std::isspace(static_cast<unsigned char>(src[pos])) && src[pos] != '\n') {
-        ++pos;
+        advance();
     }
 }
 
@@ -93,13 +110,13 @@ Token Tokenizer::getNextToken()
     } else if (currentChar == '\\') {
         // Line continuations are not handled; report an error
         size_t errorStart = pos;
-        ++pos;
+        advance();
         addDiagnostic(errorStart, pos, ErrorCode::LINE_CONTINUATION_NOT_SUPPORTED);
         return Token{TokenType::Invalid, "\\", Span(errorStart, pos, nullptr)};
     } else if (currentChar == ';') {
         size_t commentStart = pos;
         while (pos < src.size() && src[pos] != '\n') {
-            ++pos;
+            advance();
         }
         std::string commentText = src.substr(commentStart, pos - commentStart);
         return Token{TokenType::Comment, commentText, Span(commentStart, pos, nullptr)};
@@ -146,7 +163,7 @@ bool Tokenizer::isDotName()
     // return true;
 }
 
-bool Tokenizer::isValidNumberStart(char c) { return isdigit(static_cast<unsigned char>(c)) || (tolower(c) >= 'a' && tolower(c) <= 'f'); }
+bool Tokenizer::isValidNumberStart(char c) { return isdigit(static_cast<unsigned char>(c)); }
 
 Token Tokenizer::getIdentifierOrKeywordToken()
 {
@@ -154,11 +171,11 @@ Token Tokenizer::getIdentifierOrKeywordToken()
 
     // Handle optional starting dot
     if (src[pos] == '.') {
-        ++pos;
+        advance();
     }
 
     while (pos < src.size() && isValidIdentifierChar(src[pos])) {
-        ++pos;
+        advance();
     }
 
     std::string lexeme = src.substr(start, pos - start);
@@ -187,8 +204,8 @@ Token Tokenizer::getNumberToken()
     size_t length = src.size();
 
     // Collect alphanumeric characters until whitespace or operator
-    while (pos < length && isalnum(static_cast<unsigned char>(src[pos]))) {
-        ++pos;
+    while (pos < length && std::isalnum(static_cast<unsigned char>(src[pos]))) {
+        advance();
     }
     std::string lexeme = src.substr(start, pos - start);
 
@@ -196,11 +213,6 @@ Token Tokenizer::getNumberToken()
     if (isValidNumber(lexeme)) {
         return Token{TokenType::Number, lexeme, Span(start, pos, nullptr)};
     } else {
-        // check in cases like fffrh
-        if (isValidIdentifier(lexeme)) {
-            pos = start;
-            return getIdentifierOrKeywordToken();
-        }
         addDiagnostic(start, pos, ErrorCode::INVALID_NUMBER_FORMAT);
         return Token{TokenType::Invalid, lexeme, Span(start, pos, nullptr)};
     }
@@ -274,19 +286,19 @@ Token Tokenizer::getStringLiteralToken()
 {
     char quoteChar = src[pos];
     size_t start = pos;
-    ++pos; // skip the opening quote
+    advance(); // skip the opening quote
     while (pos < src.size() && src[pos] != quoteChar) {
         if (src[pos] == '\n') {
             break;
         } else {
-            ++pos;
+            advance();
         }
     }
     if (pos >= src.size() || src[pos] != quoteChar) {
         addDiagnostic(start, pos, ErrorCode::UNTERMINATED_STRING_LITERAL);
         return Token{TokenType::Invalid, src.substr(start, pos - start), Span(start, pos, nullptr)};
     }
-    ++pos; // Skip the closing quote
+    advance(); // Skip the closing quote
     std::string lexeme = src.substr(start, pos - start);
     return Token{TokenType::StringLiteral, lexeme, Span(start, pos, nullptr)};
 }
@@ -295,7 +307,7 @@ Token Tokenizer::getSpecialSymbolToken()
 {
     size_t start = pos;
     char currentChar = src[pos];
-    ++pos;
+    advance();
 
     std::string lexeme(1, currentChar);
     TokenType type = TokenType::Operator;
@@ -350,10 +362,10 @@ Token Tokenizer::getSpecialSymbolToken()
 }
 
 // TODO fix isalpha to handle utf8
-bool Tokenizer::isValidIdentifierStart(char c) { return isalpha(c) || c == '_' || c == '@' || c == '$' || c == '?'; }
+bool Tokenizer::isValidIdentifierStart(char c) { return std::isalpha(static_cast<unsigned char>(c)) || c == '_' || c == '@' || c == '$' || c == '?'; }
 
 // TODO fix isalnum to handle utf8
-bool Tokenizer::isValidIdentifierChar(char c) { return isalnum(c) || c == '_' || c == '@' || c == '$' || c == '?'; }
+bool Tokenizer::isValidIdentifierChar(char c) { return std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '@' || c == '$' || c == '?'; }
 
 bool Tokenizer::isValidIdentifier(const std::string &lexeme)
 {

@@ -99,13 +99,14 @@ private:
     [[nodiscard]] DiagnosticPtr reportOperandMustBeMemoryOrRegisterOperand(const ExpressionPtr &operand);
     [[nodiscard]] DiagnosticPtr reportOperandMustHaveSize(const ExpressionPtr &operand);
     [[nodiscard]] DiagnosticPtr reportInvalidOperandSize(const ExpressionPtr &operand, const std::string &expectedSize, int actualSize);
-    [[nodiscard]] DiagnosticPtr reportOperandMustBeAddressExpression(const ExpressionPtr &expr);
-    [[nodiscard]] DiagnosticPtr reportOperandMustBeRegister(const ExpressionPtr &expr);
-    [[nodiscard]] DiagnosticPtr reportOperandMustBeMemoryOperand(const ExpressionPtr &expr);
+    [[nodiscard]] DiagnosticPtr reportOperandMustBeAddressExpression(const ExpressionPtr &operand);
+    [[nodiscard]] DiagnosticPtr reportOperandMustBeRegister(const ExpressionPtr &operand);
+    [[nodiscard]] DiagnosticPtr reportOperandMustBeMemoryOperand(const ExpressionPtr &operand);
     [[nodiscard]] DiagnosticPtr reportFirstOperandMustBeBiggerThanSecond(const std::shared_ptr<Instruction> &instruction, int firstOpSize,
                                                                          int secondOpSize);
     [[nodiscard]] DiagnosticPtr reportOperandMustBeImmediateOrCLRegister(const ExpressionPtr &operand);
-    [[nodiscard]] DiagnosticPtr reportOperandMustBeImmediate(const ExpressionPtr &expr);
+    [[nodiscard]] DiagnosticPtr reportOperandMustBeImmediate(const ExpressionPtr &operand);
+    [[nodiscard]] DiagnosticPtr reportOperandMustBeLabel(const ExpressionPtr &operand);
 
     // RecordDir errors
     [[nodiscard]] DiagnosticPtr reportRecordWidthTooBig(const std::shared_ptr<RecordDir> &recordDir, int32_t width);

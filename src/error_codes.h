@@ -7,3 +7,4 @@ enum class ErrorCode : std::uint8_t {
 #undef DEFINE_ERROR
 #undef DEFINE_WARNING
 };
+

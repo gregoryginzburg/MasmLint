@@ -210,10 +210,27 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
         }
 
     } else if (mnemonic == "CALL" || mnemonic == "JMP") {
+        if (instruction->operands.size() != 1) {
+            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, "1");
+            return false;
+        }
+        ExpressionPtr operand = instruction->operands[0];
 
-    }
-
-    else if (mnemonic == "POP") {
+        std::shared_ptr<Leaf> leaf = std::dynamic_pointer_cast<Leaf>(operand);
+        if (!leaf) {
+            instruction->diagnostic = reportOperandMustBeLabel(operand);
+            return false;
+        }
+        if (leaf->token.type != TokenType::Identifier) {
+            instruction->diagnostic = reportOperandMustBeLabel(operand);
+            return false;
+        }
+        auto symbol = parseSess->symbolTable->findSymbol(leaf->token);
+        if (!std::dynamic_pointer_cast<LabelSymbol>(symbol) && !std::dynamic_pointer_cast<ProcSymbol>(symbol)) {
+            instruction->diagnostic = reportOperandMustBeLabel(operand);
+            return false;
+        }
+    } else if (mnemonic == "POP") {
         if (instruction->operands.size() != 1) {
             instruction->diagnostic = reportInvalidNumberOfOperands(instruction, "1");
             return false;

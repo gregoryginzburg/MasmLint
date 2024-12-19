@@ -13,6 +13,7 @@ DEFINE_ERROR(UNRECOGNIZED_SYMBOL, 1, "Unrecognized symbol")
 DEFINE_ERROR(LINE_CONTINUATION_NOT_SUPPORTED, 2, "Line continuations are not supported")
 DEFINE_ERROR(INVALID_NUMBER_FORMAT, 3, "Invalid number format")
 DEFINE_ERROR(UNTERMINATED_STRING_LITERAL, 4, "Unterminated string literal")
+DEFINE_ERROR(INVALID_UTF8_ENCODING, 78, "Invalid utf-8 encoding")
 
 // Parser errors
 // General
@@ -109,6 +110,7 @@ DEFINE_ERROR(OPERAND_MUST_BE_MEMORY_OPERAND, 49, "Operand must be a memory")
 DEFINE_ERROR(FIRST_OPERAND_MUST_BE_BIGGER_THAN_SECOND, 74, "First operand must be bigger than second")
 DEFINE_ERROR(OPERAND_MUST_BE_IMMEDIATE_OR_CL_REGISTER, 75, "Operand must be immediate or `CL` register")
 DEFINE_ERROR(OPERAND_MUST_BE_IMMEDIATE, 76, "Operand must be immediate")
+DEFINE_ERROR(OPERAND_MUST_BE_LABEL, 77, "Operand must be label")
 
 // RecordDir errors
 DEFINE_ERROR(RECORD_WIDTH_TOO_BIG, 50, "`RECORD` total width exceeds 32 bits")
@@ -144,7 +146,8 @@ DEFINE_ERROR(MORE_THAN_ONE_SCALE, 68, "Can't have more than 1 register with a sc
 DEFINE_ERROR(TWO_ESP_REGISTERS, 69, "Can't have 2 ESP registers in an address expression with modificators")
 DEFINE_ERROR(NON_32BIT_REGISTER, 70, "Can't have a non 32 bit register in an address expression with modificators")
 DEFINE_ERROR(BINARY_MINUS_OPERATOR_INCORRECT_ARGUMENT, 71, "Incorrect argument in the binary operator `-`")
-DEFINE_ERROR(MORE_THAN_ONE_REGISTER_IN_SQUARE_BRACKETS, 72, "Can only have a register with an optional scale and an optional constant expression inside `[]`")
+DEFINE_ERROR(MORE_THAN_ONE_REGISTER_IN_SQUARE_BRACKETS, 72,
+             "Can only have a register with an optional scale and an optional constant expression inside `[]`")
 
 // Warnings
 // Expression warnings

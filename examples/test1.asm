@@ -1,11 +1,8 @@
 .DATA
-var1 dd 1
+INCLUDE awgaw gwag gwa
+
 
 .CODE
-    xchg [eax], [eax]
-    xchg eax, 1
-    xchg eax, al
-    xchg eax, [ebx]
-
+    mov eax, type [eax]
 
 END
