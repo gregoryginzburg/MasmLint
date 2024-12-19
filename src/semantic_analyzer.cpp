@@ -145,9 +145,14 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
         // only label exist
         return true;
     }
-    // TODO: finish all possible instructions (dont forget about unresolvedSymbols)
-    // When checking for something, keep in mind on pass == 1 constantValue or size of expr can be undefined
-    // so dont emit errors based on that
+
+    // When we have at least 1 operand with unresolved symbols - return early - to catch errors on the second pass
+    for (const auto &operand : instruction->operands) {
+        if (operand->unresolvedSymbols) {
+            return true;
+        }
+    }
+
     Token mnemonicToken = instruction->mnemonicToken.value();
     std::string mnemonic = stringToUpper(mnemonicToken.lexeme);
 
@@ -155,7 +160,7 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
     for (const auto &operand : instruction->operands) {
         if (operand->size) {
             int opSize = operand->size.value().value;
-            if (opSize != 1 && opSize != 2 && opSize != 4 && !operand->unresolvedSymbols) {
+            if (opSize != 1 && opSize != 2 && opSize != 4) {
                 instruction->diagnostic = reportInvalidOperandSize(operand, "{1, 2, 4}", opSize);
                 return false;
             }
@@ -165,7 +170,7 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
     if (mnemonic == "ADC" || mnemonic == "ADD" || mnemonic == "AND" || mnemonic == "CMP" || mnemonic == "MOV" || mnemonic == "OR" ||
         mnemonic == "SBB" || mnemonic == "SUB" || mnemonic == "TEST" || mnemonic == "XOR") {
         if (instruction->operands.size() != 2) {
-            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, 2);
+            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, "2");
             return false;
         }
         ExpressionPtr firstOp = instruction->operands[0];
@@ -185,26 +190,32 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
         }
 
         // find out actual size of constantValue
+        // TODO: constantValue can still have size (cause of PTR)
         if (secondOp->constantValue) {
             int64_t value = secondOp->constantValue.value();
-            secondOp->size = getMinimumSizeForConstant(value);
+            secondOp->size = getMinimumSizeForConstant(value); // don't modify the AST tree here?
         }
 
         if (firstOp->size && secondOp->size) {
             int firstOpSize = firstOp->size.value().value;
             int secondOpSize = secondOp->size.value().value;
-            if (secondOp->constantValue && firstOpSize < secondOpSize && !(firstOp->unresolvedSymbols || secondOp->unresolvedSymbols)) {
+            if (secondOp->constantValue && firstOpSize < secondOpSize) {
                 instruction->diagnostic = reportImmediateOperandTooBigForOperand(instruction, firstOpSize, secondOpSize);
                 return false;
             }
-            if (!secondOp->constantValue && firstOpSize != secondOpSize && !(firstOp->unresolvedSymbols || secondOp->unresolvedSymbols)) {
+            if (!secondOp->constantValue && firstOpSize != secondOpSize) {
                 instruction->diagnostic = reportOperandsHaveDifferentSize(instruction, firstOpSize, secondOpSize);
                 return false;
             }
         }
-    } else if (mnemonic == "CALL" || mnemonic == "JMP" || mnemonic == "POP") {
+
+    } else if (mnemonic == "CALL" || mnemonic == "JMP") {
+
+    }
+
+    else if (mnemonic == "POP") {
         if (instruction->operands.size() != 1) {
-            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, 1);
+            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, "1");
             return false;
         }
         ExpressionPtr operand = instruction->operands[0];
@@ -217,19 +228,19 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
             return false;
         }
         int operandSize = operand->size.value().value;
-        if (operandSize != 4 && !operand->unresolvedSymbols) {
+        if (operandSize != 4) {
             instruction->diagnostic = reportInvalidOperandSize(operand, "4", operandSize);
             return false;
         }
     } else if (mnemonic == "CBW" || mnemonic == "CDQ" || mnemonic == "CWD" || mnemonic == "POPFD" || mnemonic == "PUSHFD") {
         if (instruction->operands.size() != 0) {
-            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, 0);
+            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, "0");
             return false;
         }
     } else if (mnemonic == "DEC" || mnemonic == "DIV" || mnemonic == "IDIV" || mnemonic == "IMUL" || mnemonic == "INC" || mnemonic == "MUL" ||
                mnemonic == "NEG" || mnemonic == "NOT") {
         if (instruction->operands.size() != 1) {
-            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, 1);
+            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, "1");
             return false;
         }
         ExpressionPtr operand = instruction->operands[0];
@@ -245,7 +256,7 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
                mnemonic == "JECXZ" || mnemonic == "JG" || mnemonic == "JGE" || mnemonic == "JL" || mnemonic == "JLE" || mnemonic == "JNC" ||
                mnemonic == "JNE" || mnemonic == "JNZ" || mnemonic == "JZ" || mnemonic == "LOOP") {
         if (instruction->operands.size() != 1) {
-            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, 1);
+            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, "1");
             return false;
         }
         ExpressionPtr operand = instruction->operands[0];
@@ -255,7 +266,7 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
         }
     } else if (mnemonic == "LEA") {
         if (instruction->operands.size() != 2) {
-            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, 2);
+            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, "2");
             return false;
         }
         ExpressionPtr firstOp = instruction->operands[0];
@@ -273,16 +284,43 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
             return false;
         }
     } else if (mnemonic == "MOVSX" || mnemonic == "MOVZX") {
-        // TODO
+        if (instruction->operands.size() != 2) {
+            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, "2");
+            return false;
+        }
+        ExpressionPtr firstOp = instruction->operands[0];
+        ExpressionPtr secondOp = instruction->operands[1];
+        if (firstOp->type != OperandType::RegisterOperand) {
+            instruction->diagnostic = reportOperandMustBeRegister(firstOp);
+            return false;
+        }
+        if (secondOp->type != OperandType::MemoryOperand && secondOp->type != OperandType::RegisterOperand) {
+            instruction->diagnostic = reportOperandMustBeMemoryOrRegisterOperand(secondOp);
+            return false;
+        }
+
+        if (!secondOp->size) {
+            instruction->diagnostic = reportOperandMustHaveSize(secondOp);
+            return false;
+        }
+
+        // now each operand is guaranteed to have a size
+        if (firstOp->size.value().value <= secondOp->size.value().value) {
+            int firstOpSize = firstOp->size.value().value;
+            int secondOpSize = secondOp->size.value().value;
+            instruction->diagnostic = reportFirstOperandMustBeBiggerThanSecond(instruction, firstOpSize, secondOpSize);
+            return false;
+        }
+
     } else if (mnemonic == "PUSH") {
         if (instruction->operands.size() != 1) {
-            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, 1);
+            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, "1");
             return false;
         }
         ExpressionPtr operand = instruction->operands[0];
         if (operand->constantValue) {
             int64_t value = operand->constantValue.value();
-            operand->size = getMinimumSizeForConstant(value);
+            operand->size = getMinimumSizeForConstant(value); // don't modify the AST tree here?
         }
 
         if (!operand->size) {
@@ -291,23 +329,102 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
         }
 
         int operandSize = operand->size.value().value;
-        if (operand->constantValue && operandSize > 4 && !operand->unresolvedSymbols) {
+        if (operand->constantValue && operandSize > 4) {
             instruction->diagnostic = reportInvalidOperandSize(operand, "4", operandSize); // TODO: change this too immediate operand two big?
             return false;
         }
-        if (!operand->constantValue && operandSize != 4 && !operand->unresolvedSymbols) {
+        if (!operand->constantValue && operandSize != 4) {
             instruction->diagnostic = reportInvalidOperandSize(operand, "4", operandSize);
             return false;
         }
     } else if (mnemonic == "RCL" || mnemonic == "RCR" || mnemonic == "ROL" || mnemonic == "ROR" || mnemonic == "SHL" || mnemonic == "SHR") {
-        // TODO
+        if (instruction->operands.size() != 2) {
+            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, "2");
+            return false;
+        }
+        ExpressionPtr firstOp = instruction->operands[0];
+        ExpressionPtr secondOp = instruction->operands[1];
+
+        if (firstOp->type != OperandType::MemoryOperand && firstOp->type != OperandType::RegisterOperand) {
+            instruction->diagnostic = reportOperandMustBeMemoryOrRegisterOperand(firstOp);
+            return false;
+        }
+
+        if (!firstOp->size) {
+            instruction->diagnostic = reportOperandMustHaveSize(firstOp);
+        }
+
+        if (!secondOp->constantValue && !isRegister(secondOp, "CL")) {
+            instruction->diagnostic = reportOperandMustBeImmediateOrCLRegister(secondOp);
+            return false;
+        }
+        if (secondOp->constantValue) {
+            OperandSize secondOpSize = getMinimumSizeForConstant(secondOp->constantValue.value());
+            if (secondOpSize.value > 1) {
+                instruction->diagnostic = reportInvalidOperandSize(secondOp, "1", secondOpSize.value);
+            }
+        }
     } else if (mnemonic == "RET") {
-        // TODO 0 or 1 arguments, immediate 16 bits
+        if (instruction->operands.size() > 1) {
+            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, "{0, 1}");
+            return false;
+        }
+
+        if (instruction->operands.size() == 1) {
+            ExpressionPtr operand = instruction->operands[0];
+            if (operand->type != OperandType::ImmediateOperand) {
+                instruction->diagnostic = reportOperandMustBeImmediate(operand);
+                return false;
+            }
+
+            if (operand->constantValue) {
+                int64_t value = operand->constantValue.value();
+                operand->size = getMinimumSizeForConstant(value); // don't modify the AST tree here?
+            }
+
+            int operandSize = operand->size.value().value;
+            if (operandSize > 2) {
+                instruction->diagnostic = reportInvalidOperandSize(operand, "2", operandSize);
+                return false;
+            }
+        }
+
     } else if (mnemonic == "XCHG") {
+        if (instruction->operands.size() != 2) {
+            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, "2");
+            return false;
+        }
+        ExpressionPtr firstOp = instruction->operands[0];
+        ExpressionPtr secondOp = instruction->operands[1];
+        if (firstOp->type == OperandType::MemoryOperand && secondOp->type == OperandType::MemoryOperand) {
+            instruction->diagnostic = reportCantHaveTwoMemoryOperands(instruction);
+            return false;
+        }
+
+        if (firstOp->type != OperandType::MemoryOperand && firstOp->type != OperandType::RegisterOperand) {
+            instruction->diagnostic = reportOperandMustBeMemoryOrRegisterOperand(firstOp);
+            return false;
+        }
+
+        if (secondOp->type != OperandType::MemoryOperand && secondOp->type != OperandType::RegisterOperand) {
+            instruction->diagnostic = reportOperandMustBeMemoryOrRegisterOperand(secondOp);
+            return false;
+        }
+
+        // Now both operands are memory or register, at least one is a register - that means at least one of them has a size
+        // So don't need to check for reportOneOfOperandsMustHaveSize
+        if (firstOp->size && secondOp->size) {
+            int firstOpSize = firstOp->size.value().value;
+            int secondOpSize = secondOp->size.value().value;
+            if (firstOpSize != secondOpSize) {
+                instruction->diagnostic = reportOperandsHaveDifferentSize(instruction, firstOpSize, secondOpSize);
+                return false;
+            }
+        }
 
     } else if (mnemonic == "INCHAR") {
         if (instruction->operands.size() != 1) {
-            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, 1);
+            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, "1");
             return false;
         }
         ExpressionPtr operand = instruction->operands[0];
@@ -320,17 +437,17 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
             return false;
         }
         int operandSize = operand->size.value().value;
-        if (operand->constantValue && operandSize > 1 && !operand->unresolvedSymbols) {
+        if (operand->constantValue && operandSize > 1) {
             instruction->diagnostic = reportInvalidOperandSize(operand, "4", operandSize); // TODO: change this too immediate operand two big?
             return false;
         }
-        if (!operand->constantValue && operandSize != 1 && !operand->unresolvedSymbols) {
+        if (!operand->constantValue && operandSize != 1) {
             instruction->diagnostic = reportInvalidOperandSize(operand, "4", operandSize);
             return false;
         }
     } else if (mnemonic == "ININT") { // like `CALL`
         if (instruction->operands.size() != 1) {
-            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, 1);
+            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, "1");
             return false;
         }
         ExpressionPtr operand = instruction->operands[0];
@@ -343,60 +460,58 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
             return false;
         }
         int operandSize = operand->size.value().value;
-        if (operand->constantValue && operandSize > 4 && !operand->unresolvedSymbols) {
+        if (operand->constantValue && operandSize > 4) {
             instruction->diagnostic = reportInvalidOperandSize(operand, "4", operandSize); // TODO: change this too immediate operand two big?
             return false;
         }
-        if (!operand->constantValue && operandSize != 4 && !operand->unresolvedSymbols) {
+        if (!operand->constantValue && operandSize != 4) {
             instruction->diagnostic = reportInvalidOperandSize(operand, "4", operandSize);
             return false;
         }
     } else if (mnemonic == "EXIT" || mnemonic == "NEWLINE") {
         if (instruction->operands.size() != 0) {
-            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, 0);
+            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, "0");
             return false;
         }
-    } else if (mnemonic == "OUTI" || mnemonic == "OUTU") { // like `PUSH`
+    } else if (mnemonic == "OUTI" || mnemonic == "OUTU" || mnemonic == "OUTSTR") { // like `PUSH`
         if (instruction->operands.size() != 1) {
-            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, 1);
+            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, "1");
             return false;
         }
         ExpressionPtr operand = instruction->operands[0];
         if (operand->constantValue) {
             int64_t value = operand->constantValue.value();
-            operand->size = getMinimumSizeForConstant(value);
+            operand->size = getMinimumSizeForConstant(value); // don't modify the AST tree here?
         }
 
         if (!operand->size) {
-            instruction->diagnostic = reportOperandMustHaveSize(operand); // Remove this?
+            instruction->diagnostic = reportOperandMustHaveSize(operand);
             return false;
         }
 
         int operandSize = operand->size.value().value;
-        if (operandSize != 4 && !operand->unresolvedSymbols) {
+        if (operandSize != 4) {
             instruction->diagnostic = reportInvalidOperandSize(operand, "4", operandSize);
             return false;
         }
-    } else if (mnemonic == "OUTSTR") {
-        // TODO
     } else if (mnemonic == "OUTCHAR") { // like `PUSH` with 8 bit
         if (instruction->operands.size() != 1) {
-            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, 1);
+            instruction->diagnostic = reportInvalidNumberOfOperands(instruction, "1");
             return false;
         }
         ExpressionPtr operand = instruction->operands[0];
         if (operand->constantValue) {
             int64_t value = operand->constantValue.value();
-            operand->size = getMinimumSizeForConstant(value);
+            operand->size = getMinimumSizeForConstant(value); // don't modify the AST tree here?
         }
 
         if (!operand->size) {
-            instruction->diagnostic = reportOperandMustHaveSize(operand); // Remove this?
+            instruction->diagnostic = reportOperandMustHaveSize(operand);
             return false;
         }
 
         int operandSize = operand->size.value().value;
-        if (operandSize != 1 && !operand->unresolvedSymbols) {
+        if (operandSize != 1) {
             instruction->diagnostic = reportInvalidOperandSize(operand, "1", operandSize);
             return false;
         }
@@ -748,23 +863,14 @@ bool SemanticAnalyzer::visitInitValueHelper(const std::shared_ptr<InitValue> &in
 
         ExpressionPtr expr = expressionInitValue->expr;
         // find out actual size of constantValue
+        // TODO: constantValue can still have size (cause of PTR)
         if (expr->constantValue) {
             int64_t value = expr->constantValue.value();
-            if (value >= INT8_MIN && value <= static_cast<int64_t>(UINT8_MAX)) {
-                expr->size = OperandSize("BYTE", 1);
-            } else if (value >= INT16_MIN && value <= static_cast<int64_t>(UINT16_MAX)) {
-                expr->size = OperandSize("WORD", 2);
-            } else if (value >= INT32_MIN && value <= static_cast<int64_t>(UINT32_MAX)) {
-                expr->size = OperandSize("DWORD", 4);
-            } else {
-                expr->size = OperandSize("DWORD", 8);
-            }
+            expr->size = getMinimumSizeForConstant(value); // don't modify the AST tree here?
         } else if (auto leaf = std::dynamic_pointer_cast<Leaf>(expr)) {
             if (leaf->token.type == TokenType::StringLiteral) {
                 // TODO: how to handle???
             }
-        } else {
-            expr->size = OperandSize("DWORD", 4); // override, because labels are always 32 bits in data definition
         }
 
         std::string expectedSizeStr = dataDirectiveToSizeStr[stringToUpper(expectedTypeToken.lexeme)];
@@ -774,7 +880,7 @@ bool SemanticAnalyzer::visitInitValueHelper(const std::shared_ptr<InitValue> &in
             return false;
         }
 
-        if (expectedSize.value < expr->size->value) {
+        if (expectedSize.value < expr->size->value && !expr->unresolvedSymbols) {
             initValue->diagnostic = reportInitializerTooLargeForSpecifiedSize(expressionInitValue, expectedTypeToken, expr->size->value);
             return false;
         }
@@ -947,38 +1053,14 @@ bool SemanticAnalyzer::visitSquareBrackets(const std::shared_ptr<SquareBrackets>
         if ((binOp = std::dynamic_pointer_cast<BinaryOperator>(operand))) {
             implicit = false;
             // Check that we have [eax * 5] in []
-            // TODO: change this error to checking whether we have more than 1 register and report that?
-            if (binOp->op.lexeme == "+") {
-                bool firstIsRegisterWithOptionalScale = binOp->left->type == OperandType::RegisterOperand;
-                if (auto binOpLeft = std::dynamic_pointer_cast<BinaryOperator>(binOp->left)) {
-                    if (binOpLeft->op.lexeme == "*" &&
-                        (binOpLeft->left->type == OperandType::RegisterOperand || binOpLeft->right->type == OperandType::RegisterOperand)) {
-                        firstIsRegisterWithOptionalScale = true;
-                    }
-                }
-                bool firstIsConstant = bool(binOp->left->constantValue);
-                bool secondIsRegisterWithOptionalScale = binOp->right->type == OperandType::RegisterOperand;
-                if (auto binOpRight = std::dynamic_pointer_cast<BinaryOperator>(binOp->right)) {
-                    if (binOpRight->op.lexeme == "*" &&
-                        (binOpRight->left->type == OperandType::RegisterOperand || binOpRight->right->type == OperandType::RegisterOperand)) {
-                        secondIsRegisterWithOptionalScale = true;
-                    }
-                }
-                bool secondIsConstant = bool(binOp->right->constantValue);
-                if ((firstIsConstant && secondIsRegisterWithOptionalScale) || (firstIsRegisterWithOptionalScale && secondIsConstant)) {
-                    // allowed
-                } else {
-                    node->diagnostic = reportNonRegisterInSquareBrackets(binOp);
-                    return false;
-                }
-            } else if (binOp->op.lexeme != "*") {
-                node->diagnostic = reportNonRegisterInSquareBrackets(binOp);
+            if (binOp->registers.size() > 1) {
+                node->diagnostic = reportMoreThanOneRegisterInSquareBrackets(binOp);
                 return false;
             }
             expr = binOp;
         } else if ((implicitPlusOp = std::dynamic_pointer_cast<ImplicitPlusOperator>(operand))) {
             // report error, beacuse can't have [[eax][ebx]]
-            node->diagnostic = reportNonRegisterInSquareBrackets(binOp);
+            node->diagnostic = reportMoreThanOneRegisterInSquareBrackets(binOp);
             return false;
         } else {
             LOG_DETAILED_ERROR("Unexpected operand type!\n");
@@ -1235,11 +1317,17 @@ bool SemanticAnalyzer::visitBinaryOperator(const std::shared_ptr<BinaryOperator>
         node->constantValue = right->constantValue;
         node->isRelocatable = right->isRelocatable;
         node->type = right->type;
-        if (builtinTypes.contains(typeOperand)) {
-            node->size = OperandSize(typeOperand, sizeStrToValue[typeOperand]);
+        if (right->type == OperandType::ImmediateOperand && right->isRelocatable) {
+            // OFFSET var - is immediate & relocatable
+            // in this case PTR doesnt change the size
+            node->size = right->size;
         } else {
-            auto structSymbol = std::dynamic_pointer_cast<StructSymbol>(typeSymbol);
-            node->size = OperandSize(typeOperand, structSymbol->size);
+            if (builtinTypes.contains(typeOperand)) {
+                node->size = OperandSize(typeOperand, sizeStrToValue[typeOperand]);
+            } else {
+                auto structSymbol = std::dynamic_pointer_cast<StructSymbol>(typeSymbol);
+                node->size = OperandSize(typeOperand, structSymbol->size);
+            }
         }
 
         node->registers = right->registers;
@@ -1576,7 +1664,10 @@ bool SemanticAnalyzer::visitUnaryOperator(const std::shared_ptr<UnaryOperator> &
         node->constantValue = operand->constantValue;
         node->isRelocatable = operand->isRelocatable;
         node->type = OperandType::ImmediateOperand;
-        node->size = operand->size;
+        // OFFSET var is always 32 bit, OFFSET 1 has undefined size (std::nullopt)
+        if (operand->size) {
+            node->size = OperandSize("DWORD", 4);
+        }
         node->registers = operand->registers;
 
     } else if (op == "TYPE") {

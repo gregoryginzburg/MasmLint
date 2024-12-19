@@ -607,3 +607,21 @@ inline Span getInitValueSpan(const std::shared_ptr<InitValue> &node)
     LOG_DETAILED_ERROR("Unknown InitValue node!\n");
     return {0, 0, nullptr};
 }
+
+inline std::shared_ptr<Leaf> getLeaf(const ASTPtr &node)
+{
+    std::shared_ptr<Leaf> leaf = std::dynamic_pointer_cast<Leaf>(node);
+    return leaf;
+}
+
+inline bool isRegister(const ASTPtr &node, std::string registerStr)
+{
+    std::shared_ptr<Leaf> leaf = std::dynamic_pointer_cast<Leaf>(node);
+    if (!leaf) {
+        return false;
+    }
+    if (leaf->type != OperandType::RegisterOperand) {
+        return false;
+    }
+    return stringToUpper(leaf->token.lexeme) == registerStr;
+}

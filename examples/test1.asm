@@ -1,10 +1,11 @@
-
-MyStruc STRUC
-MyStruc ENDS
 .DATA
-var dd 4
+var1 dd 1
 
 .CODE
-start:
-mov eax, TYPE [eax]
+    xchg [eax], [eax]
+    xchg eax, 1
+    xchg eax, al
+    xchg eax, [ebx]
+
+
 END

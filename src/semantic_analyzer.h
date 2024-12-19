@@ -89,7 +89,7 @@ private:
                                                                           const Token &expectedTypeToken, int32_t actualSize);
 
     // Instruction errors
-    [[nodiscard]] DiagnosticPtr reportInvalidNumberOfOperands(const std::shared_ptr<Instruction> &instruction, int numberOfOps);
+    [[nodiscard]] DiagnosticPtr reportInvalidNumberOfOperands(const std::shared_ptr<Instruction> &instruction, const std::string &numberOfOps);
     [[nodiscard]] DiagnosticPtr reportCantHaveTwoMemoryOperands(const std::shared_ptr<Instruction> &instruction);
     [[nodiscard]] DiagnosticPtr reportDestinationOperandCantBeImmediate(const std::shared_ptr<Instruction> &instruction);
     [[nodiscard]] DiagnosticPtr reportImmediateOperandTooBigForOperand(const std::shared_ptr<Instruction> &instruction, int firstOpSize,
@@ -102,6 +102,10 @@ private:
     [[nodiscard]] DiagnosticPtr reportOperandMustBeAddressExpression(const ExpressionPtr &expr);
     [[nodiscard]] DiagnosticPtr reportOperandMustBeRegister(const ExpressionPtr &expr);
     [[nodiscard]] DiagnosticPtr reportOperandMustBeMemoryOperand(const ExpressionPtr &expr);
+    [[nodiscard]] DiagnosticPtr reportFirstOperandMustBeBiggerThanSecond(const std::shared_ptr<Instruction> &instruction, int firstOpSize,
+                                                                         int secondOpSize);
+    [[nodiscard]] DiagnosticPtr reportOperandMustBeImmediateOrCLRegister(const ExpressionPtr &operand);
+    [[nodiscard]] DiagnosticPtr reportOperandMustBeImmediate(const ExpressionPtr &expr);
 
     // RecordDir errors
     [[nodiscard]] DiagnosticPtr reportRecordWidthTooBig(const std::shared_ptr<RecordDir> &recordDir, int32_t width);
@@ -137,7 +141,7 @@ private:
     [[nodiscard]] DiagnosticPtr reportTwoEsp(const ExpressionPtr &node, bool implicit);
     [[nodiscard]] DiagnosticPtr reportNon32bitRegister(const ExpressionPtr &node, bool implicit);
     [[nodiscard]] DiagnosticPtr reportBinaryMinusOperatorIncorrectArgument(const std::shared_ptr<BinaryOperator> &node);
-    [[nodiscard]] DiagnosticPtr reportNonRegisterInSquareBrackets(const std::shared_ptr<BinaryOperator> &node);
+    [[nodiscard]] DiagnosticPtr reportMoreThanOneRegisterInSquareBrackets(const std::shared_ptr<BinaryOperator> &node);
 
     void warnTypeReturnsZero(const std::shared_ptr<UnaryOperator> &node);
 

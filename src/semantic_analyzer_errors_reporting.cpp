@@ -141,7 +141,7 @@ DiagnosticPtr SemanticAnalyzer::reportInitializerTooLargeForSpecifiedSize(const 
 
 // Instruction errors
 
-DiagnosticPtr SemanticAnalyzer::reportInvalidNumberOfOperands(const std::shared_ptr<Instruction> &instruction, int numberOfOps)
+DiagnosticPtr SemanticAnalyzer::reportInvalidNumberOfOperands(const std::shared_ptr<Instruction> &instruction, const std::string &numberOfOps)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_NUMBER_OF_OPERANDS);
     Token mnemonicToken = instruction->mnemonicToken.value();
@@ -253,6 +253,36 @@ DiagnosticPtr SemanticAnalyzer::reportOperandMustBeRegister(const ExpressionPtr 
 DiagnosticPtr SemanticAnalyzer::reportOperandMustBeMemoryOperand(const ExpressionPtr &expr)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::OPERAND_MUST_BE_MEMORY_OPERAND);
+    diag.addPrimaryLabel(getExpressionSpan(expr), fmt::format("this has type `{}`", getOperandType(expr)));
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+DiagnosticPtr SemanticAnalyzer::reportFirstOperandMustBeBiggerThanSecond(const std::shared_ptr<Instruction> &instruction, int firstOpSize,
+                                                                         int secondOpSize)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::FIRST_OPERAND_MUST_BE_BIGGER_THAN_SECOND);
+    Token mnemonicToken = instruction->mnemonicToken.value();
+    diag.addPrimaryLabel(mnemonicToken.span, "");
+
+    diag.addSecondaryLabel(getExpressionSpan(instruction->operands[0]), fmt::format("this operand has size `{}`", firstOpSize));
+    diag.addSecondaryLabel(getExpressionSpan(instruction->operands[1]), fmt::format("this operand has size `{}`", secondOpSize));
+
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+DiagnosticPtr SemanticAnalyzer::reportOperandMustBeImmediateOrCLRegister(const ExpressionPtr &operand)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::OPERAND_MUST_BE_IMMEDIATE_OR_CL_REGISTER);
+    diag.addPrimaryLabel(getExpressionSpan(operand), fmt::format("this has type `{}`", getOperandType(operand)));
+    parseSess->dcx->addDiagnostic(diag);
+    return parseSess->dcx->getLastDiagnostic();
+}
+
+DiagnosticPtr SemanticAnalyzer::reportOperandMustBeImmediate(const ExpressionPtr &expr)
+{
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::OPERAND_MUST_BE_IMMEDIATE);
     diag.addPrimaryLabel(getExpressionSpan(expr), fmt::format("this has type `{}`", getOperandType(expr)));
     parseSess->dcx->addDiagnostic(diag);
     return parseSess->dcx->getLastDiagnostic();
@@ -875,9 +905,9 @@ DiagnosticPtr SemanticAnalyzer::reportBinaryMinusOperatorIncorrectArgument(const
     return parseSess->dcx->getLastDiagnostic();
 }
 
-DiagnosticPtr SemanticAnalyzer::reportNonRegisterInSquareBrackets(const std::shared_ptr<BinaryOperator> &node)
+DiagnosticPtr SemanticAnalyzer::reportMoreThanOneRegisterInSquareBrackets(const std::shared_ptr<BinaryOperator> &node)
 {
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::NON_REGISTER_IN_SQUARE_BRACKETS);
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::MORE_THAN_ONE_REGISTER_IN_SQUARE_BRACKETS);
     diag.addPrimaryLabel(getExpressionSpan(node), "");
     parseSess->dcx->addDiagnostic(diag);
     return parseSess->dcx->getLastDiagnostic();

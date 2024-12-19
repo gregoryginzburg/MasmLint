@@ -10,10 +10,7 @@ void Diagnostic::addPrimaryLabel(const Span &span, const std::string &labelMessa
     primaryLabel = std::pair<Span, std::string>(span, labelMessage);
 }
 
-void Diagnostic::addSecondaryLabel(const Span &span, const std::string &labelMessage)
-{
-    secondaryLabels.emplace_back(span, labelMessage);
-}
+void Diagnostic::addSecondaryLabel(const Span &span, const std::string &labelMessage) { secondaryLabels.emplace_back(span, labelMessage); }
 
 void Diagnostic::addNoteMessage(const std::string &msg) { noteMessage = msg; }
 
@@ -38,11 +35,11 @@ bool Diagnostic::isCancelled() const { return cancelled; }
 std::string getErrorMessage(ErrorCode code)
 {
     switch (code) {
-#define DEFINE_ERROR(code, message)                                                                                    \
-    case ErrorCode::code:                                                                                              \
+#define DEFINE_ERROR(code, code_number, message)                                                                                                     \
+    case ErrorCode::code:                                                                                                                            \
         return message;
-#define DEFINE_WARNING(code, message)                                                                                  \
-    case ErrorCode::code:                                                                                              \
+#define DEFINE_WARNING(code, code_number, message)                                                                                                   \
+    case ErrorCode::code:                                                                                                                            \
         return message;
 #include "diagnostic_messages.def"
 #undef DEFINE_ERROR
