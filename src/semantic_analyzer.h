@@ -97,7 +97,6 @@ private:
     // Instruction errors
     [[nodiscard]] DiagnosticPtr reportInvalidNumberOfOperands(const std::shared_ptr<Instruction> &instruction, const std::string &numberOfOps);
     [[nodiscard]] DiagnosticPtr reportCantHaveTwoMemoryOperands(const std::shared_ptr<Instruction> &instruction);
-    [[nodiscard]] DiagnosticPtr reportDestinationOperandCantBeImmediate(const std::shared_ptr<Instruction> &instruction);
     [[nodiscard]] DiagnosticPtr reportImmediateOperandTooBigForOperand(const std::shared_ptr<Instruction> &instruction, int firstOpSize,
                                                                        int immediateOpSize);
     [[nodiscard]] DiagnosticPtr reportOneOfOperandsMustHaveSize(const std::shared_ptr<Instruction> &instruction);

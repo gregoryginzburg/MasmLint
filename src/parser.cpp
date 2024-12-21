@@ -217,7 +217,6 @@ std::shared_ptr<Statement> Parser::parseStatement()
                 return parseInstruction();
             }
         } else {
-            // TODO: change?
             Token firstToken = currentToken;
             while (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
                 advance();
@@ -257,7 +256,7 @@ std::shared_ptr<DataDir> Parser::parseDataDir(std::shared_ptr<std::unordered_map
     } else if (false) {
         // TODO: check whether first symbol is defined as STRUC or RECORD?
     } else if ((lookaheadMatch(1, dataDirectives) ||
-                lookaheadMatch(1, TokenType::Identifier) /* TODO: check that this identifier is defined STRUC or RECORD?*/)) {
+                lookaheadMatch(1, TokenType::Identifier))) {
         idToken = currentToken;
         if (!match(TokenType::Identifier)) {
             auto diag = reportExpectedIdentifierInDataDir(currentToken);
@@ -699,7 +698,6 @@ std::shared_ptr<DataItem> Parser::parseDataItem(const std::optional<Token> &idTo
         return INVALID_DATA_ITEM(diag);
     }
 
-    // TODO: determine whether is's a struct or record
     Token dataTypeToken = currentToken;
     advance();
     if (idToken && namedFields) {

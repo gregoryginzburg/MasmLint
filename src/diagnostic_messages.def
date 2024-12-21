@@ -97,7 +97,7 @@ DEFINE_ERROR(INITIALIZER_TOO_LARGE_FOR_SPECIFIED_SIZE, 37, "Initializer is too l
 // Instruction errors
 DEFINE_ERROR(INVALID_NUMBER_OF_OPERANDS, 38, "Invalid number of operands in the instruction")
 DEFINE_ERROR(CANT_HAVE_TWO_MEMORY_OPERANDS, 39, "Can't have 2 memory operands")
-DEFINE_ERROR(DESTINATION_OPERAND_CANT_BE_IMMEDIATE, 40, "Destination operand can't be immediate")
+DEFINE_ERROR(DESTINATION_OPERAND_CANT_BE_IMMEDIATE, 40, "Destination operand can't be immediate") // DELETED
 DEFINE_ERROR(IMMEDIATE_OPERAND_TOO_BIG_FOR_OPERAND, 41, "Immediate operand is too big for the destination operand")
 DEFINE_ERROR(ONE_OF_OPERANDS_MUST_HAVE_SIZE, 42, "At least 1 of the operands must have a specified size")
 DEFINE_ERROR(OPERANDS_HAVE_DIFFERENT_SIZE, 43, "Operands have different size")

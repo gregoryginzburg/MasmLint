@@ -156,7 +156,6 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
     Token mnemonicToken = instruction->mnemonicToken.value();
     std::string mnemonic = stringToUpper(mnemonicToken.lexeme);
 
-    // TODO: delete if some instruction accepts 8 bytes operand
     for (const auto &operand : instruction->operands) {
         if (operand->size) {
             int opSize = operand->size.value().value;
@@ -180,7 +179,7 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
             return false;
         }
         if (firstOp->type == OperandType::ImmediateOperand) {
-            instruction->diagnostic = reportDestinationOperandCantBeImmediate(instruction);
+            instruction->diagnostic = reportOperandMustBeMemoryOrRegisterOperand(firstOp);
             return false;
         }
 
@@ -190,7 +189,6 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
         }
 
         // find out actual size of constantValue
-        // TODO: constantValue can still have size (cause of PTR)
         if (secondOp->constantValue) {
             int64_t value = secondOp->constantValue.value();
             secondOp->size = getMinimumSizeForConstant(value); // don't modify the AST tree here?
@@ -755,7 +753,6 @@ bool SemanticAnalyzer::visitEquDir(const std::shared_ptr<EquDir> &equDir)
         equDir->diagnostic = reportExpressionMustBeConstant(equDir->value);
         return false;
     }
-    // TODO: report when is' bigger than 32 bits
     equSymbol->value = static_cast<int32_t>(equDir->value->constantValue.value());
     equSymbol->wasDefined = true;
     return true;
@@ -775,7 +772,6 @@ bool SemanticAnalyzer::visitEqualDir(const std::shared_ptr<EqualDir> &equalDir)
         equalDir->diagnostic = reportExpressionMustBeConstant(equalDir->value);
         return false;
     }
-    // TODO: report when is' bigger than 32 bits
     equalSymbol->value = static_cast<int32_t>(equalDir->value->constantValue.value());
     equalSymbol->wasDefined = true;
     return true;
@@ -1619,7 +1615,7 @@ bool SemanticAnalyzer::visitUnaryOperator(const std::shared_ptr<UnaryOperator> &
             node->diagnostic = reportUnaryOperatorIncorrectArgument(node);
             return false;
         }
-        // LENGTH(OF) doesn't work with StructSymbol, RecordSymbol, RecordFieldSymbol (TODO: add others?)
+        // LENGTH(OF) doesn't work with StructSymbol, RecordSymbol, RecordFieldSymbol
         std::shared_ptr<Symbol> symbol = parseSess->symbolTable->findSymbol(leaf->token);
         if (std::dynamic_pointer_cast<StructSymbol>(symbol) || std::dynamic_pointer_cast<RecordSymbol>(symbol) ||
             std::dynamic_pointer_cast<RecordFieldSymbol>(symbol)) {
@@ -1647,7 +1643,7 @@ bool SemanticAnalyzer::visitUnaryOperator(const std::shared_ptr<UnaryOperator> &
             node->diagnostic = reportUnaryOperatorIncorrectArgument(node);
             return false;
         }
-        // SIZE(OF) doesn't work with RecordFieldSymbol (TODO: add others?)
+        // SIZE(OF) doesn't work with RecordFieldSymbol
         std::shared_ptr<Symbol> symbol = parseSess->symbolTable->findSymbol(leaf->token);
         if (std::dynamic_pointer_cast<RecordFieldSymbol>(symbol)) {
             node->diagnostic = reportUnaryOperatorIncorrectArgument(node);

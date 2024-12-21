@@ -361,10 +361,8 @@ Token Tokenizer::getSpecialSymbolToken()
     return Token{type, lexeme, Span(start, pos, nullptr)};
 }
 
-// TODO fix isalpha to handle utf8
 bool Tokenizer::isValidIdentifierStart(char c) { return std::isalpha(static_cast<unsigned char>(c)) || c == '_' || c == '@' || c == '$' || c == '?'; }
 
-// TODO fix isalnum to handle utf8
 bool Tokenizer::isValidIdentifierChar(char c) { return std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '@' || c == '$' || c == '?'; }
 
 bool Tokenizer::isValidIdentifier(const std::string &lexeme)

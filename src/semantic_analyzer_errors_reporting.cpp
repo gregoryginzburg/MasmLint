@@ -159,14 +159,6 @@ DiagnosticPtr SemanticAnalyzer::reportCantHaveTwoMemoryOperands(const std::share
     return parseSess->dcx->getLastDiagnostic();
 }
 
-DiagnosticPtr SemanticAnalyzer::reportDestinationOperandCantBeImmediate(const std::shared_ptr<Instruction> &instruction)
-{
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::DESTINATION_OPERAND_CANT_BE_IMMEDIATE);
-    diag.addPrimaryLabel(getExpressionSpan(instruction->operands[0]), "");
-    parseSess->dcx->addDiagnostic(diag);
-    return parseSess->dcx->getLastDiagnostic();
-}
-
 DiagnosticPtr SemanticAnalyzer::reportImmediateOperandTooBigForOperand(const std::shared_ptr<Instruction> &instruction, int firstOpSize,
                                                                        int immediateOpSize)
 {
@@ -622,7 +614,6 @@ DiagnosticPtr SemanticAnalyzer::reportCantAddVariables(const ExpressionPtr &node
 
     if (implicit) {
         auto implicitOp = std::dynamic_pointer_cast<ImplicitPlusOperator>(node);
-        // TODO: what to underline when [var][var]
         diag.addPrimaryLabel(firstVar.value().span, "first variable");
         diag.addSecondaryLabel(secondVar.value().span, "second variable");
     } else {
@@ -691,7 +682,6 @@ DiagnosticPtr SemanticAnalyzer::reportMoreThanTwoRegistersAfterAdd(const Express
 
     if (implicit) {
         auto implicitOp = std::dynamic_pointer_cast<ImplicitPlusOperator>(node);
-        // TODO: what to underline when [var][var]
         bool first = true;
 
         for (const auto &[reg, scale] : implicitOp->left->registers) {
@@ -734,7 +724,6 @@ DiagnosticPtr SemanticAnalyzer::reportMoreThanOneScaleAfterAdd(const ExpressionP
 
     if (implicit) {
         auto implicitOp = std::dynamic_pointer_cast<ImplicitPlusOperator>(node);
-        // TODO: what to underline when [var][var]
         bool first = true;
 
         for (const auto &[reg, scale] : implicitOp->left->registers) {
