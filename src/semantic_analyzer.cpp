@@ -277,8 +277,19 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
             return false;
         }
         ExpressionPtr operand = instruction->operands[0];
-        if (operand->type != OperandType::MemoryOperand || !operand->registers.empty()) {
-            instruction->diagnostic = reportOperandMustBeAddressExpression(operand);
+
+        std::shared_ptr<Leaf> leaf = std::dynamic_pointer_cast<Leaf>(operand);
+        if (!leaf) {
+            instruction->diagnostic = reportOperandMustBeLabel(operand);
+            return false;
+        }
+        if (leaf->token.type != TokenType::Identifier) {
+            instruction->diagnostic = reportOperandMustBeLabel(operand);
+            return false;
+        }
+        auto symbol = parseSess->symbolTable->findSymbol(leaf->token);
+        if (!std::dynamic_pointer_cast<LabelSymbol>(symbol) && !std::dynamic_pointer_cast<ProcSymbol>(symbol)) {
+            instruction->diagnostic = reportOperandMustBeLabel(operand);
             return false;
         }
     } else if (mnemonic == "LEA") {
@@ -872,7 +883,16 @@ bool SemanticAnalyzer::visitInitValueHelper(const std::shared_ptr<InitValue> &in
             return false;
         }
 
-        bool success = visitExpression(expressionInitValue->expr, ExpressionContext(ExprCtxtFlags::AllowForwardReferences));
+        bool success;
+        if (stringToUpper(expectedTypeToken.lexeme) == "DB") {
+            success = visitExpression(expressionInitValue->expr,
+                                      ExpressionContext(ExprCtxtFlags::AllowForwardReferences | ExprCtxtFlags::IsDBDirectiveOperand));
+        } else if (stringToUpper(expectedTypeToken.lexeme) == "DQ") {
+            success = visitExpression(expressionInitValue->expr,
+                                      ExpressionContext(ExprCtxtFlags::AllowForwardReferences | ExprCtxtFlags::IsDQDirectiveOperand));
+        } else {
+            success = visitExpression(expressionInitValue->expr, ExpressionContext(ExprCtxtFlags::AllowForwardReferences));
+        }
         if (!success) {
             initValue->diagnostic = expressionInitValue->expr->diagnostic;
             return false;
@@ -880,13 +900,18 @@ bool SemanticAnalyzer::visitInitValueHelper(const std::shared_ptr<InitValue> &in
 
         ExpressionPtr expr = expressionInitValue->expr;
         // find out actual size of constantValue
-        // TODO: constantValue can still have size (cause of PTR)
         if (expr->constantValue) {
             int64_t value = expr->constantValue.value();
             expr->size = getMinimumSizeForConstant(value); // don't modify the AST tree here?
         } else if (auto leaf = std::dynamic_pointer_cast<Leaf>(expr)) {
             if (leaf->token.type == TokenType::StringLiteral) {
-                // TODO: how to handle???
+                // db "awdawd" - can fit any size (as an array)
+                // dw, dd, dq - cant fit only a single value
+                if (stringToUpper(expectedTypeToken.lexeme) == "DB") {
+                    expr->size = OperandSize("BYTE", 1);
+                } else {
+                    expr->size = OperandSize("", static_cast<int>(leaf->token.lexeme.size()) - 2);
+                }
             }
         }
 
@@ -902,7 +927,8 @@ bool SemanticAnalyzer::visitInitValueHelper(const std::shared_ptr<InitValue> &in
             return false;
         }
         std::shared_ptr<Leaf> leaf;
-        if ((leaf = std::dynamic_pointer_cast<Leaf>(expr)) && leaf->token.type == TokenType::StringLiteral) {
+        if ((leaf = std::dynamic_pointer_cast<Leaf>(expr)) && leaf->token.type == TokenType::StringLiteral &&
+            stringToUpper(expectedTypeToken.lexeme) == "DB") {
             dataInitializerSize += static_cast<int32_t>((leaf->token.lexeme.size() - 2)) * dupMultiplier;
         } else {
             dataInitializerSize += getSizeFromToken(expectedTypeToken).value * dupMultiplier;
@@ -1312,7 +1338,7 @@ bool SemanticAnalyzer::visitBinaryOperator(const std::shared_ptr<BinaryOperator>
         std::shared_ptr<Leaf> leafLeft;
         if (!(leafLeft = std::dynamic_pointer_cast<Leaf>(left)) ||
             !(leafLeft->token.type == TokenType::Type || leafLeft->token.type == TokenType::Identifier) ||
-            right->type == OperandType::RegisterOperand) {
+            right->type == OperandType::RegisterOperand || right->type == OperandType::ImmediateOperand) {
             node->diagnostic = reportPtrOperatorIncorrectArgument(node);
             return false;
         }
@@ -1419,9 +1445,9 @@ bool SemanticAnalyzer::visitBinaryOperator(const std::shared_ptr<BinaryOperator>
                     node->constantValue = left->constantValue.value() % right->constantValue.value();
                 }
             } else if (op == "SHL") {
-                node->constantValue = static_cast<uint64_t>(left->constantValue.value()) << right->constantValue.value();
+                node->constantValue = left->constantValue.value() << right->constantValue.value();
             } else if (op == "SHR") {
-                node->constantValue = static_cast<uint64_t>(left->constantValue.value()) >> right->constantValue.value();
+                node->constantValue = left->constantValue.value() >> right->constantValue.value();
             }
 
             node->constantValue = right->constantValue;
@@ -1805,29 +1831,50 @@ bool SemanticAnalyzer::visitLeaf(const std::shared_ptr<Leaf> &node, const Expres
         }
 
     } else if (token.type == TokenType::Number) {
-        auto numberValue = parseNumber(token.lexeme);
-        if (!numberValue) {
-            node->diagnostic = reportNumberTooLarge(token);
-            return false;
+        if (context.isDQDirectiveOperand && expressionDepth == 1) {
+            auto numberValue = parseNumber64bit(token.lexeme);
+            if (!numberValue) {
+                node->diagnostic = reportNumberTooLarge(token, 64);
+                return false;
+            }
+            node->constantValue = static_cast<int32_t>(numberValue.value());
+        } else {
+            auto numberValue = parseNumber32bit(token.lexeme);
+            if (!numberValue) {
+                node->diagnostic = reportNumberTooLarge(token, 32);
+                return false;
+            }
+            node->constantValue = numberValue.value();
         }
-        node->constantValue = static_cast<int64_t>(numberValue.value());
+
         node->isRelocatable = false;
         node->size = std::nullopt;
         node->type = OperandType::ImmediateOperand;
         node->registers = {};
     } else if (token.type == TokenType::StringLiteral) {
-        // if expressionDepth == 1 in DataDefiniton context - string literal can be any length
+        // if expressionDepth == 1 in DataDefiniton context with db data directive - string literal can be any length
         // any other - needs to be less than 4 bytes
         // size() + 2, because " " are in the lexeme
-        if ((context.allowRegisters && token.lexeme.size() > 4 + 2) || (expressionDepth > 1 && token.lexeme.size() > 4 + 2)) {
+        if ((context.allowRegisters || expressionDepth > 1 || !context.isDBDirectiveOperand) && token.lexeme.size() > 4 + 2) {
             node->diagnostic = reportStringTooLarge(token);
             return false;
         }
         if (!context.allowRegisters && expressionDepth == 1) {
+            // Handle logic higher (visitInitValue)
             node->constantValue = std::nullopt;
-            node->size = OperandSize("BYTE", 1);
+            node->size = std::nullopt;
         } else {
-            node->constantValue = -1; // TODO: convert string value to bytes and then to int32_t
+            // Convert string value to bytes and then to int32_t
+            std::string strValue = token.lexeme.substr(1, token.lexeme.size() - 2); // Remove quotes
+            int32_t intValue = 0;
+            size_t byteCount = strValue.size();
+
+            // Pack characters into int32_t
+            for (size_t i = 0; i < byteCount; ++i) {
+                intValue |= static_cast<uint8_t>(strValue[i]) << (8 * i);
+            }
+
+            node->constantValue = intValue;
             node->size = std::nullopt;
         }
         node->isRelocatable = false;

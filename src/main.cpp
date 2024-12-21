@@ -98,9 +98,7 @@ int main(int argc, char *argv[])
             parseSess->dcx->emitJsonDiagnostics();
 
         } else {
-            std::cout << "\n"; // todo: remove
             parseSess->dcx->emitDiagnostics();
-            std::cout << "\n"; // todo: remove
         }
     } else {
         if (jsonOutput) {

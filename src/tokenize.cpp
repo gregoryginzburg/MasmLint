@@ -309,7 +309,7 @@ Token Tokenizer::getSpecialSymbolToken()
     char currentChar = src[pos];
     advance();
 
-    std::string lexeme(1, currentChar);
+    std::string lexeme = src.substr(start, pos - start);
     TokenType type = TokenType::Operator;
 
     switch (currentChar) {

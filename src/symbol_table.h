@@ -51,22 +51,12 @@ struct EquVariableSymbol : public Symbol {
     EquVariableSymbol(Token token, std::shared_ptr<EquDir> equDir) : equDir(std::move(equDir)) { this->token = std::move(token); }
     std::shared_ptr<EquDir> equDir;
     int32_t value = -1;
-
-    int32_t size = 4;
-    int32_t sizeOf = 4;
-    int32_t length = 1;
-    int32_t lengthOf = 1;
 };
 
 struct EqualVariableSymbol : public Symbol {
     EqualVariableSymbol(Token token, std::shared_ptr<EqualDir> equalDir) : equalDir(std::move(equalDir)) { this->token = std::move(token); }
     std::shared_ptr<EqualDir> equalDir;
     int32_t value = -1;
-
-    int32_t size = 4;
-    int32_t sizeOf = 4;
-    int32_t length = 1;
-    int32_t lengthOf = 1;
 };
 
 struct StructSymbol : public Symbol {

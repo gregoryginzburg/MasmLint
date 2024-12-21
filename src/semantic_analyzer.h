@@ -12,6 +12,8 @@ enum class ExprCtxtFlags {
     AllowRegisters = 1 << 0,
     AllowForwardReferences = 1 << 1,
     IsStructField = 1 << 2,
+    IsDQDirectiveOperand = 1 << 3,
+    IsDBDirectiveOperand = 1 << 4
 };
 
 inline ExprCtxtFlags operator|(ExprCtxtFlags a, ExprCtxtFlags b) { return static_cast<ExprCtxtFlags>(static_cast<int>(a) | static_cast<int>(b)); }
@@ -21,7 +23,9 @@ inline ExprCtxtFlags operator&(ExprCtxtFlags a, ExprCtxtFlags b) { return static
 struct ExpressionContext {
     explicit ExpressionContext(ExprCtxtFlags flags)
         : allowRegisters(bool(flags & ExprCtxtFlags::AllowRegisters)), isStructField(bool(flags & ExprCtxtFlags::IsStructField)),
-          allowForwardReferences(bool(flags & ExprCtxtFlags::AllowForwardReferences))
+          allowForwardReferences(bool(flags & ExprCtxtFlags::AllowForwardReferences)),
+          isDQDirectiveOperand(bool(flags & ExprCtxtFlags::IsDQDirectiveOperand)),
+          isDBDirectiveOperand(bool(flags & ExprCtxtFlags::IsDBDirectiveOperand))
 
     {
     }
@@ -29,6 +33,8 @@ struct ExpressionContext {
     bool allowRegisters;
     bool isStructField;
     bool allowForwardReferences;
+    bool isDQDirectiveOperand;
+    bool isDBDirectiveOperand;
 };
 
 using DiagnosticPtr = std::shared_ptr<Diagnostic>;
@@ -99,7 +105,6 @@ private:
     [[nodiscard]] DiagnosticPtr reportOperandMustBeMemoryOrRegisterOperand(const ExpressionPtr &operand);
     [[nodiscard]] DiagnosticPtr reportOperandMustHaveSize(const ExpressionPtr &operand);
     [[nodiscard]] DiagnosticPtr reportInvalidOperandSize(const ExpressionPtr &operand, const std::string &expectedSize, int actualSize);
-    [[nodiscard]] DiagnosticPtr reportOperandMustBeAddressExpression(const ExpressionPtr &operand);
     [[nodiscard]] DiagnosticPtr reportOperandMustBeRegister(const ExpressionPtr &operand);
     [[nodiscard]] DiagnosticPtr reportOperandMustBeMemoryOperand(const ExpressionPtr &operand);
     [[nodiscard]] DiagnosticPtr reportFirstOperandMustBeBiggerThanSecond(const std::shared_ptr<Instruction> &instruction, int firstOpSize,
@@ -119,7 +124,7 @@ private:
     [[nodiscard]] DiagnosticPtr reportExpressionMustBeConstant(ExpressionPtr &expr);
     [[nodiscard]] DiagnosticPtr reportUndefinedSymbol(const Token &token, bool isDefinedLater);
     [[nodiscard]] DiagnosticPtr reportRegisterNotAllowed(const Token &reg);
-    [[nodiscard]] DiagnosticPtr reportNumberTooLarge(const Token &number);
+    [[nodiscard]] DiagnosticPtr reportNumberTooLarge(const Token &number, int maxSize);
     [[nodiscard]] DiagnosticPtr reportStringTooLarge(const Token &string);
     [[nodiscard]] DiagnosticPtr reportUnaryOperatorIncorrectArgument(const std::shared_ptr<UnaryOperator> &node);
 
@@ -178,7 +183,7 @@ private:
 };
 
 // TODO: move this function somewhere else
-inline std::optional<uint64_t> parseNumber(const std::string &input)
+inline std::optional<uint64_t> parseNumber64bit(const std::string &input)
 {
     if (input.empty()) {
         LOG_DETAILED_ERROR("Input string is empty!");
@@ -218,6 +223,64 @@ inline std::optional<uint64_t> parseNumber(const std::string &input)
     char *end = nullptr;
     errno = 0;
     uint64_t result = std::strtoull(numberPart.c_str(), &end, base);
+
+    if (errno == ERANGE) {
+        // overflow occured
+        return std::nullopt;
+    } else if (errno != 0) {
+        return std::nullopt;
+    }
+
+    // Check for conversion errors
+    if (*end != '\0') {
+        LOG_DETAILED_ERROR("Invalid number format!");
+        return std::nullopt;
+    }
+
+    return result;
+}
+
+// TODO: move this function somewhere else
+inline std::optional<uint32_t> parseNumber32bit(const std::string &input)
+{
+    if (input.empty()) {
+        LOG_DETAILED_ERROR("Input string is empty!");
+        return std::nullopt;
+    }
+
+    char suffix = static_cast<char>(tolower(input.back()));
+    int base = 10;
+    std::string numberPart = input;
+
+    switch (suffix) {
+    case 'h':
+        base = 16;
+        break;
+    case 'b':
+    case 'y':
+        base = 2;
+        break;
+    case 'o':
+    case 'q':
+        base = 8;
+        break;
+    case 'd':
+    case 't':
+        base = 10;
+        break;
+    default:
+        break;
+    }
+
+    // If there's a valid suffix, remove it from the number part
+    if (suffix == 'h' || suffix == 'b' || suffix == 'y' || suffix == 'o' || suffix == 'q' || suffix == 'd' || suffix == 't') {
+        numberPart = input.substr(0, input.size() - 1);
+    }
+
+    // Convert the string to a number
+    char *end = nullptr;
+    errno = 0;
+    uint32_t result = std::strtoul(numberPart.c_str(), &end, base);
 
     if (errno == ERANGE) {
         // overflow occured

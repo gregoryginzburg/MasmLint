@@ -294,7 +294,7 @@ public:
     Expression() = default;
     Expression(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
     // expression attributes for semantic analysis
-    std::optional<int64_t> constantValue;
+    std::optional<int32_t> constantValue;
     bool unresolvedSymbols = false;
     bool isRelocatable = false;
     std::map<Token, std::optional<int32_t>> registers;

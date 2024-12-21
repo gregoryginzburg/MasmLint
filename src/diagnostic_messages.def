@@ -104,7 +104,7 @@ DEFINE_ERROR(OPERANDS_HAVE_DIFFERENT_SIZE, 43, "Operands have different size")
 DEFINE_ERROR(OPERAND_MUST_BE_MEMORY_OR_REGISTER_OPERAND, 44, "Operand must be a memory or a register")
 DEFINE_ERROR(OPERAND_MUST_HAVE_SIZE, 45, "Operand must have a specified size")
 DEFINE_ERROR(INVALID_OPERAND_SIZE, 46, "Invalid operand size")
-DEFINE_ERROR(OPERAND_MUST_BE_ADDRESS_EXPRESSION, 47, "Operand must be an address expression")
+DEFINE_ERROR(OPERAND_MUST_BE_ADDRESS_EXPRESSION, 47, "Operand must be an address expression") // DELETED
 DEFINE_ERROR(OPERAND_MUST_BE_REGISTER, 48, "Operand must be a register")
 DEFINE_ERROR(OPERAND_MUST_BE_MEMORY_OPERAND, 49, "Operand must be a memory")
 DEFINE_ERROR(FIRST_OPERAND_MUST_BE_BIGGER_THAN_SECOND, 74, "First operand must be bigger than second")
