@@ -1,6 +1,6 @@
 .DATA
 
 .CODE
-    mov eax, dword ptr [1]
+    mov eax, eax * ebx
 
 END
