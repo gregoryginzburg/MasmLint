@@ -26,7 +26,7 @@ public:
 
     std::size_t getLineStart(std::size_t lineNumber) const;
 
-    static std::size_t countCodePoints(const std::string &str, std::size_t startByte, std::size_t endByte);
+    std::size_t countCodePoints(std::size_t startByte, std::size_t endByte) const;
 
 private:
     std::filesystem::path path;

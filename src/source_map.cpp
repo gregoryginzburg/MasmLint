@@ -68,12 +68,12 @@ std::size_t SourceFile::getLineStart(std::size_t lineNumber) const
     return lineStarts[lineNumber];
 }
 
-std::size_t SourceFile::countCodePoints(const std::string &str, std::size_t startByte, std::size_t endByte)
+std::size_t SourceFile::countCodePoints(std::size_t startByte, std::size_t endByte) const
 {
     std::size_t codePointCount = 0;
     std::size_t i = startByte;
     while (i < endByte) {
-        auto c = static_cast<unsigned char>(str[i]);
+        auto c = static_cast<unsigned char>(src[i]);
         std::size_t charSize = 1;
         if ((c & 0x80U) == 0x00) {
             charSize = 1; // ASCII character
@@ -100,10 +100,9 @@ std::size_t SourceFile::getColumnNumber(std::size_t pos) const
 {
     std::size_t lineNumber = getLineNumber(pos);
     std::size_t lineStartPos = lineStarts[lineNumber];
-    std::size_t localPos = pos - startPos;
 
     // Count code points between lineStartPos and localPos
-    return countCodePoints(src, lineStartPos, localPos);
+    return countCodePoints(lineStartPos, pos);
 }
 
 std::size_t SourceFile::getColumnPosition(std::size_t pos) const
@@ -179,8 +178,7 @@ std::pair<std::size_t, std::size_t> SourceMap::lookupLineColumn(std::size_t pos)
     }
 }
 
-void SourceMap::spanToLocation(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
-                               std::size_t &outColumn) const
+void SourceMap::spanToLocation(const Span &span, std::filesystem::path &outPath, std::size_t &outLine, std::size_t &outColumn) const
 {
     // check if span corresponds to EndOfFile
     // if (files->())
@@ -196,14 +194,14 @@ void SourceMap::spanToLocation(const Span &span, std::filesystem::path &outPath,
     }
 }
 
-void SourceMap::spanToEndLocation(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
-                                  std::size_t &outColumn) const
+void SourceMap::spanToEndLocation(const Span &span, std::filesystem::path &outPath, std::size_t &outLine, std::size_t &outColumn) const
 {
-    auto file = lookupSourceFile(span.hi - 1);
+    // Assume EndLocation is on the same line
+    auto file = lookupSourceFile(span.lo);
     if (file) {
-        outPath = file->getPath();
-        outLine = file->getLineNumber(span.hi - 1);         // Zero-based
-        outColumn = file->getColumnNumber(span.hi - 1) + 1; // Zero-based
+        spanToLocation(span, outPath, outLine, outColumn);
+        std::string spanSubstr = file->getSource().substr(span.lo, span.hi - span.lo);
+        outColumn += file->countCodePoints(span.lo, span.hi);
     } else {
         outPath.clear();
         outLine = 0;
@@ -211,8 +209,7 @@ void SourceMap::spanToEndLocation(const Span &span, std::filesystem::path &outPa
     }
 }
 
-void SourceMap::spanToStartPosition(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
-                                    std::size_t &outColumn) const
+void SourceMap::spanToStartPosition(const Span &span, std::filesystem::path &outPath, std::size_t &outLine, std::size_t &outColumn) const
 {
     auto file = lookupSourceFile(span.lo);
     if (file) {
@@ -226,20 +223,20 @@ void SourceMap::spanToStartPosition(const Span &span, std::filesystem::path &out
     }
 }
 
-void SourceMap::spanToEndPosition(const Span &span, std::filesystem::path &outPath, std::size_t &outLine,
-                                  std::size_t &outColumn) const
+void SourceMap::spanToEndPosition(const Span &span, std::filesystem::path &outPath, std::size_t &outLine, std::size_t &outColumn) const
 {
-    auto file = lookupSourceFile(span.hi - 1);
+    // Assume EndPosition is on the same line
+    auto file = lookupSourceFile(span.lo);
     if (file) {
-        outPath = file->getPath();
-        outLine = file->getLineNumber(span.hi - 1); // Zero-based
-        // (need to add one because in the span (4, 5) startLocation is column 4 but endLocation column should be 5)
-        outColumn = file->getColumnPosition(span.hi - 1) + 1; // Zero-based
+        spanToStartPosition(span, outPath, outLine, outColumn);
+        outColumn += span.hi - span.lo;
     } else {
         outPath.clear();
         outLine = 0;
         outColumn = 0;
     }
+    spanToStartPosition(span, outPath, outLine, outColumn);
+    outColumn += span.hi - span.lo;
 }
 
 std::string SourceMap::spanToSnippet(const Span &span) const

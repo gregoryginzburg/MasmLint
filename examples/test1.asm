@@ -1,6 +1,1 @@
-.DATA
-
-.CODE
-    mov eax, eax * ebx
-
-END
+한 1

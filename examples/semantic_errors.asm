@@ -20,6 +20,11 @@ INCLUDE io2023.inc
     dq +0fffffffffffffffffh
     dq 0fffffffffffffffffh
 
+    한 1
+    Ю 1 2
+    dw "Ю"
+    dw "한"
+
     db "1"
     db "12"
     db "123"

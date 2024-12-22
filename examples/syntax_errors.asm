@@ -13,27 +13,11 @@ INCLUDE io2023.inc
     awd <1, 2>
     a DUP
     b 1 DUP 
-    c (1 + 2) DUP (1, 2
+    db (1 + 2) DUP (1, 2
     db 1
     byte dw 3
 
 .CODE
-    a1 STRUC
-        db 1
-    a1 ENDS
-
-    a2 STRUC
-        db 1
-    b ENDS
-
-    a STRUC
-        db 1
-    ENDS
-
-    STRUC
-
-    adwa RECORD anothersym:321, 
-
 
 start:
     ; fixed things
@@ -52,5 +36,25 @@ start:
     mov eax, x[ebx].a[esi]
 
     inchar al
+
+.DATA
+    a1 STRUC
+        db 1
+    a1 ENDS
+
+    a2 STRUC
+        db 1
+    b ENDS
+
+    a STRUC
+        db 1
+    ENDS
+
+    STRUC
+
+    adwa RECORD anothersym:321, 
+
+
+
 ; END start
 
