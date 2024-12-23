@@ -44,9 +44,6 @@ int main(int argc, char *argv[])
             filename = std::string(argv[i]);
         }
     }
-    // TODO: Remove in release
-    std::filesystem::path new_path = R"(C:\Users\grigo\Documents\MasmLint)";
-    std::filesystem::current_path(new_path);
 
     auto parseSess = std::make_shared<ParseSession>();
     std::shared_ptr<SourceFile> sourceFile;
@@ -65,10 +62,7 @@ int main(int argc, char *argv[])
         sourceFile = parseSess->sourceMap->loadFile(filename);
     }
 
-    float totalTime = 0;
-
     if (sourceFile) {
-        Timer timer;
         Tokenizer tokenizer(parseSess, sourceFile->getSource());
         std::vector<Token> tokens = tokenizer.tokenize();
 
@@ -80,14 +74,6 @@ int main(int argc, char *argv[])
 
         SemanticAnalyzer semanticAnalyzer(parseSess, ast);
         semanticAnalyzer.analyze();
-
-        totalTime = timer.elapsed();
-
-        if (!jsonOutput) {
-            printAST(ast, 0);
-            std::cout << "\n";
-            parseSess->symbolTable->printSymbols();
-        }
     } else {
         Diagnostic diag(Diagnostic::Level::Error, ErrorCode::FAILED_TO_OPEN_FILE, filename.string());
         parseSess->dcx->addDiagnostic(diag);
@@ -107,7 +93,5 @@ int main(int argc, char *argv[])
             fmt::print("Parsing completed successfully with no errors.\n");
         }
     }
-
-    std::cerr << "Total time: " << totalTime << " seconds \n";
     return 0;
 }
