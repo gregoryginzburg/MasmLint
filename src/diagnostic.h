@@ -30,7 +30,7 @@ public:
     Level getLevel() const;
     ErrorCode getCode() const;
     const std::string &getMessage() const;
-    const std::pair<Span, std::string> &getPrimaryLabel() const;
+    const std::optional<std::pair<Span, std::string>> &getPrimaryLabel() const;
     const std::vector<std::pair<Span, std::string>> &getSecondaryLabels() const;
     const std::optional<std::string> &getNoteMessage() const;
     const std::optional<std::string> &getHelpMessage() const;
@@ -42,7 +42,7 @@ private:
     Level level;
     ErrorCode code;
     std::string message;
-    std::pair<Span, std::string> primaryLabel;
+    std::optional<std::pair<Span, std::string>> primaryLabel;
     std::vector<std::pair<Span, std::string>> secondaryLabels;
 
     std::optional<std::string> noteMessage;

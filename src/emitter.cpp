@@ -23,7 +23,9 @@ void Emitter::emit(const std::shared_ptr<Diagnostic> &diag)
         return;
     }
     printHeader(diag);
-    printDiagnosticBody(diag);
+    if (diag->getPrimaryLabel()) {
+        printDiagnosticBody(diag);
+    }
     if (diag->getNoteMessage()) {
         printNote(diag);
     }
@@ -79,7 +81,7 @@ void Emitter::printDiagnosticBody(const std::shared_ptr<Diagnostic> &diag)
 
     size_t maxLineNumber = 0;
     // primary label
-    const auto &[primarySpan, primaryLabelMsg] = diag->getPrimaryLabel();
+    const auto &[primarySpan, primaryLabelMsg] = diag->getPrimaryLabel().value();
     std::filesystem::path primaryFilePath;
     std::size_t primaryLineNumberZeroBased = 0, primaryColumnNumberZeroBased = 0;
     sourceMap->spanToLocation(primarySpan, primaryFilePath, primaryLineNumberZeroBased, primaryColumnNumberZeroBased);
@@ -386,6 +388,10 @@ void Emitter::emitJSON(const std::vector<std::shared_ptr<Diagnostic>> &diagnosti
     nlohmann::json output = nlohmann::json::array();
 
     for (const auto &diag : diagnostics) {
+        if (!diag->getPrimaryLabel()) {
+            continue;
+        }
+
         nlohmann::json diagJson;
 
         diagJson["message"] = diag->getMessage();
@@ -401,7 +407,7 @@ void Emitter::emitJSON(const std::vector<std::shared_ptr<Diagnostic>> &diagnosti
         }
 
         // Primary label
-        const auto &primaryLabel = diag->getPrimaryLabel();
+        const auto &primaryLabel = diag->getPrimaryLabel().value();
         nlohmann::json primaryLabelJson;
 
         std::filesystem::path filePath;

@@ -20,7 +20,7 @@ ErrorCode Diagnostic::getCode() const { return code; }
 
 const std::string &Diagnostic::getMessage() const { return message; }
 
-const std::pair<Span, std::string> &Diagnostic::getPrimaryLabel() const { return primaryLabel; }
+const std::optional<std::pair<Span, std::string>> &Diagnostic::getPrimaryLabel() const { return primaryLabel; }
 
 const std::vector<std::pair<Span, std::string>> &Diagnostic::getSecondaryLabels() const { return secondaryLabels; }
 
