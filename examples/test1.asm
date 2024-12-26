@@ -1,1 +1,3 @@
-한 1
+.CODE
+    inchar eax
+END

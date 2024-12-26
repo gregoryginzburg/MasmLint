@@ -464,11 +464,11 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
         }
         int operandSize = operand->size.value().value;
         if (operand->constantValue && operandSize > 1) {
-            instruction->diagnostic = reportInvalidOperandSize(operand, "4", operandSize); // TODO: change this too immediate operand two big?
+            instruction->diagnostic = reportInvalidOperandSize(operand, "1", operandSize); // TODO: change this too immediate operand two big?
             return false;
         }
         if (!operand->constantValue && operandSize != 1) {
-            instruction->diagnostic = reportInvalidOperandSize(operand, "4", operandSize);
+            instruction->diagnostic = reportInvalidOperandSize(operand, "1", operandSize);
             return false;
         }
     } else if (mnemonic == "ININT") { // like `CALL`
