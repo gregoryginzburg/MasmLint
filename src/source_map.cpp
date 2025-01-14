@@ -4,6 +4,7 @@
 
 #include <fstream>
 #include <filesystem>
+#include <algorithm>
 
 SourceFile::SourceFile(std::filesystem::path path, const std::string &src, std::size_t startPos)
     : path(std::move(path)), src(src), startPos(startPos), endPos(startPos + src.size())
