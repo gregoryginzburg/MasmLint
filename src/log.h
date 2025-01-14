@@ -1,4 +1,5 @@
 #pragma once
+#include <fmt/core.h>
 
 /*
 Regular logging macros
