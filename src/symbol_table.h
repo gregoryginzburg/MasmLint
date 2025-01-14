@@ -12,11 +12,16 @@ struct Symbol {
     bool wasVisited = false;
     bool wasDefined = false; // when it's defined, its value is evaluated, also avoid visiting ExpressionPtr twice
     // bool wasEvaluated = false; // when error happens
+    Symbol() = default;
+    Symbol(const Symbol&) = delete;
+    Symbol& operator=(const Symbol&) = delete;
+    Symbol(Symbol&&) = delete;
+    Symbol& operator=(Symbol&&) = delete;
     virtual ~Symbol() = default;
 };
 
 struct LabelSymbol : public Symbol {
-    LabelSymbol(Token token) { this->token = std::move(token); }
+    explicit LabelSymbol(Token token) { this->token = std::move(token); }
     int32_t value = -1;
 
     int32_t size = 4;
@@ -26,7 +31,7 @@ struct LabelSymbol : public Symbol {
 };
 
 struct ProcSymbol : public Symbol {
-    ProcSymbol(Token token) { this->token = std::move(token); }
+    explicit ProcSymbol(Token token) { this->token = std::move(token); }
     int32_t value = -1;
 
     int32_t size = 4;
@@ -78,7 +83,7 @@ struct StructSymbol : public Symbol {
 };
 
 struct RecordSymbol : public Symbol {
-    RecordSymbol(Token token, std::shared_ptr<RecordDir> recordDir, std::vector<std::shared_ptr<RecordField>> fields) : recordDir(std::move(recordDir)), fields(std::move(fields)) { this->token = std::move(token); }
+    RecordSymbol(Token token, std::shared_ptr<RecordDir> recordDir, std::vector<std::shared_ptr<RecordField>> fields) : fields(std::move(fields)), recordDir(std::move(recordDir)) { this->token = std::move(token); }
     std::vector<std::shared_ptr<RecordField>> fields;
     std::shared_ptr<RecordDir> recordDir;
 

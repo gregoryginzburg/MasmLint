@@ -200,7 +200,6 @@ void SourceMap::spanToEndLocation(const Span &span, std::filesystem::path &outPa
     auto file = lookupSourceFile(span.lo);
     if (file) {
         spanToLocation(span, outPath, outLine, outColumn);
-        std::string spanSubstr = file->getSource().substr(span.lo, span.hi - span.lo);
         outColumn += file->countCodePoints(span.lo, span.hi);
     } else {
         outPath.clear();

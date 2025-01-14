@@ -4,33 +4,37 @@
 #include <algorithm>
 #include "span.h"
 
-enum class TokenType : uint8_t {
-    Identifier,
-    Directive,
-    Instruction,
-    Type,
-    Register,
-    Number,
-    StringLiteral,
-    Operator,
-    OpenBracket,        // '('
-    CloseBracket,       // ')'
-    OpenSquareBracket,  // '['
-    CloseSquareBracket, // ']'
-    OpenAngleBracket,   // '<'
-    CloseAngleBracket,  // '>'
-    Comma,              // ','
-    Colon,              // ':'
-    Dollar,             // '$'
-    QuestionMark,       // '?'
-    EndOfFile,
-    EndOfLine,
-    Comment,
-    Invalid
-};
-
+// TODO: why is this warning happening?
+// NOLINTNEXTLINE(clang-analyzer-core.uninitialized.Assign)
 struct Token {
-    enum TokenType type;
+    // Define like this, because Token::Type name conflicts with windows headers
+    // enum TOKEN_INFORMATION_CLASS::Token::Type = 8 from winnt.h conflicts with enum class Token::Type
+    enum class Type : uint8_t {
+        Identifier,
+        Directive,
+        Instruction,
+        Type,
+        Register,
+        Number,
+        StringLiteral,
+        Operator,
+        OpenBracket,        // '('
+        CloseBracket,       // ')'
+        OpenSquareBracket,  // '['
+        CloseSquareBracket, // ']'
+        OpenAngleBracket,   // '<'
+        CloseAngleBracket,  // '>'
+        Comma,              // ','
+        Colon,              // ':'
+        Dollar,             // '$'
+        QuestionMark,       // '?'
+        EndOfFile,
+        EndOfLine,
+        Comment,
+        Invalid
+    };
+
+    Type type{Token::Type::Invalid};
     std::string lexeme;
     Span span;
     bool operator<(const Token &other) const
@@ -51,56 +55,56 @@ inline std::string stringToUpper(const std::string &str)
 
 inline bool isReservedWord(const Token &token)
 {
-    return token.lexeme.size() != 1 && token.type != TokenType::Number && token.type != TokenType::StringLiteral &&
-           token.type != TokenType::Identifier && token.type != TokenType::EndOfLine && token.type != TokenType::EndOfFile;
+    return token.lexeme.size() != 1 && token.type != Token::Type::Number && token.type != Token::Type::StringLiteral &&
+           token.type != Token::Type::Identifier && token.type != Token::Type::EndOfLine && token.type != Token::Type::EndOfFile;
 }
 
-inline std::string tokenTypeToStr(enum TokenType type)
+inline std::string tokenTypeToStr(enum Token::Type type)
 {
     switch (type) {
-    case TokenType::Identifier:
+    case Token::Type::Identifier:
         return "Identifier";
-    case TokenType::Directive:
+    case Token::Type::Directive:
         return "Directive";
-    case TokenType::Instruction:
+    case Token::Type::Instruction:
         return "Instruction";
-    case TokenType::Type:
+    case Token::Type::Type:
         return "Type";
-    case TokenType::Register:
+    case Token::Type::Register:
         return "Register";
-    case TokenType::Number:
+    case Token::Type::Number:
         return "Number";
-    case TokenType::StringLiteral:
+    case Token::Type::StringLiteral:
         return "StringLiteral";
-    case TokenType::Operator:
+    case Token::Type::Operator:
         return "Operator";
-    case TokenType::OpenBracket:
+    case Token::Type::OpenBracket:
         return "(";
-    case TokenType::CloseBracket:
+    case Token::Type::CloseBracket:
         return ")";
-    case TokenType::OpenSquareBracket:
+    case Token::Type::OpenSquareBracket:
         return "[";
-    case TokenType::CloseSquareBracket:
+    case Token::Type::CloseSquareBracket:
         return "]";
-    case TokenType::OpenAngleBracket:
+    case Token::Type::OpenAngleBracket:
         return "<";
-    case TokenType::CloseAngleBracket:
+    case Token::Type::CloseAngleBracket:
         return ">";
-    case TokenType::Comma:
+    case Token::Type::Comma:
         return ",";
-    case TokenType::Colon:
+    case Token::Type::Colon:
         return ":";
-    case TokenType::Dollar:
+    case Token::Type::Dollar:
         return "$";
-    case TokenType::QuestionMark:
+    case Token::Type::QuestionMark:
         return "?";
-    case TokenType::EndOfFile:
+    case Token::Type::EndOfFile:
         return "EndOfFile";
-    case TokenType::EndOfLine:
+    case Token::Type::EndOfLine:
         return "\\n";
-    case TokenType::Comment:
+    case Token::Type::Comment:
         return "Comment";
-    case TokenType::Invalid:
+    case Token::Type::Invalid:
         return "Invalid Token";
     default:
         return "Unknown";

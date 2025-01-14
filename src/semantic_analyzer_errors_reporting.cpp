@@ -8,12 +8,12 @@ std::string SemanticAnalyzer::getOperandType(const ExpressionPtr &node)
     std::shared_ptr<Leaf> leaf;
     std::shared_ptr<Symbol> symbol;
     if ((leaf = std::dynamic_pointer_cast<Leaf>(node))) {
-        if (leaf->token.type == TokenType::Identifier) {
+        if (leaf->token.type == Token::Type::Identifier) {
             symbol = parseSess->symbolTable->findSymbol(leaf->token);
         }
     }
 
-    std::string identifierInfo = "";
+    std::string identifierInfo;
     if (symbol) {
         identifierInfo = " (" + getSymbolType(symbol) + ")";
     }
@@ -219,7 +219,8 @@ DiagnosticPtr SemanticAnalyzer::reportOperandMustHaveSize(const ExpressionPtr &o
 DiagnosticPtr SemanticAnalyzer::reportInvalidOperandSize(const ExpressionPtr &operand, const std::string &expectedSize, int actualSize)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_OPERAND_SIZE);
-    diag.addPrimaryLabel(getExpressionSpan(operand), fmt::format("expected operand with size `{}`, found operand with size `{}`", expectedSize, actualSize));
+    diag.addPrimaryLabel(getExpressionSpan(operand),
+                         fmt::format("expected operand with size `{}`, found operand with size `{}`", expectedSize, actualSize));
     parseSess->dcx->addDiagnostic(diag);
     return parseSess->dcx->getLastDiagnostic();
 }
@@ -307,7 +308,7 @@ DiagnosticPtr SemanticAnalyzer::reportRecordFieldWidthTooBig(const std::shared_p
 
 // Expression errors
 
-DiagnosticPtr SemanticAnalyzer::reportExpressionMustBeConstant(ExpressionPtr &expr)
+DiagnosticPtr SemanticAnalyzer::reportExpressionMustBeConstant(const ExpressionPtr &expr)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPRESSION_MUST_BE_CONSTANT);
     diag.addPrimaryLabel(getExpressionSpan(expr), fmt::format("expected `constant expression`, found `{}`", getOperandType(expr)));
@@ -398,7 +399,7 @@ DiagnosticPtr SemanticAnalyzer::reportDotOperatorIncorrectArgument(const std::sh
     if (left->constantValue || left->type == OperandType::RegisterOperand) {
         diag.addSecondaryLabel(getExpressionSpan(left), fmt::format("expected `memory`, found `{}`", getOperandType(left)));
     }
-    if (!(leaf = std::dynamic_pointer_cast<Leaf>(right)) || leaf->token.type != TokenType::Identifier) {
+    if (!(leaf = std::dynamic_pointer_cast<Leaf>(right)) || leaf->token.type != Token::Type::Identifier) {
         diag.addSecondaryLabel(getExpressionSpan(right), fmt::format("expected `identifier`, found `{}`", getOperandType(right)));
     }
 
@@ -445,7 +446,7 @@ DiagnosticPtr SemanticAnalyzer::reportPtrOperatorIncorrectArgument(const std::sh
     diag.addPrimaryLabel(node->op.span, "");
 
     std::shared_ptr<Leaf> leaf;
-    if (!(leaf = std::dynamic_pointer_cast<Leaf>(left)) || !(leaf->token.type == TokenType::Type || leaf->token.type == TokenType::Identifier)) {
+    if (!(leaf = std::dynamic_pointer_cast<Leaf>(left)) || !(leaf->token.type == Token::Type::Type || leaf->token.type == Token::Type::Identifier)) {
         diag.addSecondaryLabel(getExpressionSpan(left), fmt::format("expected `type`, found `{}`", getOperandType(left)));
     }
     if (auto leafLeft = std::dynamic_pointer_cast<Leaf>(left)) {

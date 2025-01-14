@@ -15,7 +15,7 @@ public:
     std::vector<Token> preprocess();
 
     void advance();
-    bool match(TokenType type) const;
+    bool match(Token::Type type) const;
     bool match(const std::string &value) const;
 
 private:

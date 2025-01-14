@@ -7,18 +7,28 @@
 #include "session.h"
 #include <unordered_set>
 
-enum class ExprCtxtFlags {
+// NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
+enum class ExprCtxtFlags : uint8_t {
     None = 0,
-    AllowRegisters = 1 << 0,
-    AllowForwardReferences = 1 << 1,
-    IsStructField = 1 << 2,
-    IsDQDirectiveOperand = 1 << 3,
-    IsDBDirectiveOperand = 1 << 4
+    AllowRegisters = 1u << 0u,
+    AllowForwardReferences = 1u << 1u,
+    IsStructField = 1u << 2u,
+    IsDQDirectiveOperand = 1u << 3u,
+    IsDBDirectiveOperand = 1u << 4u,
+    AllFlags = 255
 };
 
-inline ExprCtxtFlags operator|(ExprCtxtFlags a, ExprCtxtFlags b) { return static_cast<ExprCtxtFlags>(static_cast<int>(a) | static_cast<int>(b)); }
+// Ignore out of range enum classes (that don't correspond to any named fields in the enum class)
+// NOLINTNEXTLINE
+inline ExprCtxtFlags operator|(ExprCtxtFlags a, ExprCtxtFlags b)
+{
+    return static_cast<ExprCtxtFlags>(static_cast<uint8_t>(a) | static_cast<uint8_t>(b));
+}
 
-inline ExprCtxtFlags operator&(ExprCtxtFlags a, ExprCtxtFlags b) { return static_cast<ExprCtxtFlags>(static_cast<int>(a) & static_cast<int>(b)); }
+inline ExprCtxtFlags operator&(ExprCtxtFlags a, ExprCtxtFlags b)
+{
+    return static_cast<ExprCtxtFlags>(static_cast<uint8_t>(a) & static_cast<uint8_t>(b));
+}
 
 struct ExpressionContext {
     explicit ExpressionContext(ExprCtxtFlags flags)
@@ -120,7 +130,7 @@ private:
     [[nodiscard]] DiagnosticPtr reportRecordFieldWidthTooBig(const std::shared_ptr<RecordField> &recordField, int64_t width);
 
     // Expression errors
-    [[nodiscard]] DiagnosticPtr reportExpressionMustBeConstant(ExpressionPtr &expr);
+    [[nodiscard]] DiagnosticPtr reportExpressionMustBeConstant(const ExpressionPtr &expr);
     [[nodiscard]] DiagnosticPtr reportUndefinedSymbol(const Token &token, bool isDefinedLater);
     [[nodiscard]] DiagnosticPtr reportRegisterNotAllowed(const Token &reg);
     [[nodiscard]] DiagnosticPtr reportNumberTooLarge(const Token &number, int maxSize);

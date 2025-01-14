@@ -2,7 +2,6 @@
 #include "symbol_table.h"
 #include "diag_ctxt.h"
 #include "log.h"
-#include "symbol_table.h"
 
 #include <ranges>
 #include <unordered_set>
@@ -19,7 +18,7 @@ Parser::Parser(const std::shared_ptr<ParseSession> &parseSession, const std::vec
 // Only advance when matched a not EndOfFile
 void Parser::advance()
 {
-    if (currentToken.type == TokenType::EndOfFile) {
+    if (currentToken.type == Token::Type::EndOfFile) {
         LOG_DETAILED_ERROR("Trying to advance() after EndOfFile encountered!");
         return;
     }
@@ -28,38 +27,38 @@ void Parser::advance()
 
 void Parser::synchronizeLine()
 {
-    while (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
+    while (!match(Token::Type::EndOfLine) && !match(Token::Type::EndOfFile)) {
         advance();
     }
 }
 
 void Parser::synchronizeProcDir()
 {
-    while (!match("ENDP") && !match(TokenType::EndOfFile)) {
+    while (!match("ENDP") && !match(Token::Type::EndOfFile)) {
         advance();
     }
 }
 
 void Parser::synchronizeStrucDir()
 {
-    while (!match("ENDS") && !match(TokenType::EndOfFile)) {
+    while (!match("ENDS") && !match(Token::Type::EndOfFile)) {
         advance();
     }
 }
 
-bool Parser::match(TokenType type) const { return currentToken.type == type; }
+bool Parser::match(Token::Type type) const { return currentToken.type == type; }
 
 bool Parser::match(const std::string &value) const { return stringToUpper(currentToken.lexeme) == value; }
 
 bool Parser::match(const std::unordered_set<std::string> &values) const { return values.contains(stringToUpper(currentToken.lexeme)); }
 
-bool Parser::match(TokenType type, const std::string &value) const
+bool Parser::match(Token::Type type, const std::string &value) const
 {
     return currentToken.type == type && stringToUpper(currentToken.lexeme) == value;
 }
 
 // Can't consume EndOfFile
-std::optional<Token> Parser::consume(TokenType type)
+std::optional<Token> Parser::consume(Token::Type type)
 {
     if (currentToken.type == type) {
         Token token = currentToken;
@@ -85,7 +84,7 @@ bool Parser::lookaheadMatch(size_t n, const std::string &value) const
 {
     if (currentIndex + n < tokens.size()) {
         for (size_t i = 0; i < n; ++i) {
-            if (tokens[currentIndex + i].type == TokenType::EndOfLine) {
+            if (tokens[currentIndex + i].type == Token::Type::EndOfLine) {
                 return false;
             }
         }
@@ -99,7 +98,7 @@ bool Parser::lookaheadMatch(size_t n, const std::unordered_set<std::string> &val
 {
     if (currentIndex + n < tokens.size()) {
         for (size_t i = 0; i < n; ++i) {
-            if (tokens[currentIndex + i].type == TokenType::EndOfLine) {
+            if (tokens[currentIndex + i].type == Token::Type::EndOfLine) {
                 return false;
             }
         }
@@ -109,11 +108,11 @@ bool Parser::lookaheadMatch(size_t n, const std::unordered_set<std::string> &val
     }
 }
 
-bool Parser::lookaheadMatch(size_t n, TokenType type) const
+bool Parser::lookaheadMatch(size_t n, Token::Type type) const
 {
     if (currentIndex + n < tokens.size()) {
         for (size_t i = 0; i < n; ++i) {
-            if (tokens[currentIndex + i].type == TokenType::EndOfLine) {
+            if (tokens[currentIndex + i].type == Token::Type::EndOfLine) {
                 return false;
             }
         }
@@ -129,8 +128,8 @@ ASTPtr Parser::parse()
     std::shared_ptr<Directive> endDir;
     currentIndex = 0;
     currentToken = tokens[currentIndex];
-    while (!match("END") && !match(TokenType::EndOfFile)) {
-        if (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
+    while (!match("END") && !match(Token::Type::EndOfFile)) {
+        if (!match(Token::Type::EndOfLine) && !match(Token::Type::EndOfFile)) {
             std::shared_ptr<Statement> statement;
             statement = parseStatement();
             if (INVALID(statement)) {
@@ -142,7 +141,7 @@ ASTPtr Parser::parse()
                 synchronizeLine();
             } else {
                 // remove and handle everyhting in parseStatement()?
-                if (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
+                if (!match(Token::Type::EndOfLine) && !match(Token::Type::EndOfFile)) {
                     std::ignore = reportExpectedEndOfLine(currentToken);
                     synchronizeLine();
                     // continue parsing after synchronize
@@ -150,16 +149,16 @@ ASTPtr Parser::parse()
             }
 
             // Can't consume endoffile
-            if (match(TokenType::EndOfLine)) {
-                consume(TokenType::EndOfLine);
+            if (match(Token::Type::EndOfLine)) {
+                consume(Token::Type::EndOfLine);
             }
             if (!INVALID(statement)) {
                 statements.push_back(statement);
             }
         } else {
             // empty line
-            if (match(TokenType::EndOfLine)) {
-                consume(TokenType::EndOfLine);
+            if (match(Token::Type::EndOfLine)) {
+                consume(Token::Type::EndOfLine);
             }
         }
     }
@@ -218,7 +217,7 @@ std::shared_ptr<Statement> Parser::parseStatement()
             }
         } else {
             Token firstToken = currentToken;
-            while (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
+            while (!match(Token::Type::EndOfLine) && !match(Token::Type::EndOfFile)) {
                 advance();
             }
             Token lastToken = currentToken;
@@ -236,7 +235,7 @@ std::shared_ptr<SegDir> Parser::parseSegDir()
     }
     Token directiveToken = currentToken;
     std::optional<ExpressionPtr> expression;
-    consume(TokenType::Directive);
+    consume(Token::Type::Directive);
     if (stringToUpper(directiveToken.lexeme) == ".STACK") {
         ExpressionPtr expr = parseExpression();
         if (INVALID(expr)) {
@@ -247,22 +246,22 @@ std::shared_ptr<SegDir> Parser::parseSegDir()
     return std::make_shared<SegDir>(directiveToken, expression);
 }
 
-std::shared_ptr<DataDir> Parser::parseDataDir(std::shared_ptr<std::unordered_map<std::string, std::shared_ptr<DataVariableSymbol>>> namedFields)
+std::shared_ptr<DataDir>
+Parser::parseDataDir(const std::shared_ptr<std::unordered_map<std::string, std::shared_ptr<DataVariableSymbol>>> &namedFields)
 {
     std::optional<Token> idToken;
     // TODO: debug and test this
     if (match(dataDirectives)) {
         idToken = std::nullopt;
-    } else if (false) {
-        // TODO: check whether first symbol is defined as STRUC or RECORD?
-    } else if ((lookaheadMatch(1, dataDirectives) ||
-                lookaheadMatch(1, TokenType::Identifier))) {
+    }
+    // TODO: check whether first symbol is defined as STRUC or RECORD?
+    else if ((lookaheadMatch(1, dataDirectives) || lookaheadMatch(1, Token::Type::Identifier))) {
         idToken = currentToken;
-        if (!match(TokenType::Identifier)) {
+        if (!match(Token::Type::Identifier)) {
             auto diag = reportExpectedIdentifierInDataDir(currentToken);
             return INVALID_DATA_DIR(diag);
         }
-        consume(TokenType::Identifier);
+        consume(Token::Type::Identifier);
         if (namedFields) {
             std::string fieldName = idToken.value().lexeme;
             if (namedFields->contains(fieldName)) {
@@ -288,14 +287,14 @@ std::shared_ptr<StructDir> Parser::parseStructDir()
     Token firstIdToken, secondIdToken;
     Token directiveToken, endsDirToken;
     std::vector<std::shared_ptr<DataDir>> fields;
-    if (!match(TokenType::Identifier)) {
+    if (!match(Token::Type::Identifier)) {
         auto diag = reportExpectedIdentifierInStrucDir(currentToken);
         return INVALID_STRUCT_DIR(diag);
     }
     firstIdToken = currentToken;
-    consume(TokenType::Identifier);
+    consume(Token::Type::Identifier);
     if (auto symbolPtr = parseSess->symbolTable->findSymbol(firstIdToken)) {
-        auto diag = reportSymbolRedefinition(firstIdToken, symbolPtr->token);
+        [[maybe_unused]] auto diag = reportSymbolRedefinition(firstIdToken, symbolPtr->token);
         // return INVALID_STRUCT_DIR(diag); // To avoid having to synchronize
     }
 
@@ -305,23 +304,23 @@ std::shared_ptr<StructDir> Parser::parseStructDir()
     }
     directiveToken = currentToken;
     consume("STRUC");
-    if (!match(TokenType::EndOfLine)) {
+    if (!match(Token::Type::EndOfLine)) {
         auto diag = reportExpectedEndOfLine(currentToken);
         return INVALID_STRUCT_DIR(diag);
     }
-    consume(TokenType::EndOfLine);
+    consume(Token::Type::EndOfLine);
 
     auto namedFields = std::make_shared<std::unordered_map<std::string, std::shared_ptr<DataVariableSymbol>>>();
 
-    while (!match("ENDS") && !lookaheadMatch(1, "ENDS") && !match(TokenType::EndOfFile)) {
-        if (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
+    while (!match("ENDS") && !lookaheadMatch(1, "ENDS") && !match(Token::Type::EndOfFile)) {
+        if (!match(Token::Type::EndOfLine) && !match(Token::Type::EndOfFile)) {
             std::shared_ptr<DataDir> dataDir;
             dataDir = parseDataDir(namedFields);
             if (INVALID(dataDir)) {
                 synchronizeLine();
             } else {
                 // remove and handle everyhting in parseStatement()?
-                if (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
+                if (!match(Token::Type::EndOfLine) && !match(Token::Type::EndOfFile)) {
                     std::ignore = reportExpectedEndOfLine(currentToken);
                     synchronizeLine();
                     // continue parsing after synchronize
@@ -329,8 +328,8 @@ std::shared_ptr<StructDir> Parser::parseStructDir()
             }
 
             // Can't consume endoffile
-            if (match(TokenType::EndOfLine)) {
-                consume(TokenType::EndOfLine);
+            if (match(Token::Type::EndOfLine)) {
+                consume(Token::Type::EndOfLine);
             }
             if (!INVALID(dataDir)) {
                 fields.push_back(dataDir);
@@ -338,8 +337,8 @@ std::shared_ptr<StructDir> Parser::parseStructDir()
 
         } else {
             // empty line
-            if (match(TokenType::EndOfLine)) {
-                consume(TokenType::EndOfLine);
+            if (match(Token::Type::EndOfLine)) {
+                consume(Token::Type::EndOfLine);
             }
         }
     }
@@ -359,7 +358,7 @@ std::shared_ptr<StructDir> Parser::parseStructDir()
     }
 
     secondIdToken = currentToken;
-    consume(TokenType::Identifier);
+    consume(Token::Type::Identifier);
     if (!match("ENDS")) {
         LOG_DETAILED_ERROR("shouldn't happen");
         return INVALID_STRUCT_DIR(std::nullopt);
@@ -375,12 +374,12 @@ std::shared_ptr<RecordDir> Parser::parseRecordDir()
 {
     Token idToken, directiveToken;
     std::vector<std::shared_ptr<RecordField>> fields;
-    if (!match(TokenType::Identifier)) {
+    if (!match(Token::Type::Identifier)) {
         auto diag = reportExpectedIdentifierInRecordDir(currentToken);
         return INVALID_RECORD_DIR(diag);
     }
     idToken = currentToken;
-    consume(TokenType::Identifier);
+    consume(Token::Type::Identifier);
     if (auto symbolPtr = parseSess->symbolTable->findSymbol(idToken)) {
         auto diag = reportSymbolRedefinition(idToken, symbolPtr->token);
         return INVALID_RECORD_DIR(diag);
@@ -408,7 +407,7 @@ std::shared_ptr<RecordDir> Parser::parseRecordDir()
         fields.push_back(field);
     }
 
-    if (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
+    if (!match(Token::Type::EndOfLine) && !match(Token::Type::EndOfFile)) {
         auto diag = reportExpectedCommaOrEndOfLine(currentToken);
         return INVALID_RECORD_DIR(diag);
     }
@@ -420,7 +419,7 @@ std::shared_ptr<RecordDir> Parser::parseRecordDir()
 
 std::shared_ptr<RecordField> Parser::parseRecordField()
 {
-    if (!match(TokenType::Identifier)) {
+    if (!match(Token::Type::Identifier)) {
         auto diag = reportExpectedIdentifierInRecordDir(currentToken);
         return INVALID_RECORD_FIELD(diag);
     }
@@ -461,12 +460,12 @@ std::shared_ptr<ProcDir> Parser::parseProcDir()
     Token directiveToken, endpDirToken;
     std::vector<std::shared_ptr<Instruction>> fields;
 
-    if (!match(TokenType::Identifier)) {
+    if (!match(Token::Type::Identifier)) {
         auto diag = reportExpectedIdentifierInProcDir(currentToken);
         return INVALID_PROC_DIR(diag);
     }
     firstIdToken = currentToken;
-    consume(TokenType::Identifier);
+    consume(Token::Type::Identifier);
     if (auto symbolPtr = parseSess->symbolTable->findSymbol(firstIdToken)) {
         auto diag = reportSymbolRedefinition(firstIdToken, symbolPtr->token);
         return INVALID_PROC_DIR(diag);
@@ -478,11 +477,11 @@ std::shared_ptr<ProcDir> Parser::parseProcDir()
     }
     directiveToken = currentToken;
     consume("PROC");
-    if (!match(TokenType::EndOfLine)) {
+    if (!match(Token::Type::EndOfLine)) {
         auto diag = reportExpectedEndOfLine(currentToken);
         return INVALID_PROC_DIR(diag);
     }
-    consume(TokenType::EndOfLine);
+    consume(Token::Type::EndOfLine);
 
     if (!currentSegment) {
         auto diag = reportProcMustBeInSegmentBlock(firstIdToken, directiveToken);
@@ -493,14 +492,14 @@ std::shared_ptr<ProcDir> Parser::parseProcDir()
         return INVALID_PROC_DIR(diag);
     }
 
-    while (!match("ENDP") && !lookaheadMatch(1, "ENDP") && !match(TokenType::EndOfFile)) {
-        if (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
+    while (!match("ENDP") && !lookaheadMatch(1, "ENDP") && !match(Token::Type::EndOfFile)) {
+        if (!match(Token::Type::EndOfLine) && !match(Token::Type::EndOfFile)) {
             std::shared_ptr<Instruction> instruction;
             instruction = parseInstruction();
             if (INVALID(instruction)) {
                 synchronizeLine();
             } else {
-                if (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
+                if (!match(Token::Type::EndOfLine) && !match(Token::Type::EndOfFile)) {
                     std::ignore = reportExpectedEndOfLine(currentToken);
                     synchronizeLine();
                     // continue parsing after synchronize
@@ -508,8 +507,8 @@ std::shared_ptr<ProcDir> Parser::parseProcDir()
             }
 
             // Can't consume endoffile
-            if (match(TokenType::EndOfLine)) {
-                consume(TokenType::EndOfLine);
+            if (match(Token::Type::EndOfLine)) {
+                consume(Token::Type::EndOfLine);
             }
             if (!INVALID(instruction)) {
                 fields.push_back(instruction);
@@ -517,8 +516,8 @@ std::shared_ptr<ProcDir> Parser::parseProcDir()
 
         } else {
             // empty line
-            if (match(TokenType::EndOfLine)) {
-                consume(TokenType::EndOfLine);
+            if (match(Token::Type::EndOfLine)) {
+                consume(Token::Type::EndOfLine);
             }
         }
     }
@@ -537,7 +536,7 @@ std::shared_ptr<ProcDir> Parser::parseProcDir()
         return INVALID_PROC_DIR(diag);
     }
     secondIdToken = currentToken;
-    consume(TokenType::Identifier);
+    consume(Token::Type::Identifier);
     if (!match("ENDP")) {
         LOG_DETAILED_ERROR("shouldn't happen");
         return INVALID_PROC_DIR(std::nullopt);
@@ -550,12 +549,12 @@ std::shared_ptr<ProcDir> Parser::parseProcDir()
 
 std::shared_ptr<EquDir> Parser::parseEquDir()
 {
-    if (!match(TokenType::Identifier)) {
+    if (!match(Token::Type::Identifier)) {
         auto diag = reportExpectedIdentifierInEquDir(currentToken);
         return INVALID_EQU_DIR(diag);
     }
     Token idToken = currentToken;
-    consume(TokenType::Identifier);
+    consume(Token::Type::Identifier);
     if (auto symbolPtr = parseSess->symbolTable->findSymbol(idToken)) {
         auto diag = reportSymbolRedefinition(idToken, symbolPtr->token);
         return INVALID_EQU_DIR(diag);
@@ -566,7 +565,7 @@ std::shared_ptr<EquDir> Parser::parseEquDir()
         return INVALID_EQU_DIR(std::nullopt);
     }
     Token directiveToken = currentToken;
-    consume(TokenType::Directive);
+    consume(Token::Type::Directive);
 
     // TODO: can also be a string in <> (or without <>?)
     ExpressionPtr expr = parseExpression();
@@ -582,12 +581,12 @@ std::shared_ptr<EquDir> Parser::parseEquDir()
 
 std::shared_ptr<EqualDir> Parser::parseEqualDir()
 {
-    if (!match(TokenType::Identifier)) {
+    if (!match(Token::Type::Identifier)) {
         auto diag = reportExpectedIdentifierInEqualDir(currentToken);
         return INVALID_EQUAL_DIR(diag);
     }
     Token idToken = currentToken;
-    consume(TokenType::Identifier);
+    consume(Token::Type::Identifier);
     // Redefinition is allowed for `=`
     if (auto symbolPtr = parseSess->symbolTable->findSymbol(idToken)) {
         if (!std::dynamic_pointer_cast<EqualVariableSymbol>(symbolPtr)) {
@@ -601,7 +600,7 @@ std::shared_ptr<EqualDir> Parser::parseEqualDir()
         return INVALID_EQUAL_DIR(std::nullopt);
     }
     Token directiveToken = currentToken;
-    consume(TokenType::Directive);
+    consume(Token::Type::Directive);
 
     ExpressionPtr expr = parseExpression();
     if (INVALID(expr)) {
@@ -621,9 +620,9 @@ std::shared_ptr<EndDir> Parser::parseEndDir()
         return INVALID_END_DIR(std::nullopt);
     }
     Token directiveToken = currentToken;
-    consume(TokenType::Directive);
+    consume(Token::Type::Directive);
 
-    if (match(TokenType::EndOfLine) || match(TokenType::EndOfFile)) {
+    if (match(Token::Type::EndOfLine) || match(Token::Type::EndOfFile)) {
         return std::make_shared<EndDir>(directiveToken, std::nullopt);
     }
 
@@ -641,12 +640,12 @@ std::shared_ptr<Instruction> Parser::parseInstruction()
     std::optional<Token> menmonicToken;
     std::vector<ExpressionPtr> operands;
     if (lookaheadMatch(1, ":")) {
-        if (!match(TokenType::Identifier)) {
+        if (!match(Token::Type::Identifier)) {
             auto diag = reportExpectedIdentifierInLabel(currentToken);
             return INVALID_INSTRUCTION(diag);
         }
         Token labelToken = currentToken;
-        consume(TokenType::Identifier);
+        consume(Token::Type::Identifier);
         if (auto symbolPtr = parseSess->symbolTable->findSymbol(labelToken)) {
             auto diag = reportSymbolRedefinition(labelToken, symbolPtr->token);
             return INVALID_INSTRUCTION(diag);
@@ -655,18 +654,18 @@ std::shared_ptr<Instruction> Parser::parseInstruction()
         label = labelToken;
         parseSess->symbolTable->addSymbol(std::make_shared<LabelSymbol>(labelToken));
     }
-    if (match(TokenType::EndOfLine) || match(TokenType::EndOfFile)) {
+    if (match(Token::Type::EndOfLine) || match(Token::Type::EndOfFile)) {
         return std::make_shared<Instruction>(label, std::nullopt, operands);
     }
 
-    if (!match(TokenType::Instruction)) {
+    if (!match(Token::Type::Instruction)) {
         auto diag = reportExpectedInstruction(currentToken);
         return INVALID_INSTRUCTION(diag);
     }
     menmonicToken = currentToken;
-    consume(TokenType::Instruction);
+    consume(Token::Type::Instruction);
 
-    if (match(TokenType::EndOfLine) || match(TokenType::EndOfFile)) {
+    if (match(Token::Type::EndOfLine) || match(Token::Type::EndOfFile)) {
         // 0 arguments
         return std::make_shared<Instruction>(label, menmonicToken, operands);
     }
@@ -683,17 +682,18 @@ std::shared_ptr<Instruction> Parser::parseInstruction()
         }
         operands.push_back(expr);
     }
-    if (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
+    if (!match(Token::Type::EndOfLine) && !match(Token::Type::EndOfFile)) {
         auto diag = reportExpectedCommaOrEndOfLine(currentToken);
         return INVALID_INSTRUCTION(diag);
     }
     return std::make_shared<Instruction>(label, menmonicToken, operands);
 }
 
-std::shared_ptr<DataItem> Parser::parseDataItem(const std::optional<Token> &idToken,
-                                                std::shared_ptr<std::unordered_map<std::string, std::shared_ptr<DataVariableSymbol>>> namedFields)
+std::shared_ptr<DataItem>
+Parser::parseDataItem(const std::optional<Token> &idToken,
+                      const std::shared_ptr<std::unordered_map<std::string, std::shared_ptr<DataVariableSymbol>>> &namedFields)
 {
-    if (!match(TokenType::Identifier) && !match(dataDirectives)) {
+    if (!match(Token::Type::Identifier) && !match(dataDirectives)) {
         auto diag = reportExpectedVariableNameOrDataDirective(currentToken);
         return INVALID_DATA_ITEM(diag);
     }
@@ -720,7 +720,7 @@ std::shared_ptr<InitializerList> Parser::parseInitValues()
     if (INVALID(initValue)) {
         return initValue;
     }
-    if (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
+    if (!match(Token::Type::EndOfLine) && !match(Token::Type::EndOfFile)) {
         auto diag = reportExpectedCommaOrEndOfLine(currentToken);
         return INVALID_INITIALIZER_LIST(diag);
     }
@@ -782,9 +782,9 @@ std::shared_ptr<InitValue> Parser::parseSingleInitValue()
             return std::make_shared<DupOperator>(expr, op, leftBracket.value(), operands, rightBracket.value());
         } else {
             // <var var> - can't be
-            if (!dataInitializerDelimitersStack.empty() && !match(TokenType::CloseAngleBracket) && !match(TokenType::CloseBracket) &&
-                !match(TokenType::Comma)) {
-                if (match(TokenType::EndOfLine) || match(TokenType::EndOfFile)) {
+            if (!dataInitializerDelimitersStack.empty() && !match(Token::Type::CloseAngleBracket) && !match(Token::Type::CloseBracket) &&
+                !match(Token::Type::Comma)) {
+                if (match(Token::Type::EndOfLine) || match(Token::Type::EndOfFile)) {
                     auto diag = reportUnclosedDelimiterInDataInitializer(currentToken);
                     return INVALID_INIT_VALUE(diag);
                 }
@@ -901,8 +901,8 @@ ExpressionPtr Parser::parseMemberAccessAndIndexingExpression()
     if (INVALID(term1)) {
         return term1;
     }
-    while (match(TokenType::OpenSquareBracket) || match(TokenType::OpenBracket) || match(".")) {
-        if (match(TokenType::OpenSquareBracket)) {
+    while (match(Token::Type::OpenSquareBracket) || match(Token::Type::OpenBracket) || match(".")) {
+        if (match(Token::Type::OpenSquareBracket)) {
             Token leftBracket = currentToken;
             expressionDelimitersStack.push(leftBracket);
             advance();
@@ -910,7 +910,7 @@ ExpressionPtr Parser::parseMemberAccessAndIndexingExpression()
             if (INVALID(expr)) {
                 return expr;
             }
-            std::optional<Token> rightBracket = consume(TokenType::CloseSquareBracket);
+            std::optional<Token> rightBracket = consume(Token::Type::CloseSquareBracket);
             if (!rightBracket) {
                 std::shared_ptr<Diagnostic> diag = reportUnclosedDelimiterError(currentToken);
                 return INVALID_EXPRESSION(diag);
@@ -918,7 +918,7 @@ ExpressionPtr Parser::parseMemberAccessAndIndexingExpression()
             expressionDelimitersStack.pop();
             ExpressionPtr term2 = std::make_shared<SquareBrackets>(leftBracket, rightBracket.value(), expr);
             term1 = std::make_shared<ImplicitPlusOperator>(term1, term2);
-        } else if (match(TokenType::OpenBracket)) {
+        } else if (match(Token::Type::OpenBracket)) {
             Token leftBracket = currentToken;
             expressionDelimitersStack.push(leftBracket);
             advance();
@@ -926,7 +926,7 @@ ExpressionPtr Parser::parseMemberAccessAndIndexingExpression()
             if (INVALID(expr)) {
                 return expr;
             }
-            std::optional<Token> rightBracket = consume(TokenType::CloseBracket);
+            std::optional<Token> rightBracket = consume(Token::Type::CloseBracket);
             if (!rightBracket) {
                 std::shared_ptr<Diagnostic> diag = reportUnclosedDelimiterError(currentToken);
                 return INVALID_EXPRESSION(diag);
@@ -937,7 +937,7 @@ ExpressionPtr Parser::parseMemberAccessAndIndexingExpression()
         } else if (match(".")) {
             Token dot = currentToken;
             advance();
-            if (currentToken.type != TokenType::Identifier) {
+            if (currentToken.type != Token::Type::Identifier) {
                 auto diag = reportExpectedIdentifierInExpression(currentToken);
                 return INVALID_EXPRESSION(diag);
             }
@@ -970,7 +970,7 @@ ExpressionPtr Parser::parseHighPrecedenceUnaryExpression()
 
 ExpressionPtr Parser::parsePrimaryExpression()
 {
-    if (match(TokenType::OpenBracket)) {
+    if (match(Token::Type::OpenBracket)) {
         Token leftBracket = currentToken;
         expressionDelimitersStack.push(leftBracket);
         advance();
@@ -978,7 +978,7 @@ ExpressionPtr Parser::parsePrimaryExpression()
         if (INVALID(expr)) {
             return expr;
         }
-        std::optional<Token> rightBracket = consume(TokenType::CloseBracket);
+        std::optional<Token> rightBracket = consume(Token::Type::CloseBracket);
         if (!rightBracket) {
             auto diag = reportUnclosedDelimiterError(currentToken);
             return INVALID_EXPRESSION(diag);
@@ -986,7 +986,7 @@ ExpressionPtr Parser::parsePrimaryExpression()
         expressionDelimitersStack.pop();
         return std::make_shared<Brackets>(leftBracket, rightBracket.value(), expr);
 
-    } else if (match(TokenType::OpenSquareBracket)) {
+    } else if (match(Token::Type::OpenSquareBracket)) {
         Token leftBracket = currentToken;
         expressionDelimitersStack.push(leftBracket);
         advance();
@@ -994,15 +994,15 @@ ExpressionPtr Parser::parsePrimaryExpression()
         if (INVALID(expr)) {
             return expr;
         }
-        std::optional<Token> rightBracket = consume(TokenType::CloseSquareBracket);
+        std::optional<Token> rightBracket = consume(Token::Type::CloseSquareBracket);
         if (!rightBracket) {
             auto diag = reportUnclosedDelimiterError(currentToken);
             return INVALID_EXPRESSION(diag);
         }
         expressionDelimitersStack.pop();
         return std::make_shared<SquareBrackets>(leftBracket, rightBracket.value(), expr);
-    } else if (match(TokenType::Identifier) || match(TokenType::Number) || match(TokenType::StringLiteral) || match(TokenType::Register) ||
-               match(TokenType::Type) || match(TokenType::Dollar)) {
+    } else if (match(Token::Type::Identifier) || match(Token::Type::Number) || match(Token::Type::StringLiteral) || match(Token::Type::Register) ||
+               match(Token::Type::Type) || match(Token::Type::Dollar)) {
         Token token = currentToken;
         advance();
         std::string curentTokenLexemeUpper = stringToUpper(currentToken.lexeme);
@@ -1010,15 +1010,16 @@ ExpressionPtr Parser::parsePrimaryExpression()
         // after leaf when there'are unclosed parenthesis `()` or `[]` must be operator (binary operator)
         // or closing `)` or `]`
         // or there might be `(` or `[` - implicit plus for index operator
-        if (!expressionDelimitersStack.empty() && currentToken.type != TokenType::CloseSquareBracket &&
-            currentToken.type != TokenType::CloseBracket && currentToken.type != TokenType::OpenSquareBracket &&
-            currentToken.type != TokenType::OpenBracket && curentTokenLexemeUpper != "+" && curentTokenLexemeUpper != "-" &&
+        if (!expressionDelimitersStack.empty() && currentToken.type != Token::Type::CloseSquareBracket &&
+            currentToken.type != Token::Type::CloseBracket && currentToken.type != Token::Type::OpenSquareBracket &&
+            currentToken.type != Token::Type::OpenBracket && curentTokenLexemeUpper != "+" && curentTokenLexemeUpper != "-" &&
             curentTokenLexemeUpper != "*" && curentTokenLexemeUpper != "/" && curentTokenLexemeUpper != "PTR" && curentTokenLexemeUpper != "." &&
             curentTokenLexemeUpper != "MOD" && curentTokenLexemeUpper != "SHL" && curentTokenLexemeUpper != "SHR") {
 
             // try to distinct between `(var var` and `(1 + 2` or `(1 + 2,
             // when after var there aren't any vars and only possible closing things and then endofline -
-            if (currentToken.type == TokenType::EndOfLine || currentToken.type == TokenType::EndOfFile || currentToken.type == TokenType::Comma) {
+            if (currentToken.type == Token::Type::EndOfLine || currentToken.type == Token::Type::EndOfFile ||
+                currentToken.type == Token::Type::Comma) {
                 auto diag = reportUnclosedDelimiterError(currentToken);
                 return INVALID_EXPRESSION(diag);
             }

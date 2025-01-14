@@ -15,7 +15,7 @@ public:
 
 private:
     void advance();
-    int getSymbolLength(size_t symbolPos);
+    int getSymbolLength(size_t symbolPos) const;
     void skipWhitespace();
     Token getNextToken();
     Token getNumberToken();

@@ -1,11 +1,12 @@
-#define DOCTEST_CONFIG_COLORS_ANSI
-#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
-#include <doctest/doctest.h>
 #include "add.h"
 #include "tokenize.h"
 #include "session.h"
 #include "diagnostic.h"
 #include <memory>
+
+#define DOCTEST_CONFIG_COLORS_ANSI
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+#include <doctest/doctest.h>
 
 // int add(int a, int b) { return a + b; }
 
@@ -26,7 +27,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
         auto tokens = tokenizer.tokenize();
 
         CHECK(tokens.size() == 2); // Identifier + EndOfFile
-        CHECK(tokens[0].type == TokenType::Identifier);
+        CHECK(tokens[0].type == Token::Type::Identifier);
         CHECK(tokens[0].lexeme == "myVar");
     }
 
@@ -36,7 +37,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
         Tokenizer tokenizer(parseSess, source);
         auto tokens = tokenizer.tokenize();
 
-        CHECK(tokens[0].type == TokenType::Directive);
+        CHECK(tokens[0].type == Token::Type::Directive);
         CHECK(tokens[0].lexeme == "EQU");
     }
 
@@ -46,7 +47,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
         Tokenizer tokenizer(parseSess, source);
         auto tokens = tokenizer.tokenize();
 
-        CHECK(tokens[0].type == TokenType::Instruction);
+        CHECK(tokens[0].type == Token::Type::Instruction);
         CHECK(tokens[0].lexeme == "mov");
     }
 
@@ -56,7 +57,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
         Tokenizer tokenizer(parseSess, source);
         auto tokens = tokenizer.tokenize();
 
-        CHECK(tokens[0].type == TokenType::Register);
+        CHECK(tokens[0].type == Token::Type::Register);
         CHECK(tokens[0].lexeme == "AX");
     }
 
@@ -66,7 +67,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
         Tokenizer tokenizer(parseSess, source);
         auto tokens = tokenizer.tokenize();
 
-        CHECK(tokens[0].type == TokenType::Identifier);
+        CHECK(tokens[0].type == Token::Type::Identifier);
         CHECK(tokens[0].lexeme == ".myLabel");
     }
 }
@@ -79,7 +80,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 //         Tokenizer tokenizer(parseSess, source);
 //         auto tokens = tokenizer.tokenize();
 
-//         CHECK(tokens[0].type == TokenType::Number);
+//         CHECK(tokens[0].type == Token::Type::Number);
 //         CHECK(tokens[0].lexeme == "12345");
 //     }
 
@@ -88,7 +89,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 //         Tokenizer tokenizer(parseSess, source);
 //         auto tokens = tokenizer.tokenize();
 
-//         CHECK(tokens[0].type == TokenType::Number);
+//         CHECK(tokens[0].type == Token::Type::Number);
 //         CHECK(tokens[0].lexeme == "0FFh");
 //     }
 
@@ -97,7 +98,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 //         Tokenizer tokenizer(parseSess, source);
 //         auto tokens = tokenizer.tokenize();
 
-//         CHECK(tokens[0].type == TokenType::Number);
+//         CHECK(tokens[0].type == Token::Type::Number);
 //         CHECK(tokens[0].lexeme == "1010b");
 //     }
 
@@ -106,7 +107,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 //         Tokenizer tokenizer(parseSess, source);
 //         auto tokens = tokenizer.tokenize();
 
-//         CHECK(tokens[0].type == TokenType::Number);
+//         CHECK(tokens[0].type == Token::Type::Number);
 //         CHECK(tokens[0].lexeme == "77o");
 //     }
 
@@ -115,7 +116,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 //         Tokenizer tokenizer(parseSess, source);
 //         auto tokens = tokenizer.tokenize();
 
-//         CHECK(tokens[0].type == TokenType::Number);
+//         CHECK(tokens[0].type == Token::Type::Number);
 //         CHECK(tokens[0].lexeme == "3.14");
 //     }
 
@@ -124,7 +125,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 //         Tokenizer tokenizer(parseSess, source);
 //         auto tokens = tokenizer.tokenize();
 
-//         CHECK(tokens[0].type == TokenType::Invalid);
+//         CHECK(tokens[0].type == Token::Type::Invalid);
 //         CHECK(parseSess->dcx->hasErrors());
 //     }
 // }
@@ -137,7 +138,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 //         Tokenizer tokenizer(parseSess, source);
 //         auto tokens = tokenizer.tokenize();
 
-//         CHECK(tokens[0].type == TokenType::StringLiteral);
+//         CHECK(tokens[0].type == Token::Type::StringLiteral);
 //         CHECK(tokens[0].lexeme == "\"Hello, World!\"");
 //     }
 
@@ -146,7 +147,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 //         Tokenizer tokenizer(parseSess, source);
 //         auto tokens = tokenizer.tokenize();
 
-//         CHECK(tokens[0].type == TokenType::StringLiteral);
+//         CHECK(tokens[0].type == Token::Type::StringLiteral);
 //         CHECK(tokens[0].lexeme == "'Hello, MASM'");
 //     }
 
@@ -155,7 +156,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 //         Tokenizer tokenizer(parseSess, source);
 //         auto tokens = tokenizer.tokenize();
 
-//         CHECK(tokens[0].type == TokenType::StringLiteral);
+//         CHECK(tokens[0].type == Token::Type::StringLiteral);
 //         CHECK(tokens[0].lexeme == "\"She said, \\\"Hello\\\"\"");
 //     }
 
@@ -164,7 +165,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 //         Tokenizer tokenizer(parseSess, source);
 //         auto tokens = tokenizer.tokenize();
 
-//         CHECK(tokens[0].type == TokenType::Invalid);
+//         CHECK(tokens[0].type == Token::Type::Invalid);
 //         CHECK(parseSess->dcx->hasErrors());
 //     }
 // }
@@ -177,7 +178,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 //         Tokenizer tokenizer(parseSess, source);
 //         auto tokens = tokenizer.tokenize();
 
-//         CHECK(tokens[0].type == TokenType::Comment);
+//         CHECK(tokens[0].type == Token::Type::Comment);
 //         CHECK(tokens[0].lexeme == "; This is a comment");
 //     }
 
@@ -187,9 +188,9 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 //         auto tokens = tokenizer.tokenize();
 
 //         CHECK(tokens.size() == 7); // MOV, AX, ,, BX, Comment, EndOfFile
-//         CHECK(tokens[0].type == TokenType::Instruction);
+//         CHECK(tokens[0].type == Token::Type::Instruction);
 //         CHECK(tokens[0].lexeme == "MOV");
-//         CHECK(tokens[5].type == TokenType::Comment);
+//         CHECK(tokens[5].type == Token::Type::Comment);
 //         CHECK(tokens[5].lexeme == "; Move BX into AX");
 //     }
 // }
@@ -231,7 +232,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 //         auto tokens = tokenizer.tokenize();
 
 //         // '@' can be part of identifiers in MASM, so it should be recognized
-//         CHECK(tokens[0].type == TokenType::Identifier);
+//         CHECK(tokens[0].type == Token::Type::Identifier);
 //         CHECK(tokens[0].lexeme == "@");
 //     }
 // }
@@ -245,7 +246,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 //         auto tokens = tokenizer.tokenize();
 
 //         CHECK(tokens.size() == 6); // MOV, AX, ,, BX, EndOfFile
-//         CHECK(tokens[0].type == TokenType::Instruction);
+//         CHECK(tokens[0].type == Token::Type::Instruction);
 //         CHECK(tokens[0].lexeme == "MOV");
 //         CHECK(tokens[3].lexeme == "BX");
 //     }
@@ -256,9 +257,9 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 //         auto tokens = tokenizer.tokenize();
 
 //         CHECK(tokens.size() == 7); // MOV, AX, ,, BX, EndOfFile
-//         CHECK(tokens[0].type == TokenType::Instruction);
+//         CHECK(tokens[0].type == Token::Type::Instruction);
 //         CHECK(tokens[0].lexeme == "MOV");
-//         CHECK(tokens[5].type == TokenType::Identifier);
+//         CHECK(tokens[5].type == Token::Type::Identifier);
 //         CHECK(tokens[5].lexeme == "BX");
 //     }
 // }
@@ -271,7 +272,7 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 //         Tokenizer tokenizer(parseSess, source);
 //         auto tokens = tokenizer.tokenize();
 
-//         CHECK(tokens[0].type == TokenType::Invalid);
+//         CHECK(tokens[0].type == Token::Type::Invalid);
 //         CHECK(parseSess->dcx->hasErrors());
 //     }
 
@@ -281,8 +282,8 @@ TEST_CASE("Tokenizer: Identifiers and Keywords")
 //         auto tokens = tokenizer.tokenize();
 
 //         // Should report error but continue tokenizing
-//         CHECK(tokens[0].type == TokenType::Invalid);
-//         CHECK(tokens[1].type == TokenType::Instruction);
+//         CHECK(tokens[0].type == Token::Type::Invalid);
+//         CHECK(tokens[1].type == Token::Type::Instruction);
 //         CHECK(tokens[1].lexeme == "MOV");
 //         CHECK(parseSess->dcx->hasErrors());
 //     }

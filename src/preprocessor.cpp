@@ -8,14 +8,14 @@ Preprocessor::Preprocessor(const std::shared_ptr<ParseSession> &parseSess, const
 
 void Preprocessor::advance()
 {
-    if (currentToken.type == TokenType::EndOfFile) {
+    if (currentToken.type == Token::Type::EndOfFile) {
         LOG_DETAILED_ERROR("Trying to advance() after EndOfFile encountered!");
         return;
     }
     currentToken = tokens[++currentIndex];
 }
 
-bool Preprocessor::match(TokenType type) const { return currentToken.type == type; }
+bool Preprocessor::match(Token::Type type) const { return currentToken.type == type; }
 
 bool Preprocessor::match(const std::string &value) const { return stringToUpper(currentToken.lexeme) == value; }
 
@@ -26,10 +26,10 @@ std::vector<Token> Preprocessor::preprocess()
 
     currentIndex = 0;
     currentToken = tokens[currentIndex];
-    while (!match(TokenType::EndOfFile)) {
+    while (!match(Token::Type::EndOfFile)) {
         // Delete all INCLUDE lines
         if (match("INCLUDE")) {
-            while (!match(TokenType::EndOfLine) && !match(TokenType::EndOfFile)) {
+            while (!match(Token::Type::EndOfLine) && !match(Token::Type::EndOfFile)) {
                 advance();
             }
         }

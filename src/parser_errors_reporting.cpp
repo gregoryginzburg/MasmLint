@@ -271,7 +271,7 @@ std::shared_ptr<Diagnostic> Parser::reportExpectedInstruction(const Token &token
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::EXPECTED_INSTRUCTION);
     if (isReservedWord(token)) {
         diag.addPrimaryLabel(token.span, "this is a reserved word");
-    } else if (token.type == TokenType::Identifier) {
+    } else if (token.type == Token::Type::Identifier) {
         diag.addPrimaryLabel(token.span, "this instruction name is incorrect");
     } else {
         diag.addPrimaryLabel(token.span, "");
@@ -363,15 +363,15 @@ std::shared_ptr<Diagnostic> Parser::reportUnclosedDelimiterError(const Token &cl
 
 std::shared_ptr<Diagnostic> Parser::reportExpectedExpression(const Token &token)
 {
-    if ((token.type == TokenType::CloseSquareBracket || token.type == TokenType::CloseBracket) && expressionDelimitersStack.empty()) {
+    if ((token.type == Token::Type::CloseSquareBracket || token.type == Token::Type::CloseBracket) && expressionDelimitersStack.empty()) {
         Diagnostic diag(Diagnostic::Level::Error, ErrorCode::UNEXPECTED_CLOSING_DELIMITER, token.lexeme);
         diag.addPrimaryLabel(token.span, "");
         parseSess->dcx->addDiagnostic(diag);
     } else {
         std::string lexeme;
-        if (token.type == TokenType::EndOfLine) {
+        if (token.type == Token::Type::EndOfLine) {
             lexeme = "\\n";
-        } else if (token.type == TokenType::EndOfFile) {
+        } else if (token.type == Token::Type::EndOfFile) {
             lexeme = "End Of File";
         } else {
             lexeme = token.lexeme;

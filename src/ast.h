@@ -19,7 +19,7 @@ class RecordField;
 using ASTPtr = std::shared_ptr<AST>;
 using ExpressionPtr = std::shared_ptr<Expression>;
 
-#define INVALID(node) (node->diagnostic)
+#define INVALID(node) ((node)->diagnostic)
 #define INVALID_EXPRESSION(diag) (std::make_shared<Expression>(diag))
 
 #define INVALID_STATEMENT(diag) (std::make_shared<Statement>(diag))
@@ -58,7 +58,10 @@ public:
 
 class Program : public AST {
 public:
-    Program(const std::vector<std::shared_ptr<Statement>> &sentences, std::shared_ptr<Directive> endDir) : statements(sentences), endDir(endDir) {}
+    Program(const std::vector<std::shared_ptr<Statement>> &sentences, std::shared_ptr<Directive> endDir)
+        : statements(sentences), endDir(std::move(endDir))
+    {
+    }
     std::vector<std::shared_ptr<Statement>> statements;
     std::shared_ptr<Directive> endDir;
 };
@@ -66,15 +69,15 @@ public:
 class Statement : public AST {
 public:
     Statement() = default;
-    Statement(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
-    Statement(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
+    explicit Statement(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = std::move(diag); }
+    explicit Statement(std::shared_ptr<Diagnostic> diag) { diagnostic = std::move(diag); }
 };
 
 // Init values
 class InitValue : public AST {
 public:
     InitValue() = default;
-    InitValue(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
+    explicit InitValue(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = std::move(diag); }
 };
 
 class DupOperator : public InitValue {
@@ -93,20 +96,20 @@ public:
 
 class QuestionMarkInitValue : public InitValue {
 public:
-    QuestionMarkInitValue(Token token) : token(std::move(token)) {}
+    explicit QuestionMarkInitValue(Token token) : token(std::move(token)) {}
     Token token;
 };
 
 class ExpressionInitValue : public InitValue {
 public:
-    ExpressionInitValue(ExpressionPtr expr) : expr(std::move(expr)) {}
+    explicit ExpressionInitValue(ExpressionPtr expr) : expr(std::move(expr)) {}
     ExpressionPtr expr;
 };
 
 class StructOrRecordInitValue : public InitValue {
 public:
     StructOrRecordInitValue(Token leftBracket, Token rightBracket, std::shared_ptr<InitializerList> fields)
-        : initList(std::move(fields)), leftBracket(std::move(leftBracket)), rightBracket(std::move(rightBracket))
+        : leftBracket(std::move(leftBracket)), rightBracket(std::move(rightBracket)), initList(std::move(fields))
     {
     }
     Token leftBracket;
@@ -116,9 +119,9 @@ public:
 
 class InitializerList : public InitValue {
 public:
-    InitializerList(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
-    InitializerList(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
-    InitializerList(std::vector<std::shared_ptr<InitValue>> fields) : fields(std::move(fields)) {}
+    explicit InitializerList(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = std::move(diag); }
+    explicit InitializerList(std::shared_ptr<Diagnostic> diag) { diagnostic = std::move(diag); }
+    explicit InitializerList(std::vector<std::shared_ptr<InitValue>> fields) : fields(std::move(fields)) {}
     std::vector<std::shared_ptr<InitValue>> fields;
 };
 
@@ -129,7 +132,7 @@ public:
     std::shared_ptr<InitializerList> initValues;
 
     DataItem() = default;
-    DataItem(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
+    explicit DataItem(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = std::move(diag); }
     DataItem(Token dataTypeToken, std::shared_ptr<InitializerList> initValues)
         : dataTypeToken(std::move(dataTypeToken)), initValues(std::move(initValues))
     {
@@ -144,9 +147,9 @@ public:
     Token directiveToken;
     std::optional<ExpressionPtr> constExpr;
 
-    SegDir(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
-    SegDir(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
-    SegDir(Token directiveToken, std::optional<ExpressionPtr> constExpr = std::nullopt)
+    explicit SegDir(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = std::move(diag); }
+    explicit SegDir(std::shared_ptr<Diagnostic> diag) { diagnostic = std::move(diag); }
+    explicit SegDir(Token directiveToken, std::optional<ExpressionPtr> constExpr = std::nullopt)
         : directiveToken(std::move(directiveToken)), constExpr(std::move(constExpr))
     {
     }
@@ -157,8 +160,8 @@ public:
     std::optional<Token> idToken;
     std::shared_ptr<DataItem> dataItem;
 
-    DataDir(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
-    DataDir(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
+    explicit DataDir(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = std::move(diag); }
+    explicit DataDir(std::shared_ptr<Diagnostic> diag) { diagnostic = std::move(diag); }
     DataDir(std::optional<Token> idToken, std::shared_ptr<DataItem> dataItem) : idToken(std::move(idToken)), dataItem(std::move(dataItem)) {}
 };
 
@@ -170,8 +173,8 @@ public:
     Token secondIdToken;
     Token endsDirToken;
 
-    StructDir(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
-    StructDir(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
+    explicit StructDir(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = std::move(diag); }
+    explicit StructDir(std::shared_ptr<Diagnostic> diag) { diagnostic = std::move(diag); }
     StructDir(Token firstIdToken, Token directiveToken, const std::vector<std::shared_ptr<DataDir>> &fields, Token secondIdToken, Token endsDirToken)
         : firstIdToken(std::move(firstIdToken)), directiveToken(std::move(directiveToken)), fields(fields), secondIdToken(std::move(secondIdToken)),
           endsDirToken(std::move(endsDirToken))
@@ -186,8 +189,8 @@ public:
     std::vector<std::shared_ptr<RecordField>> fields;
 
     RecordDir() = default;
-    RecordDir(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
-    RecordDir(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
+    explicit RecordDir(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = std::move(diag); }
+    explicit RecordDir(std::shared_ptr<Diagnostic> diag) { diagnostic = std::move(diag); }
     RecordDir(Token idToken, Token directiveToken, std::vector<std::shared_ptr<RecordField>> fields)
         : idToken(std::move(idToken)), directiveToken(std::move(directiveToken)), fields(std::move(fields))
     {
@@ -200,8 +203,8 @@ public:
     ExpressionPtr width;
     std::optional<ExpressionPtr> initialValue;
 
-    RecordField(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
-    RecordField(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
+    explicit RecordField(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = std::move(diag); }
+    explicit RecordField(std::shared_ptr<Diagnostic> diag) { diagnostic = std::move(diag); }
     RecordField(Token fieldToken, ExpressionPtr width, std::optional<ExpressionPtr> initialValue)
         : fieldToken(std::move(fieldToken)), width(std::move(width)), initialValue(std::move(initialValue))
     {
@@ -214,8 +217,8 @@ public:
     Token directiveToken;
     ExpressionPtr value; // TODO: can also be a string
 
-    EquDir(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
-    EquDir(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
+    explicit EquDir(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = std::move(diag); }
+    explicit EquDir(std::shared_ptr<Diagnostic> diag) { diagnostic = std::move(diag); }
     EquDir(Token idToken, Token directiveToken, ExpressionPtr value)
         : idToken(std::move(idToken)), directiveToken(std::move(directiveToken)), value(std::move(value))
     {
@@ -228,8 +231,8 @@ public:
     Token directiveToken;
     ExpressionPtr value;
 
-    EqualDir(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
-    EqualDir(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
+    explicit EqualDir(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = std::move(diag); }
+    explicit EqualDir(std::shared_ptr<Diagnostic> diag) { diagnostic = std::move(diag); }
     EqualDir(Token idToken, Token directiveToken, ExpressionPtr value)
         : idToken(std::move(idToken)), directiveToken(std::move(directiveToken)), value(std::move(value))
     {
@@ -244,8 +247,8 @@ public:
     Token secondIdToken;
     Token endpDirToken;
 
-    ProcDir(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
-    ProcDir(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
+    explicit ProcDir(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = std::move(diag); }
+    explicit ProcDir(std::shared_ptr<Diagnostic> diag) { diagnostic = std::move(diag); }
     ProcDir(Token firstIdToken, Token directiveToken, const std::vector<std::shared_ptr<Instruction>> &fields, Token secondIdToken,
             Token endsDirToken)
         : firstIdToken(std::move(firstIdToken)), directiveToken(std::move(directiveToken)), instructions(fields),
@@ -259,8 +262,8 @@ public:
     Token endToken;
     std::optional<ExpressionPtr> addressExpr;
 
-    EndDir(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
-    EndDir(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
+    explicit EndDir(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = std::move(diag); }
+    explicit EndDir(std::shared_ptr<Diagnostic> diag) { diagnostic = std::move(diag); }
     EndDir(Token endToken, std::optional<ExpressionPtr> addressExpr) : endToken(std::move(endToken)), addressExpr(std::move(addressExpr)) {}
 };
 
@@ -271,10 +274,10 @@ public:
     std::optional<Token> mnemonicToken;
     std::vector<ExpressionPtr> operands;
 
-    Instruction(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = diag; }
-    Instruction(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
+    explicit Instruction(std::optional<std::shared_ptr<Diagnostic>> diag) { diagnostic = std::move(diag); }
+    explicit Instruction(std::shared_ptr<Diagnostic> diag) { diagnostic = std::move(diag); }
     Instruction(std::optional<Token> label, std::optional<Token> mnemonicToken, const std::vector<ExpressionPtr> &operands)
-        : label(label), mnemonicToken(std::move(mnemonicToken)), operands(operands)
+        : label(std::move(label)), mnemonicToken(std::move(mnemonicToken)), operands(operands)
     {
     }
 };
@@ -292,7 +295,7 @@ struct OperandSize {
 class Expression : public AST {
 public:
     Expression() = default;
-    Expression(std::shared_ptr<Diagnostic> diag) { diagnostic = diag; }
+    explicit Expression(std::shared_ptr<Diagnostic> diag) { diagnostic = std::move(diag); }
     // expression attributes for semantic analysis
     std::optional<int32_t> constantValue;
     bool unresolvedSymbols = false;
@@ -595,7 +598,7 @@ inline Span getInitValueSpan(const std::shared_ptr<InitValue> &node)
     }
 
     if (auto initList = std::dynamic_pointer_cast<InitializerList>(node)) {
-        if (initList->fields.size() == 0) {
+        if (initList->fields.empty()) {
             LOG_DETAILED_ERROR("Initalizer list length can't be 0");
             return {0, 0, nullptr};
         }
@@ -614,7 +617,7 @@ inline std::shared_ptr<Leaf> getLeaf(const ASTPtr &node)
     return leaf;
 }
 
-inline bool isRegister(const ASTPtr &node, std::string registerStr)
+inline bool isRegister(const ASTPtr &node, const std::string &registerStr)
 {
     std::shared_ptr<Leaf> leaf = std::dynamic_pointer_cast<Leaf>(node);
     if (!leaf) {

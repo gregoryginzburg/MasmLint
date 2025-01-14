@@ -9,7 +9,6 @@
 #include "session.h"
 #include "ast.h"
 
-enum class TokenType : uint8_t;
 
 class Parser {
 public:
@@ -31,21 +30,21 @@ private:
     void synchronizeLine();
     void synchronizeProcDir();
     void synchronizeStrucDir();
-    bool match(TokenType type) const;
+    bool match(Token::Type type) const;
     bool match(const std::string &value) const;
-    bool match(TokenType type, const std::string &value) const;
+    bool match(Token::Type type, const std::string &value) const;
     bool match(const std::unordered_set<std::string> &values) const;
-    std::optional<Token> consume(TokenType type);
+    std::optional<Token> consume(Token::Type type);
     std::optional<Token> consume(const std::string &value);
     bool lookaheadMatch(size_t n, const std::string &value) const;
     bool lookaheadMatch(size_t n, const std::unordered_set<std::string> &values) const;
-    bool lookaheadMatch(size_t n, TokenType type) const;
+    bool lookaheadMatch(size_t n, Token::Type type) const;
 
     [[nodiscard]] std::shared_ptr<Statement> parseStatement();
 
     [[nodiscard]] std::shared_ptr<SegDir> parseSegDir();
     [[nodiscard]] std::shared_ptr<DataDir>
-    parseDataDir(std::shared_ptr<std::unordered_map<std::string, std::shared_ptr<DataVariableSymbol>>> namedFields = nullptr);
+    parseDataDir(const std::shared_ptr<std::unordered_map<std::string, std::shared_ptr<DataVariableSymbol>>> &namedFields = nullptr);
     [[nodiscard]] std::shared_ptr<StructDir> parseStructDir();
     [[nodiscard]] std::shared_ptr<ProcDir> parseProcDir();
     [[nodiscard]] std::shared_ptr<RecordDir> parseRecordDir();
@@ -58,7 +57,7 @@ private:
 
     [[nodiscard]] std::shared_ptr<DataItem>
     parseDataItem(const std::optional<Token> &idToken,
-                  std::shared_ptr<std::unordered_map<std::string, std::shared_ptr<DataVariableSymbol>>> namedFields);
+                  const std::shared_ptr<std::unordered_map<std::string, std::shared_ptr<DataVariableSymbol>>> &namedFields);
     [[nodiscard]] std::shared_ptr<InitializerList> parseInitValues();
     [[nodiscard]] std::shared_ptr<InitValue> parseSingleInitValue();
     [[nodiscard]] std::shared_ptr<InitializerList> parseInitializerList();

@@ -40,15 +40,15 @@ void Tokenizer::advance()
         addDiagnostic(pos, pos + 1, ErrorCode::INVALID_UTF8_ENCODING);
         pos += 1;
     } else {
-        pos += len;
+        pos += static_cast<uint32_t>(len);
     }
 }
 
-int Tokenizer::getSymbolLength(size_t symbolPos)
+int Tokenizer::getSymbolLength(size_t symbolPos) const
 {
     const char *str = src.c_str();
     auto len = static_cast<utf8proc_ssize_t>(src.size());
-    utf8proc_ssize_t idx = symbolPos;
+    auto idx = static_cast<utf8proc_ssize_t>(symbolPos);
     utf8proc_int32_t codepoint = 0;
 
     utf8proc_ssize_t charLen = utf8proc_iterate(reinterpret_cast<const utf8proc_uint8_t *>(str + idx), len - idx, &codepoint);
@@ -68,24 +68,24 @@ std::vector<Token> Tokenizer::tokenize()
         }
 
         if (src[pos] == '\n') {
-            tokens.emplace_back(Token{TokenType::EndOfLine, "", Span(pos, pos + 1, nullptr)});
+            tokens.emplace_back(Token{Token::Type::EndOfLine, "", Span(pos, pos + 1, nullptr)});
             advance();
             continue; // Skip calling getNextToken() after processing '\n'
         }
 
         Token token = getNextToken();
-        // if (token.type == TokenType::Invalid) {
-        //     // Stop tokenizing on error
+        // if (token.type == Token::Type::Invalid) {
+        //     Stop tokenizing on error
         //     break;
         // }
-        if (token.type != TokenType::Comment) {
+        if (token.type != Token::Type::Comment) {
             tokens.push_back(token);
         }
     }
 
     // because files always ends with a '\n', we can make EndOfFile span equal to the last '\n'
     // to be able to underline EndOfFile correctly
-    tokens.emplace_back(Token{TokenType::EndOfFile, "", Span(pos - 1, pos, nullptr)});
+    tokens.emplace_back(Token{Token::Type::EndOfFile, "", Span(pos - 1, pos, nullptr)});
 
     return tokens;
 }
@@ -112,14 +112,14 @@ Token Tokenizer::getNextToken()
         size_t errorStart = pos;
         advance();
         addDiagnostic(errorStart, pos, ErrorCode::LINE_CONTINUATION_NOT_SUPPORTED);
-        return Token{TokenType::Invalid, "\\", Span(errorStart, pos, nullptr)};
+        return Token{Token::Type::Invalid, "\\", Span(errorStart, pos, nullptr)};
     } else if (currentChar == ';') {
         size_t commentStart = pos;
         while (pos < src.size() && src[pos] != '\n') {
             advance();
         }
         std::string commentText = src.substr(commentStart, pos - commentStart);
-        return Token{TokenType::Comment, commentText, Span(commentStart, pos, nullptr)};
+        return Token{Token::Type::Comment, commentText, Span(commentStart, pos, nullptr)};
     } else {
         return getSpecialSymbolToken();
     }
@@ -151,10 +151,10 @@ bool Tokenizer::isDotName()
     //     return true;
     // }
 
-    // TokenType prevType = tokens.back().type;
+    // Token::Type prevType = tokens.back().type;
     // std::string prevLexeme = tokens.back().lexeme;
 
-    // if (prevType == TokenType::Register || prevType == TokenType::Identifier || prevLexeme == ")" ||
+    // if (prevType == Token::Type::Register || prevType == Token::Type::Identifier || prevLexeme == ")" ||
     //     prevLexeme == "]") {
     //     // Previous token is a register, identifier, or closing bracket; dot is an operator
     //     return false;
@@ -184,17 +184,17 @@ Token Tokenizer::getIdentifierOrKeywordToken()
     Span tokenSpan(start, pos, nullptr);
 
     if (directives.contains(lexemeUpper)) {
-        return Token{TokenType::Directive, lexeme, tokenSpan};
+        return Token{Token::Type::Directive, lexeme, tokenSpan};
     } else if (instructions.contains(lexemeUpper)) {
-        return Token{TokenType::Instruction, lexeme, tokenSpan};
+        return Token{Token::Type::Instruction, lexeme, tokenSpan};
     } else if (registers.contains(lexemeUpper)) {
-        return Token{TokenType::Register, lexeme, tokenSpan};
+        return Token{Token::Type::Register, lexeme, tokenSpan};
     } else if (operators.contains(lexemeUpper)) {
-        return Token{TokenType::Operator, lexeme, tokenSpan};
+        return Token{Token::Type::Operator, lexeme, tokenSpan};
     } else if (types.contains(lexemeUpper)) {
-        return Token{TokenType::Type, lexeme, tokenSpan};
+        return Token{Token::Type::Type, lexeme, tokenSpan};
     } else {
-        return Token{TokenType::Identifier, lexeme, tokenSpan};
+        return Token{Token::Type::Identifier, lexeme, tokenSpan};
     }
 }
 
@@ -211,10 +211,10 @@ Token Tokenizer::getNumberToken()
 
     // Now check if the lexeme is a valid number
     if (isValidNumber(lexeme)) {
-        return Token{TokenType::Number, lexeme, Span(start, pos, nullptr)};
+        return Token{Token::Type::Number, lexeme, Span(start, pos, nullptr)};
     } else {
         addDiagnostic(start, pos, ErrorCode::INVALID_NUMBER_FORMAT);
-        return Token{TokenType::Invalid, lexeme, Span(start, pos, nullptr)};
+        return Token{Token::Type::Invalid, lexeme, Span(start, pos, nullptr)};
     }
 }
 
@@ -296,11 +296,11 @@ Token Tokenizer::getStringLiteralToken()
     }
     if (pos >= src.size() || src[pos] != quoteChar) {
         addDiagnostic(start, pos, ErrorCode::UNTERMINATED_STRING_LITERAL);
-        return Token{TokenType::Invalid, src.substr(start, pos - start), Span(start, pos, nullptr)};
+        return Token{Token::Type::Invalid, src.substr(start, pos - start), Span(start, pos, nullptr)};
     }
     advance(); // Skip the closing quote
     std::string lexeme = src.substr(start, pos - start);
-    return Token{TokenType::StringLiteral, lexeme, Span(start, pos, nullptr)};
+    return Token{Token::Type::StringLiteral, lexeme, Span(start, pos, nullptr)};
 }
 
 Token Tokenizer::getSpecialSymbolToken()
@@ -310,52 +310,52 @@ Token Tokenizer::getSpecialSymbolToken()
     advance();
 
     std::string lexeme = src.substr(start, pos - start);
-    TokenType type = TokenType::Operator;
+    Token::Type type = Token::Type::Operator;
 
     switch (currentChar) {
     case '(':
-        type = TokenType::OpenBracket;
+        type = Token::Type::OpenBracket;
         break;
     case ')':
-        type = TokenType::CloseBracket;
+        type = Token::Type::CloseBracket;
         break;
     case '[':
-        type = TokenType::OpenSquareBracket;
+        type = Token::Type::OpenSquareBracket;
         break;
     case ']':
-        type = TokenType::CloseSquareBracket;
+        type = Token::Type::CloseSquareBracket;
         break;
     case ',':
-        type = TokenType::Comma;
+        type = Token::Type::Comma;
         break;
     case ':':
-        type = TokenType::Colon;
+        type = Token::Type::Colon;
         break;
     case '+':
     case '-':
     case '*':
     case '/':
     case '.':
-        type = TokenType::Operator;
+        type = Token::Type::Operator;
         break;
     case '=':
-        type = TokenType::Directive;
+        type = Token::Type::Directive;
         break;
     case '<':
-        type = TokenType::OpenAngleBracket;
+        type = Token::Type::OpenAngleBracket;
         break;
     case '>':
-        type = TokenType::CloseAngleBracket;
+        type = Token::Type::CloseAngleBracket;
         break;
     case '?':
-        type = TokenType::QuestionMark;
+        type = Token::Type::QuestionMark;
         break;
     case '$':
-        type = TokenType::Dollar;
+        type = Token::Type::Dollar;
         break;
     default:
         addDiagnostic(start, pos, ErrorCode::UNRECOGNIZED_SYMBOL);
-        return Token{TokenType::Invalid, lexeme, Span(start, pos, nullptr)};
+        return Token{Token::Type::Invalid, lexeme, Span(start, pos, nullptr)};
     }
 
     return Token{type, lexeme, Span(start, pos, nullptr)};

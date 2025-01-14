@@ -462,24 +462,24 @@ Parser::Parser(const std::shared_ptr<ParseSession> &parseSession, const std::vec
 // Only advance when matched a not EndOfFile
 void Parser::advance()
 {
-    if (currentToken.type == TokenType::EndOfFile) {
+    if (currentToken.type == Token::Type::EndOfFile) {
         LOG_DETAILED_ERROR("Trying to advance() after EndOfFile encountered!");
         return;
     }
     currentToken = tokens[++currentIndex];
 }
 
-bool Parser::match(TokenType type) const { return currentToken.type == type; }
+bool Parser::match(Token::Type type) const { return currentToken.type == type; }
 
 bool Parser::match(const std::string &value) const { return stringToUpper(currentToken.lexeme) == value; }
 
-bool Parser::match(TokenType type, const std::string &value) const
+bool Parser::match(Token::Type type, const std::string &value) const
 {
     return currentToken.type == type && stringToUpper(currentToken.lexeme) == value;
 }
 
 // Can't consume EndOfFile
-std::optional<Token> Parser::consume(TokenType type)
+std::optional<Token> Parser::consume(Token::Type type)
 {
     if (currentToken.type == type) {
         Token token = currentToken;
@@ -490,7 +490,7 @@ std::optional<Token> Parser::consume(TokenType type)
     }
 }
 // Can't consume EndOfFile
-std::optional<Token> Parser::consume(TokenType type, const std::string &value)
+std::optional<Token> Parser::consume(Token::Type type, const std::string &value)
 {
     if (currentToken.type == type && currentToken.lexeme == value) {
         Token token = currentToken;
@@ -541,11 +541,11 @@ private:
     std::stack<Token> expressionDelimitersStack;
 
     void advance();
-    bool match(TokenType type) const;
+    bool match(Token::Type type) const;
     bool match(const std::string &value) const;
-    bool match(TokenType type, const std::string &value) const;
-    std::optional<Token> consume(TokenType type);
-    std::optional<Token> consume(TokenType type, const std::string &value);
+    bool match(Token::Type type, const std::string &value) const;
+    std::optional<Token> consume(Token::Type type);
+    std::optional<Token> consume(Token::Type type, const std::string &value);
 
     ASTExpressionPtr parseLine();
     ASTExpressionPtr parseExpression();
@@ -776,7 +776,7 @@ File tokenize.h:
 #include <deque>
 #include <unordered_set>
 
-enum class TokenType : uint8_t {
+enum class Token::Type : uint8_t {
     Identifier,
     Directive,
     Instruction,
@@ -802,7 +802,7 @@ enum class TokenType : uint8_t {
 };
 
 struct Token {
-    enum TokenType type;
+    enum Token::Type type;
     std::string lexeme;
     Span span;
     bool operator<(const Token &other) const

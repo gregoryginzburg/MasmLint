@@ -55,7 +55,9 @@ Checks: "*,
         -bugprone-unchecked-optional-access,
         -useStlAlgorithm,
         -bugprone-exception-escape,
-        -readability-avoid-nested-conditional-operator
+        -readability-avoid-nested-conditional-operator,
+        -modernize-pass-by-value,
+        -readability-simplify-boolean-expr
 "
 
 
