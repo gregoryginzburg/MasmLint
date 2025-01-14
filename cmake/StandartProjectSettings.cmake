@@ -20,7 +20,7 @@ macro(ML_setup_build_type)
 endmacro()
 
 
-macro(RL_enable_colored_warnings)
+macro(ML_enable_colored_warnings)
 # Enhance error reporting and compiler messages
 if(CMAKE_CXX_COMPILER_ID MATCHES ".*Clang")
   if(WIN32)

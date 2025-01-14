@@ -37,7 +37,7 @@ macro(ML_apply_options)
     # General options
     include(cmake/StandartProjectSettings.cmake)
     ML_setup_build_type()
-    RL_enable_colored_warnings() # TODO: not working, why???  
+    ML_enable_colored_warnings() # TODO: not working, why???  
 
     # Compiler settings
     include(cmake/CompilerSettings.cmake)
