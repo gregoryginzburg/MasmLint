@@ -1,5 +1,6 @@
 #pragma once
 #include <fmt/core.h>
+#include <fmt/color.h>
 
 /*
 Regular logging macros
