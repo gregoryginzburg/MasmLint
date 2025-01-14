@@ -19,11 +19,12 @@ enum class ExprCtxtFlags : uint8_t {
 };
 
 // Ignore out of range enum classes (that don't correspond to any named fields in the enum class)
-// NOLINTNEXTLINE
+// NOLINTBEGIN
 inline ExprCtxtFlags operator|(ExprCtxtFlags a, ExprCtxtFlags b)
 {
     return static_cast<ExprCtxtFlags>(static_cast<uint8_t>(a) | static_cast<uint8_t>(b));
 }
+// NOLINTEND
 
 inline ExprCtxtFlags operator&(ExprCtxtFlags a, ExprCtxtFlags b)
 {
@@ -289,7 +290,7 @@ inline std::optional<uint32_t> parseNumber32bit(const std::string &input)
     // Convert the string to a number
     char *end = nullptr;
     errno = 0;
-    uint32_t result = std::strtoul(numberPart.c_str(), &end, base);
+    auto result = static_cast<uint32_t>(std::strtoul(numberPart.c_str(), &end, base));
 
     if (errno == ERANGE) {
         // overflow occured
