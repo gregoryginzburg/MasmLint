@@ -1,6 +1,8 @@
 set(SOURCES_LIST
-    test_add.cpp
-
+    test_main.cpp
+    test_tokenization.cpp
+    test_parsing.cpp
+    test_semantic_analysis.cpp
 )
 
 set(HEADERS_LIST

@@ -1,5 +1,4 @@
 set(SOURCES_LIST
-    add.cpp
     parser.cpp
     preprocessor.cpp
     symbol_table.cpp
@@ -17,7 +16,6 @@ set(SOURCES_LIST
 )
 
 set(HEADERS_LIST
-    add.h
     log.h
     timer.h
     parser.h

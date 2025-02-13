@@ -1,3 +1,1 @@
-.CODE
-    inchar eax
-END
+.myVar
