@@ -9,78 +9,79 @@
 DEFINE_ERROR(FAILED_TO_OPEN_FILE, 0, "Failed to open file '{}'.")
 
 // Tokenization error
-DEFINE_ERROR(UNRECOGNIZED_SYMBOL, 1, "Unrecognized symbol")
+DEFINE_ERROR(UNKNOWN_CHARACTER, 1, "Unknown character")
 DEFINE_ERROR(LINE_CONTINUATION_NOT_SUPPORTED, 2, "Line continuations are not supported")
 DEFINE_ERROR(INVALID_NUMBER_FORMAT, 3, "Invalid number format")
-DEFINE_ERROR(UNTERMINATED_STRING_LITERAL, 4, "Unterminated string literal")
+DEFINE_ERROR(UNTERMINATED_STRING_LITERAL, 4, "Missing closing quote")
 DEFINE_ERROR(INVALID_UTF8_ENCODING, 78, "Invalid utf-8 encoding")
 
 // Parser errors
 // General
 
-DEFINE_ERROR(SYMBOL_REDEFINITION, 5, "Symbol redefinition: `{}`")
+DEFINE_ERROR(SYMBOL_REDEFINITION, 5, "Symbol already defined: {}")
 
 // Program
-DEFINE_ERROR(EXPECTED_END_OF_LINE, 6, "Expected `\\n`, found `{}`")
-DEFINE_ERROR(EXPECTED_END_DIR, 7, "All files must end with the `END` directive")
+DEFINE_ERROR(EXPECTED_END_OF_LINE, 6, "End of line expected but `{}` found")
+DEFINE_ERROR(EXPECTED_END_DIR, 7, "`END` directive expected but `end of file` found")
 
 // Statement
-DEFINE_ERROR(MUST_BE_IN_SEGMENT_BLOCK, 8, "Instructions and data definitions must be in segment blocks (`.CODE` or `.DATA`)")
+DEFINE_ERROR(MUST_BE_IN_SEGMENT_BLOCK, 8, "Instructions and data definitions must be in segment blocks (.CODE or .DATA)")
 DEFINE_ERROR(PROC_MUST_BE_IN_SEGMENT_BLOCK, 9, "`PROC` definition must be in segment block")
-DEFINE_ERROR(MUST_BE_IN_CODE_SEGMENT, 10, "`PROC` definition must be in `.CODE` segment")
+DEFINE_ERROR(MUST_BE_IN_CODE_SEGMENT, 10, "`PROC` definition must be in .CODE segment")
 
 // SegDir
 
 // DataDir
-// EXPECTED_IDENTIFIER_IN_DATA_DIR = EXPECTED_IDENTIFIER
+// EXPECTED_IDENTIFIER_IN_DATA_DIR = EXPECTED_IDENTIFIER | ILLEGAL_USE_OF_RESERVED_NAME
 
 // StructDir
-// EXPECTED_IDENTIFIER_IN_STRUCT_DIR = EXPECTED_IDENTIFIER
-DEFINE_ERROR(EXPECTED_IDENTIFIER_BEFORE_STRUC, 11, "Expected a name before `STRUC` directive")
-DEFINE_ERROR(EXPECTED_DIFFERENT_IDENTIFIER_STRUCT_DIR, 12, "`STRUC` names dont't match")
+// EXPECTED_IDENTIFIER_IN_STRUCT_DIR = EXPECTED_IDENTIFIER | ILLEGAL_USE_OF_RESERVED_NAME
+DEFINE_ERROR(EXPECTED_IDENTIFIER_BEFORE_STRUC, 11, "Expecting name before `STRUC` directive")
+DEFINE_ERROR(EXPECTED_DIFFERENT_IDENTIFIER_STRUCT_DIR, 12, "Unmatched ENDS")
 DEFINE_ERROR(EXPECTED_ENDS, 13, "All `STRUC` definitions must end with the `ENDS` directive")
-DEFINE_ERROR(MISSING_IDENTIFIER_BEFORE_ENDS, 14, "Before `ENDS` directive a `STRUC` name must be specified")
+DEFINE_ERROR(MISSING_IDENTIFIER_BEFORE_ENDS, 14, "Expecting name before `ENDS` directive")
 
 // ProcDir
-// EXPECTED_IDENTIFIER_IN_PROC_DIR = EXPECTED_IDENTIFIER
-DEFINE_ERROR(EXPECTED_IDENTIFIER_BEFORE_PROC, 15, "Expected a name before `PROC` directive")
-DEFINE_ERROR(EXPECTED_DIFFERENT_IDENTIFIER_PROC_DIR, 16, "`PROC` names dont't match")
+// EXPECTED_IDENTIFIER_IN_PROC_DIR = EXPECTED_IDENTIFIER | ILLEGAL_USE_OF_RESERVED_NAME
+DEFINE_ERROR(EXPECTED_IDENTIFIER_BEFORE_PROC, 15, "Expecting name before `PROC` directive")
+DEFINE_ERROR(EXPECTED_DIFFERENT_IDENTIFIER_PROC_DIR, 16, "`PROC` names don't match")
 DEFINE_ERROR(EXPECTED_ENDP, 17, "All `PROC` definitions must end with the `ENDP` directive")
-DEFINE_ERROR(MISSING_IDENTIFIER_BEFORE_ENDP, 18, "Before `ENDP` directive a `PROC` name must be specified")
+DEFINE_ERROR(MISSING_IDENTIFIER_BEFORE_ENDP, 18, "Expecting name before `ENDP` directive")
 
 // RecordDir
-// EXPECTED_IDENTIFIER_IN_RECORD_DIR = EXPECTED_IDENTIFIER
-DEFINE_ERROR(EXPECTED_COLON_IN_RECORD_DIR, 19, "Expected `:`")
-DEFINE_ERROR(EXPECTED_IDENTIFIER_BEFORE_RECORD, 20, "Expected a name before `RECORD` directive")
+// EXPECTED_IDENTIFIER_IN_RECORD_DIR = EXPECTED_IDENTIFIER | ILLEGAL_USE_OF_RESERVED_NAME
+DEFINE_ERROR(EXPECTED_COLON_IN_RECORD_DIR, 19, "Expecting `:`")
+DEFINE_ERROR(EXPECTED_IDENTIFIER_BEFORE_RECORD, 20, "Expecting name before `RECORD` directive")
 
 // EquDir
-// EXPECTED_IDENTIFIER_IN_EQU_DIR = EXPECTED_IDENTIFIER
-DEFINE_ERROR(EXPECTED_IDENTIFIER_BEFORE_EQU, 21, "Expected a name before `EQU` directive")
+// EXPECTED_IDENTIFIER_IN_EQU_DIR = EXPECTED_IDENTIFIER | ILLEGAL_USE_OF_RESERVED_NAME
+DEFINE_ERROR(EXPECTED_IDENTIFIER_BEFORE_EQU, 21, "Expecting name before `EQU` directive")
 
 // EqualDir
-// EXPECTED_IDENTIFIER_IN_EQUAL_DIR = EXPECTED_IDENTIFIER
-DEFINE_ERROR(EXPECTED_IDENTIFIER_BEFORE_EQUAL, 22, "Expected a name before `=` directive")
+// EXPECTED_IDENTIFIER_IN_EQUAL_DIR = EXPECTED_IDENTIFIER | ILLEGAL_USE_OF_RESERVED_NAME
+DEFINE_ERROR(EXPECTED_IDENTIFIER_BEFORE_EQUAL, 22, "Expecting name before `=` directive")
 
 // Instruction
-DEFINE_ERROR(EXPECTED_INSTRUCTION, 23, "Expected instruction name")
-DEFINE_ERROR(EXPECTED_COMMA_OR_END_OF_LINE, 24, "Expected `,` or `\\n`")
-// EXPECTED_IDENTIFIER_IN_LABEL = EXPECTED_IDENTIFIER
+DEFINE_ERROR(EXPECTED_INSTRUCTION, 23, "Illegal instruction")
+DEFINE_ERROR(EXPECTED_COMMA_OR_END_OF_LINE, 24, "Expecting `,` or `\\n`")
+// EXPECTED_IDENTIFIER_IN_LABEL = EXPECTED_IDENTIFIER | ILLEGAL_USE_OF_RESERVED_NAME
 
 // DataItem
-DEFINE_ERROR(EXPECTED_VARIABLE_NAME_OR_DATA_DIRECTIVE, 25, "Expected variable name or data directive (`DB`, `DW`, `DD`, 'DQ`)")
+DEFINE_ERROR(EXPECTED_VARIABLE_NAME_OR_DATA_DIRECTIVE, 25, "Expecting variable name or data directive (`DB`, `DW`, `DD`, 'DQ`)")
 
 // InitValue
 // UNCLOSED_DELIMITER_IN_INIT_VALUE = UNCLOSED_DELIMITER
-DEFINE_ERROR(EXPECTED_COMMA_OR_CLOSING_DELIMITER, 26, "Expected `,` or `>` or `)`")
-DEFINE_ERROR(EXPECTED_OPEN_BRACKET, 27, "Expected `(`")
+DEFINE_ERROR(EXPECTED_COMMA_OR_CLOSING_DELIMITER, 26, "Expecting `,` or `{}`")
+DEFINE_ERROR(EXPECTED_OPEN_BRACKET, 27, "Expecting `(`")
 
 // Expression
-DEFINE_ERROR(UNCLOSED_DELIMITER, 28, "This line contains an unclosed delimiter: `{}`")
-DEFINE_ERROR(EXPECTED_EXPRESSION, 29, "Expected expression, found `{}`")
+DEFINE_ERROR(UNCLOSED_DELIMITER, 28, "Unclosed delimiter: `{}`")
+DEFINE_ERROR(EXPECTED_EXPRESSION, 29, "Expression expected but `{}` found")
 DEFINE_ERROR(UNEXPECTED_CLOSING_DELIMITER, 30, "Unexpected closing delimiter: `{}`")
-DEFINE_ERROR(EXCPECTED_OPERATOR_OR_CLOSING_DELIMITER, 31, "Expected operator or `)` or `]`")
-DEFINE_ERROR(EXPECTED_IDENTIFIER, 32, "Expected name, found `{}`")
-
+DEFINE_ERROR(EXCPECTED_OPERATOR_OR_CLOSING_DELIMITER, 31, "Expecting operator or `{}`")
+DEFINE_ERROR(EXPECTED_IDENTIFIER, 32, "Name expected but `{}` found")
+DEFINE_ERROR(ILLEGAL_USE_OF_RESERVED_NAME, 79, "Illegal use of reserved name")
+DEFINE_ERROR(NEED_STRUCTURE_MEMBER_NAME, 80, "Structure member name expected but `{}` found")
 // Semantic errors
 
 // DataItem errors
@@ -90,64 +91,64 @@ DEFINE_ERROR(INVALID_DATA_TYPE, 33, "Invalid data type `{}`")
 DEFINE_ERROR(INVALID_DATA_INITIALIZER, 34, "Invalid data initializer")
 // EXPECTED_STRUC_OR_RECORD_DATA_INITIALIZER = INVALID_DATA_INITIALIZER
 // EXPECTED_SINGLE_ITEM_DATA_INITIALIZER = INVALID_DATA_INITIALIZER
-DEFINE_ERROR(TOO_MANY_INITIAL_VALUES_FOR_RECORD, 35, "Too many initial values for `RECORD`")
-DEFINE_ERROR(TOO_MANY_INITIAL_VALUES_FOR_STRUC, 36, "Too many initial values for `STRUC`")
+DEFINE_ERROR(TOO_MANY_INITIAL_VALUES, 35, "Too many initial values")
+// DEFINE_ERROR(TOO_MANY_INITIAL_VALUES_FOR_STRUC, 36, "Too many initial values for `STRUC`") // DELETED
 DEFINE_ERROR(INITIALIZER_TOO_LARGE_FOR_SPECIFIED_SIZE, 37, "Initializer is too large for the specified size")
 
 // Instruction errors
 DEFINE_ERROR(INVALID_NUMBER_OF_OPERANDS, 38, "Invalid number of operands in the instruction")
-DEFINE_ERROR(CANT_HAVE_TWO_MEMORY_OPERANDS, 39, "Can't have 2 memory operands")
-DEFINE_ERROR(DESTINATION_OPERAND_CANT_BE_IMMEDIATE, 40, "Destination operand can't be immediate") // DELETED
+DEFINE_ERROR(CANT_HAVE_TWO_MEMORY_OPERANDS, 39, "Instruction can't have 2 memory operands")
+// DEFINE_ERROR(DESTINATION_OPERAND_CANT_BE_IMMEDIATE, 40, "Destination operand can't be immediate") // DELETED
 DEFINE_ERROR(IMMEDIATE_OPERAND_TOO_BIG_FOR_OPERAND, 41, "Immediate operand is too big for the destination operand")
-DEFINE_ERROR(ONE_OF_OPERANDS_MUST_HAVE_SIZE, 42, "At least 1 of the operands must have a specified size")
-DEFINE_ERROR(OPERANDS_HAVE_DIFFERENT_SIZE, 43, "Operands have different size")
-DEFINE_ERROR(OPERAND_MUST_BE_MEMORY_OR_REGISTER_OPERAND, 44, "Operand must be a memory or a register")
-DEFINE_ERROR(OPERAND_MUST_HAVE_SIZE, 45, "Operand must have a specified size")
+DEFINE_ERROR(ONE_OF_OPERANDS_MUST_HAVE_SIZE, 42, "At least 1 of the operands must have a specified type")
+DEFINE_ERROR(OPERANDS_HAVE_DIFFERENT_SIZE, 43, "Operand types don't match")
+DEFINE_ERROR(OPERAND_MUST_BE_MEMORY_OR_REGISTER_OPERAND, 44, "Expecting memory or register operand")
+DEFINE_ERROR(OPERAND_MUST_HAVE_SIZE, 45, "Operand must have a specified type")
 DEFINE_ERROR(INVALID_OPERAND_SIZE, 46, "Invalid operand size")
-DEFINE_ERROR(OPERAND_MUST_BE_ADDRESS_EXPRESSION, 47, "Operand must be an address expression") // DELETED
+// DEFINE_ERROR(OPERAND_MUST_BE_ADDRESS_EXPRESSION, 47, "Operand must be an address expression") // DELETED
 DEFINE_ERROR(OPERAND_MUST_BE_REGISTER, 48, "Operand must be a register")
 DEFINE_ERROR(OPERAND_MUST_BE_MEMORY_OPERAND, 49, "Operand must be a memory")
 DEFINE_ERROR(FIRST_OPERAND_MUST_BE_BIGGER_THAN_SECOND, 74, "First operand must be bigger than second")
-DEFINE_ERROR(OPERAND_MUST_BE_IMMEDIATE_OR_CL_REGISTER, 75, "Operand must be immediate or `CL` register")
+DEFINE_ERROR(OPERAND_MUST_BE_IMMEDIATE_OR_CL_REGISTER, 75, "Operand must be immediate or CL register")
 DEFINE_ERROR(OPERAND_MUST_BE_IMMEDIATE, 76, "Operand must be immediate")
 DEFINE_ERROR(OPERAND_MUST_BE_LABEL, 77, "Operand must be label")
 
 // RecordDir errors
-DEFINE_ERROR(RECORD_WIDTH_TOO_BIG, 50, "`RECORD` total width exceeds 32 bits")
+DEFINE_ERROR(RECORD_WIDTH_TOO_BIG, 50, "RECORD width exceeds 32 bits")
 
 // RecordField errors
-DEFINE_ERROR(RECORD_FIELD_WIDTH_MUST_BE_POSITIVE, 51, "`RECORD` field width must be positive")
-DEFINE_ERROR(RECORD_FIELD_TOO_BIG, 52, "`RECORD` field width exceeds 31 bits")
+DEFINE_ERROR(RECORD_FIELD_WIDTH_MUST_BE_POSITIVE, 51, "RECORD field width must be positive")
+DEFINE_ERROR(RECORD_FIELD_TOO_BIG, 52, "`RECORD` field width exceeds 32 bits")
 
 // Expression errors
-DEFINE_ERROR(EXPRESSION_MUST_BE_CONSTANT, 53, "Expression must be constant")
+DEFINE_ERROR(EXPRESSION_MUST_BE_CONSTANT, 53, "Expecting constant expression")
 DEFINE_ERROR(UNDEFINED_SYMBOL, 54, "Undefined symbol `{}`")
 DEFINE_ERROR(REGISTER_NOT_ALLOWED, 55, "Register is not allowed outside of instruction operands")
 DEFINE_ERROR(CONSTANT_TOO_LARGE, 56, "Constant too large")
-DEFINE_ERROR(UNARY_OPERATOR_INCORRECT_ARGUMENT, 57, "Incorrect argument in the unary operator `{}`")
+DEFINE_ERROR(UNARY_OPERATOR_INCORRECT_ARGUMENT, 57, "Incorrect argument in unary operator `{}`")
 
 // Dot operator
-DEFINE_ERROR(DOT_OPERATOR_INCORRECT_ARGUMENT, 58, "Incorrect argument in the binary operator `.`")
+DEFINE_ERROR(DOT_OPERATOR_INCORRECT_ARGUMENT, 58, "Incorrect argument in binary operator `.`")
 // DOT_SIZE_NOT_SPECIFIED = DOT_OPERATOR_INCORRECT_ARGUMENT
 // DOT_TYPE_NOT_STRUCT = DOT_OPERATOR_INCORRECT_ARGUMENT
 DEFINE_ERROR(DOT_OPERATOR_FIELD_DOESNT_EXIST, 59, "STRUC `{}` doesn't have `{}` field")
 
 // Ptr Operator
-DEFINE_ERROR(PTR_OPERATOR_INCORRECT_ARGUMENT, 60, "Incorrect argument in the binary operator `PTR`")
+DEFINE_ERROR(PTR_OPERATOR_INCORRECT_ARGUMENT, 60, "Incorrect argument in binary operator `PTR`")
 
-DEFINE_ERROR(DIVISION_BY_ZERO_IN_EXPRESSION, 61, "Division by `0` in the expression")
+DEFINE_ERROR(DIVISION_BY_ZERO_IN_EXPRESSION, 61, "Division by `0` in expression")
 DEFINE_ERROR(INVALID_SCALE_VALUE, 62, "Invalid scale value")
-DEFINE_ERROR(INCORRECT_INDEX_REGISTER, 63, "Index register can't be `ESP`")
-DEFINE_ERROR(OTHER_BINARY_OPERATOR_INCORRECT_ARGUMENT, 64, "Incorrect argument in the binary operator `{}`")
-DEFINE_ERROR(CANT_ADD_VARIABLES, 65, "Can't {} add 2 variables")
+DEFINE_ERROR(INCORRECT_INDEX_REGISTER, 63, "Index register can't be ESP")
+DEFINE_ERROR(OTHER_BINARY_OPERATOR_INCORRECT_ARGUMENT, 64, "Incorrect argument in binary operator `{}`")
+DEFINE_ERROR(CANT_ADD_VARIABLES, 65, "Can't {} add data variables")
 DEFINE_ERROR(CANT_HAVE_REGISTERS_IN_EXPRESSION, 66, "Can't have registers in expression")
-DEFINE_ERROR(MORE_THAN_TWO_REGISTERS, 67, "Can't have more than 2 registers in an address expression with modificators")
-DEFINE_ERROR(MORE_THAN_ONE_SCALE, 68, "Can't have more than 1 register with a scale in an address expression with modificators")
+DEFINE_ERROR(MORE_THAN_TWO_REGISTERS, 67, "Too many registers in address expression with modificators")
+DEFINE_ERROR(MORE_THAN_ONE_SCALE, 68, "Can't have more than 1 register with a scale in address expression with modificators")
 DEFINE_ERROR(TWO_ESP_REGISTERS, 69, "Can't have 2 ESP registers in an address expression with modificators")
-DEFINE_ERROR(NON_32BIT_REGISTER, 70, "Can't have a non 32 bit register in an address expression with modificators")
-DEFINE_ERROR(BINARY_MINUS_OPERATOR_INCORRECT_ARGUMENT, 71, "Incorrect argument in the binary operator `-`")
+DEFINE_ERROR(NON_32BIT_REGISTER, 70, "Only 32-bit register can be used as modifier")
+DEFINE_ERROR(BINARY_MINUS_OPERATOR_INCORRECT_ARGUMENT, 71, "Incorrect argument in binary operator `-`")
 DEFINE_ERROR(MORE_THAN_ONE_REGISTER_IN_SQUARE_BRACKETS, 72,
-             "Can only have a register with an optional scale and an optional constant expression inside `[]`")
+             "Can only have register with an optional scale and an optional constant expression inside `[]`")
 
 // Warnings
 // Expression warnings

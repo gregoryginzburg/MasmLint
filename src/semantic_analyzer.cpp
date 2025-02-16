@@ -713,7 +713,7 @@ bool SemanticAnalyzer::visitRecordField(const std::shared_ptr<RecordField> &reco
         recordField->diagnostic = reportRecordFieldWidthMustBePositive(recordField, width);
         return false;
     }
-    if (width > 31) {
+    if (width > 32) {
         recordField->diagnostic = reportRecordFieldWidthTooBig(recordField, width);
         return false;
     }
@@ -968,15 +968,17 @@ bool SemanticAnalyzer::visitInitValueHelper(const std::shared_ptr<InitValue> &in
             for (const auto &init : structOrRecordInitValue->initList->fields) {
                 Token newExpectedTypeToken = expectedStructSymbol->structDir->fields[i]->dataItem->dataTypeToken;
 
-                if (std::dynamic_pointer_cast<DupOperator>(init)) {
-                    if (dataDirectives.contains(stringToUpper(newExpectedTypeToken.lexeme))) {
-                        initValue->diagnostic = reportExpectedSingleItemDataInitializer(init, newExpectedTypeToken);
-                        return false;
-                    } else {
-                        initValue->diagnostic = reportExpectedStrucOrRecordDataInitializer(init, newExpectedTypeToken);
-                        return false;
-                    }
-                }
+                // TODO: refactor completly
+                // for now just dont show false errors (but not showing some of the needed error messages)
+                // if (std::dynamic_pointer_cast<DupOperator>(init)) {
+                //     if (dataDirectives.contains(stringToUpper(newExpectedTypeToken.lexeme))) {
+                //         initValue->diagnostic = reportExpectedSingleItemDataInitializer(init, newExpectedTypeToken);
+                //         return false;
+                //     } else {
+                //         initValue->diagnostic = reportExpectedStrucOrRecordDataInitializer(init, newExpectedTypeToken);
+                //         return false;
+                //     }
+                // }
                 bool success = visitInitValueHelper(init, dataVariableSymbol, newExpectedTypeToken, dupMultiplier);
                 if (!success) {
                     initValue->diagnostic = init->diagnostic;

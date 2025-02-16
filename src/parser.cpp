@@ -15,6 +15,26 @@ Parser::Parser(const std::shared_ptr<ParseSession> &parseSession, const std::vec
 {
 }
 
+std::string Parser::getMathcingDelimiter(const std::string &delimiter)
+{
+
+    if (delimiter == "(") {
+        return ")";
+    } else if (delimiter == "[") {
+        return "]";
+    } else if (delimiter == "<") {
+        return ">";
+    } else if (delimiter == ")") {
+        return "(";
+    } else if (delimiter == "]") {
+        return "[";
+    } else if (delimiter == ">") {
+        return ">";
+    } else {
+        return "";
+    }
+}
+
 // Only advance when matched a not EndOfFile
 void Parser::advance()
 {
@@ -483,11 +503,7 @@ std::shared_ptr<ProcDir> Parser::parseProcDir()
     }
     consume(Token::Type::EndOfLine);
 
-    if (!currentSegment) {
-        auto diag = reportProcMustBeInSegmentBlock(firstIdToken, directiveToken);
-        return INVALID_PROC_DIR(diag);
-    }
-    if (currentSegment.value() != ".CODE") {
+    if (!currentSegment || currentSegment.value() != ".CODE") {
         auto diag = reportMustBeInCodeSegment(firstIdToken, directiveToken);
         return INVALID_PROC_DIR(diag);
     }

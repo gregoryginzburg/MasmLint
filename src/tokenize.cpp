@@ -354,7 +354,7 @@ Token Tokenizer::getSpecialSymbolToken()
         type = Token::Type::Dollar;
         break;
     default:
-        addDiagnostic(start, pos, ErrorCode::UNRECOGNIZED_SYMBOL);
+        addDiagnostic(start, pos, ErrorCode::UNKNOWN_CHARACTER);
         return Token{Token::Type::Invalid, lexeme, Span(start, pos, nullptr)};
     }
 

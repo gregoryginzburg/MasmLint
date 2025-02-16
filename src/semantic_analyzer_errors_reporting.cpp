@@ -106,8 +106,8 @@ DiagnosticPtr SemanticAnalyzer::reportExpectedSingleItemDataInitializer(const st
 DiagnosticPtr SemanticAnalyzer::reportTooManyInitialValuesForRecord(const std::shared_ptr<InitValue> &initValue,
                                                                     const std::shared_ptr<RecordSymbol> &recordSymbol)
 {
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::TOO_MANY_INITIAL_VALUES_FOR_RECORD);
-    diag.addPrimaryLabel(getInitValueSpan(initValue), fmt::format("expected `{}` initial values or less", recordSymbol->fields.size()));
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::TOO_MANY_INITIAL_VALUES);
+    diag.addPrimaryLabel(getInitValueSpan(initValue), fmt::format("expected {} initial values or less", recordSymbol->fields.size()));
     parseSess->dcx->addDiagnostic(diag);
     return parseSess->dcx->getLastDiagnostic();
 }
@@ -115,8 +115,8 @@ DiagnosticPtr SemanticAnalyzer::reportTooManyInitialValuesForRecord(const std::s
 DiagnosticPtr SemanticAnalyzer::reportTooManyInitialValuesForStruc(const std::shared_ptr<InitValue> &initValue,
                                                                    const std::shared_ptr<StructSymbol> &structSymbol)
 {
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::TOO_MANY_INITIAL_VALUES_FOR_STRUC);
-    diag.addPrimaryLabel(getInitValueSpan(initValue), fmt::format("expected `{}` initial values or less", structSymbol->structDir->fields.size()));
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::TOO_MANY_INITIAL_VALUES);
+    diag.addPrimaryLabel(getInitValueSpan(initValue), fmt::format("expected {} initial values or less", structSymbol->structDir->fields.size()));
     parseSess->dcx->addDiagnostic(diag);
     return parseSess->dcx->getLastDiagnostic();
 }
@@ -127,10 +127,9 @@ DiagnosticPtr SemanticAnalyzer::reportInitializerTooLargeForSpecifiedSize(const 
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INITIALIZER_TOO_LARGE_FOR_SPECIFIED_SIZE);
     ExpressionPtr expr = initValue->expr;
     if (expr->constantValue) {
-        diag.addPrimaryLabel(getExpressionSpan(expr),
-                             fmt::format("this has value `{}` and needs `{}` bytes", expr->constantValue.value(), actualSize));
+        diag.addPrimaryLabel(getExpressionSpan(expr), fmt::format("this has value {} and needs {} bytes", expr->constantValue.value(), actualSize));
     } else {
-        diag.addPrimaryLabel(getExpressionSpan(expr), fmt::format("this has size `{}`", actualSize));
+        diag.addPrimaryLabel(getExpressionSpan(expr), fmt::format("this has size {}", actualSize));
     }
     // TODO: add secondary label for expectedTypeToken?
     parseSess->dcx->addDiagnostic(diag);
@@ -166,10 +165,10 @@ DiagnosticPtr SemanticAnalyzer::reportImmediateOperandTooBigForOperand(const std
     Token mnemonicToken = instruction->mnemonicToken.value();
     diag.addPrimaryLabel(mnemonicToken.span, "");
 
-    diag.addSecondaryLabel(getExpressionSpan(instruction->operands[0]), fmt::format("this operand has size `{}`", firstOpSize));
+    diag.addSecondaryLabel(getExpressionSpan(instruction->operands[0]), fmt::format("this operand has size {}", firstOpSize));
     diag.addSecondaryLabel(
         getExpressionSpan(instruction->operands[1]),
-        fmt::format("immediate operand has value `{}` and needs `{}` bytes", instruction->operands[1]->constantValue.value(), immediateOpSize));
+        fmt::format("operand evaluates to {} and needs {} bytes", instruction->operands[1]->constantValue.value(), immediateOpSize));
     parseSess->dcx->addDiagnostic(diag);
     return parseSess->dcx->getLastDiagnostic();
 }
@@ -182,6 +181,7 @@ DiagnosticPtr SemanticAnalyzer::reportOneOfOperandsMustHaveSize(const std::share
 
     diag.addSecondaryLabel(getExpressionSpan(instruction->operands[0]), "this operand doesn't have a size");
     diag.addSecondaryLabel(getExpressionSpan(instruction->operands[1]), "this operand doesn't have a size");
+    diag.addNoteMessage("Use PTR operator to specify operand type");
 
     parseSess->dcx->addDiagnostic(diag);
     return parseSess->dcx->getLastDiagnostic();
@@ -193,8 +193,8 @@ DiagnosticPtr SemanticAnalyzer::reportOperandsHaveDifferentSize(const std::share
     Token mnemonicToken = instruction->mnemonicToken.value();
     diag.addPrimaryLabel(mnemonicToken.span, "");
 
-    diag.addSecondaryLabel(getExpressionSpan(instruction->operands[0]), fmt::format("this operand has size `{}`", firstOpSize));
-    diag.addSecondaryLabel(getExpressionSpan(instruction->operands[1]), fmt::format("this operand has size `{}`", secondOpSize));
+    diag.addSecondaryLabel(getExpressionSpan(instruction->operands[0]), fmt::format("this operand has size {}", firstOpSize));
+    diag.addSecondaryLabel(getExpressionSpan(instruction->operands[1]), fmt::format("this operand has size {}", secondOpSize));
 
     parseSess->dcx->addDiagnostic(diag);
     return parseSess->dcx->getLastDiagnostic();
@@ -212,6 +212,7 @@ DiagnosticPtr SemanticAnalyzer::reportOperandMustHaveSize(const ExpressionPtr &o
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::OPERAND_MUST_HAVE_SIZE);
     diag.addPrimaryLabel(getExpressionSpan(operand), "");
+    diag.addNoteMessage("Use PTR operator to specify operand type");
     parseSess->dcx->addDiagnostic(diag);
     return parseSess->dcx->getLastDiagnostic();
 }
@@ -220,7 +221,7 @@ DiagnosticPtr SemanticAnalyzer::reportInvalidOperandSize(const ExpressionPtr &op
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::INVALID_OPERAND_SIZE);
     diag.addPrimaryLabel(getExpressionSpan(operand),
-                         fmt::format("expected operand with size `{}`, found operand with size `{}`", expectedSize, actualSize));
+                         fmt::format("expected operand with size {}, found operand with size {}", expectedSize, actualSize));
     parseSess->dcx->addDiagnostic(diag);
     return parseSess->dcx->getLastDiagnostic();
 }
@@ -248,8 +249,8 @@ DiagnosticPtr SemanticAnalyzer::reportFirstOperandMustBeBiggerThanSecond(const s
     Token mnemonicToken = instruction->mnemonicToken.value();
     diag.addPrimaryLabel(mnemonicToken.span, "");
 
-    diag.addSecondaryLabel(getExpressionSpan(instruction->operands[0]), fmt::format("this operand has size `{}`", firstOpSize));
-    diag.addSecondaryLabel(getExpressionSpan(instruction->operands[1]), fmt::format("this operand has size `{}`", secondOpSize));
+    diag.addSecondaryLabel(getExpressionSpan(instruction->operands[0]), fmt::format("this operand has size {}", firstOpSize));
+    diag.addSecondaryLabel(getExpressionSpan(instruction->operands[1]), fmt::format("this operand has size {}", secondOpSize));
 
     parseSess->dcx->addDiagnostic(diag);
     return parseSess->dcx->getLastDiagnostic();
@@ -284,7 +285,7 @@ DiagnosticPtr SemanticAnalyzer::reportRecordWidthTooBig(const std::shared_ptr<Re
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::RECORD_WIDTH_TOO_BIG);
     Token recordIdToken = recordDir->idToken;
-    diag.addPrimaryLabel(recordIdToken.span, fmt::format("this `RECORD` has total width `{}`", width));
+    diag.addPrimaryLabel(recordIdToken.span, fmt::format("this `RECORD` has total width {}", width));
     parseSess->dcx->addDiagnostic(diag);
     return parseSess->dcx->getLastDiagnostic();
 }
@@ -293,7 +294,7 @@ DiagnosticPtr SemanticAnalyzer::reportRecordWidthTooBig(const std::shared_ptr<Re
 DiagnosticPtr SemanticAnalyzer::reportRecordFieldWidthMustBePositive(const std::shared_ptr<RecordField> &recordField, int64_t width)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::RECORD_FIELD_WIDTH_MUST_BE_POSITIVE);
-    diag.addPrimaryLabel(getExpressionSpan(recordField->width), fmt::format("this evaluates to `{}`", width));
+    diag.addPrimaryLabel(getExpressionSpan(recordField->width), fmt::format("this evaluates to {}", width));
     parseSess->dcx->addDiagnostic(diag);
     return parseSess->dcx->getLastDiagnostic();
 }
@@ -301,7 +302,7 @@ DiagnosticPtr SemanticAnalyzer::reportRecordFieldWidthMustBePositive(const std::
 DiagnosticPtr SemanticAnalyzer::reportRecordFieldWidthTooBig(const std::shared_ptr<RecordField> &recordField, int64_t width)
 {
     Diagnostic diag(Diagnostic::Level::Error, ErrorCode::RECORD_FIELD_TOO_BIG);
-    diag.addPrimaryLabel(getExpressionSpan(recordField->width), fmt::format("this evaluates to `{}`", width));
+    diag.addPrimaryLabel(getExpressionSpan(recordField->width), fmt::format("this evaluates to {}", width));
     parseSess->dcx->addDiagnostic(diag);
     return parseSess->dcx->getLastDiagnostic();
 }
@@ -490,9 +491,9 @@ DiagnosticPtr SemanticAnalyzer::reportInvalidScaleValue(const std::shared_ptr<Bi
     auto right = node->right;
 
     if (left->constantValue) {
-        diag.addPrimaryLabel(getExpressionSpan(left), fmt::format("this evaluates to `{}`", left->constantValue.value()));
+        diag.addPrimaryLabel(getExpressionSpan(left), fmt::format("this evaluates to {}", left->constantValue.value()));
     } else {
-        diag.addPrimaryLabel(getExpressionSpan(right), fmt::format("this evaluates to `{}`", right->constantValue.value()));
+        diag.addPrimaryLabel(getExpressionSpan(right), fmt::format("this evaluates to {}", right->constantValue.value()));
     }
 
     diag.addNoteMessage("scale can only be {1, 2, 4, 8}");
@@ -524,7 +525,7 @@ DiagnosticPtr SemanticAnalyzer::reportOtherBinaryOperatorIncorrectArgument(const
         diag.addSecondaryLabel(getExpressionSpan(left), fmt::format("expected `constant expression`, found `{}`", getOperandType(left)));
     } else {
         if (node->op.lexeme == "*") {
-            diag.addPrimaryLabel(node->op.span, "can only multiply constant expressions or a register by the scale");
+            diag.addPrimaryLabel(node->op.span, "can only multiply constant expressions or register by scale");
         } else {
             diag.addPrimaryLabel(node->op.span, fmt::format("operator `{}` supports only constant expressions", node->op.lexeme));
         }

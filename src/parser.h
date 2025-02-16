@@ -25,6 +25,7 @@ private:
 
     std::stack<Token> expressionDelimitersStack;
     std::stack<Token> dataInitializerDelimitersStack;
+    std::string getMathcingDelimiter(const std::string& delimiter);
 
     void advance();
     void synchronizeLine();

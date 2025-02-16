@@ -56,7 +56,8 @@ inline std::string stringToUpper(const std::string &str)
 inline bool isReservedWord(const Token &token)
 {
     return token.lexeme.size() != 1 && token.type != Token::Type::Number && token.type != Token::Type::StringLiteral &&
-           token.type != Token::Type::Identifier && token.type != Token::Type::EndOfLine && token.type != Token::Type::EndOfFile;
+           token.type != Token::Type::Identifier && token.type != Token::Type::EndOfLine && token.type != Token::Type::EndOfFile &&
+           token.type != Token::Type::Invalid;
 }
 
 inline std::string tokenTypeToStr(enum Token::Type type)
