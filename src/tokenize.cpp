@@ -30,8 +30,10 @@ static const std::unordered_set<std::string> instructions = {
     "MOVSX", "MOVZX", "MUL", "NEG",   "NOT",  "OR",  "POP",    "POPFD", "PUSH", "PUSHFD", "RCL",  "RCR",    "RET",     "ROL",    "ROR",  "SBB",
     "SHL",   "SHR",   "SUB", "TEST",  "XCHG", "XOR", "INCHAR", "ININT", "EXIT", "OUTI",   "OUTU", "OUTSTR", "OUTCHAR", "NEWLINE"};
 
-static const std::unordered_set<std::string> registers = {"AL", "AX",  "EAX", "BL",  "BX", "EBX", "CL", "CX",  "ECX", "DL",
-                                                          "DX", "EDX", "SI",  "ESI", "DI", "EDI", "BP", "EBP", "SP",  "ESP"};
+// when changing this MUST change std::map<std::string, int> SemanticAnalyzer::registerSizes in semantic_analyzer.cpp
+static const std::unordered_set<std::string> registers = {
+    "AH",  "AL",  "AX",  "BH", "BL", "BP",  "BX",  "CH",  "CL",  "CR0", "CR2", "CR3", "CS",  "CX",  "DH", "DI", "DL", "DR0", "DR1", "DR2",
+    "DR3", "DR6", "DR7", "DS", "DX", "EAX", "EBP", "EBX", "ECX", "EDI", "EDX", "ES",  "ESI", "ESP", "FS", "GS", "SI", "SP",  "SS",  "ST"};
 
 void Tokenizer::advance()
 {

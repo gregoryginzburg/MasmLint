@@ -6,9 +6,11 @@
 #include <cstdint>
 #include <ranges>
 
-std::map<std::string, int> SemanticAnalyzer::registerSizes = {{"AL", 1}, {"AX", 2},  {"EAX", 4}, {"BL", 1},  {"BX", 2},  {"EBX", 4}, {"CL", 1},
-                                                              {"CX", 2}, {"ECX", 4}, {"DL", 1},  {"DX", 2},  {"EDX", 4}, {"SI", 2},  {"ESI", 4},
-                                                              {"DI", 2}, {"EDI", 4}, {"BP", 2},  {"EBP", 4}, {"SP", 2},  {"ESP", 4}};
+std::map<std::string, int> SemanticAnalyzer::registerSizes = {
+    {"AH", 1},  {"AL", 1},  {"AX", 2},  {"BH", 1},  {"BL", 1}, {"BP", 2},  {"BX", 2},  {"CH", 1},  {"CL", 1},  {"CR0", 4},
+    {"CR2", 4}, {"CR3", 4}, {"CS", 2},  {"CX", 2},  {"DH", 1}, {"DI", 2},  {"DL", 1},  {"DR0", 4}, {"DR1", 4}, {"DR2", 4},
+    {"DR3", 4}, {"DR6", 4}, {"DR7", 4}, {"DS", 2},  {"DX", 2}, {"EAX", 4}, {"EBP", 4}, {"EBX", 4}, {"ECX", 4}, {"EDI", 4},
+    {"EDX", 4}, {"ES", 2},  {"ESI", 4}, {"ESP", 4}, {"FS", 2}, {"GS", 2},  {"SI", 2},  {"SP", 2},  {"SS", 2},  {"ST", 10}};
 
 std::map<int, std::string> SemanticAnalyzer::sizeValueToStr = {{1, "BYTE"}, {2, "WORD"}, {4, "DWORD"}, {8, "QWORD"}};
 

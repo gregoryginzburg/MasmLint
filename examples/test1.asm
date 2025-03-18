@@ -1,14 +1,9 @@
 .DATA
-MyStruc Struc
-db 1
-MyStruc ENDS
-
-MyStruc <1 DUP (1)>
-
+; test db 1
+test1 db 2 dup (<1, 2, 3)
 
 .CODE
-push [eax]
-mov [eax], 1
+    mov [eax], 1
 
 
 END
