@@ -80,7 +80,7 @@ DEFINE_ERROR(EXPECTED_EXPRESSION, 29, "Expression expected but `{}` found")
 DEFINE_ERROR(UNEXPECTED_CLOSING_DELIMITER, 30, "Unexpected closing delimiter: `{}`")
 DEFINE_ERROR(EXCPECTED_OPERATOR_OR_CLOSING_DELIMITER, 31, "Expecting operator or `{}`")
 DEFINE_ERROR(EXPECTED_IDENTIFIER, 32, "Name expected but `{}` found")
-DEFINE_ERROR(ILLEGAL_USE_OF_RESERVED_NAME, 79, "Reserved word used as name")
+DEFINE_ERROR(ILLEGAL_USE_OF_RESERVED_NAME, 79, "Reserved word can't be used as name")
 DEFINE_ERROR(NEED_STRUCTURE_MEMBER_NAME, 80, "Structure member name expected but `{}` found")
 // Semantic errors
 

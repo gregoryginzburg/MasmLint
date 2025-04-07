@@ -43,7 +43,6 @@ A lightweight linter for detecting common issues in MASM (Microsoft Macro Assemb
 ## Dependencies
 
 - doctest (for unit testing)
-- spdlog (for logging)
 
 ## Tooling
 
