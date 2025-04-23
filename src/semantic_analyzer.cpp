@@ -401,7 +401,7 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
         if (instruction->operands.size() == 1) {
             ExpressionPtr operand = instruction->operands[0];
             if (operand->type != OperandType::ImmediateOperand) {
-                instruction->diagnostic = reportOperandMustBeImmediate(operand);
+                instruction->diagnostic = reportOperandMustBeImmediate(operand); // TODO: change to - operand must be constant?
                 return false;
             }
 
@@ -518,7 +518,11 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
         }
 
         int operandSize = operand->size.value().value;
-        if (operandSize != 4) {
+        if (operand->constantValue && operandSize > 4) {
+            instruction->diagnostic = reportInvalidOperandSize(operand, "4", operandSize);
+            return false;
+        }
+        if (!operand->constantValue && operandSize != 4) {
             instruction->diagnostic = reportInvalidOperandSize(operand, "4", operandSize);
             return false;
         }
@@ -539,7 +543,11 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
         }
 
         int operandSize = operand->size.value().value;
-        if (operandSize != 1) {
+        if (operand->constantValue && operandSize > 1) {
+            instruction->diagnostic = reportInvalidOperandSize(operand, "1", operandSize); // TODO: change this too immediate operand two big?
+            return false;
+        }
+        if (!operand->constantValue && operandSize != 1) {
             instruction->diagnostic = reportInvalidOperandSize(operand, "1", operandSize);
             return false;
         }
@@ -1716,8 +1724,25 @@ bool SemanticAnalyzer::visitUnaryOperator(const std::shared_ptr<UnaryOperator> &
         node->registers = operand->registers;
 
     } else if (op == "TYPE") {
-        // work with everythings, but outputs 0 sometimes
-        if (!operand->size) {
+        // work with everything, but outputs 0 sometimes
+        std::shared_ptr<Leaf> leaf;
+        if ((leaf = std::dynamic_pointer_cast<Leaf>(operand)) && leaf->token.type == Token::Type::Identifier) {
+            std::shared_ptr<Symbol> symbol = parseSess->symbolTable->findSymbol(leaf->token);
+            if (auto dataVariableSymbol = std::dynamic_pointer_cast<DataVariableSymbol>(symbol)) {
+                node->constantValue = dataVariableSymbol->dataTypeSize.value;
+            } else if (auto procSymbol = std::dynamic_pointer_cast<ProcSymbol>(symbol)) {
+                node->constantValue = procSymbol->value;
+            } else if (auto labelSymbol = std::dynamic_pointer_cast<LabelSymbol>(symbol)) {
+                node->constantValue = procSymbol->value;
+            } else if (auto strucSymbol = std::dynamic_pointer_cast<StructSymbol>(symbol)) {
+                node->constantValue = strucSymbol->size;
+            } else if (auto recordSymbol = std::dynamic_pointer_cast<RecordSymbol>(symbol)) {
+                node->constantValue = 0; // TODO: change this (MASM have strange behavior here, outputs 1, 2, 4)
+            } else {
+                node->constantValue = 0;
+                warnTypeReturnsZero(node);
+            }
+        } else if (!operand->size) {
             node->constantValue = 0;
             warnTypeReturnsZero(node);
         } else {

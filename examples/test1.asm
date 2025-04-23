@@ -1,9 +1,15 @@
 .DATA
-; test db 1
-test1 db 2 dup (<1, 2, 3)
+
+E STRUC
+dd 1, 2, 3
+E ENDS
 
 .CODE
-    mov [eax], 1
+    mov eax, TYPE 1
+    mov eax, type E
+    OUTI 1
+    OUTSTR 1
+
 
 
 END
