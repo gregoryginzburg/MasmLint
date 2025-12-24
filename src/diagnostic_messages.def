@@ -140,7 +140,7 @@ DEFINE_ERROR(DIVISION_BY_ZERO_IN_EXPRESSION, 61, "Division by `0` in expression"
 DEFINE_ERROR(INVALID_SCALE_VALUE, 62, "Invalid scale value")
 DEFINE_ERROR(INCORRECT_INDEX_REGISTER, 63, "Index register can't be ESP")
 DEFINE_ERROR(OTHER_BINARY_OPERATOR_INCORRECT_ARGUMENT, 64, "Incorrect argument in binary operator `{}`")
-DEFINE_ERROR(CANT_ADD_VARIABLES, 65, "Can't {} add data variables")
+DEFINE_ERROR(CANT_ADD_VARIABLES, 65, "Can't {}add data variables")
 DEFINE_ERROR(CANT_HAVE_REGISTERS_IN_EXPRESSION, 66, "Can't have registers in expression")
 DEFINE_ERROR(MORE_THAN_TWO_REGISTERS, 67, "Too many registers in address expression with modificators")
 DEFINE_ERROR(MORE_THAN_ONE_SCALE, 68, "Can't have more than 1 register with a scale in address expression with modificators")

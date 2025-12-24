@@ -612,7 +612,7 @@ DiagnosticPtr SemanticAnalyzer::reportCantAddVariables(const ExpressionPtr &node
         return parseSess->dcx->getLastDiagnostic();
     }
 
-    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::CANT_ADD_VARIABLES, implicit ? "implicitly" : "");
+    Diagnostic diag(Diagnostic::Level::Error, ErrorCode::CANT_ADD_VARIABLES, implicit ? "implicitly " : "");
 
     if (implicit) {
         auto implicitOp = std::dynamic_pointer_cast<ImplicitPlusOperator>(node);
