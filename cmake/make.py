@@ -116,7 +116,7 @@ def main():
     parser.add_argument(
         "command", nargs='?', help="The command to execute (compile, run, clean, clean_cache, test, compile_run, start_runner, stop_runner).")
     parser.add_argument("-p", "--preset", dest="config_preset",
-                        help="Specify the CMake preset")
+                        help="Specify the CMake preset in the format <compiler>-<build_type>, for example: msvc-debug")
     parser.add_argument("-c", "--compiler", help="Specify the compiler.")
     # parser.add_argument("--generator", help="Specify the generator.")
     parser.add_argument("-C", "--config", default="Debug",
