@@ -5,6 +5,7 @@
 #include <unordered_set>
 #include <cstdint>
 #include <ranges>
+#include <climits>
 
 std::map<std::string, int> SemanticAnalyzer::registerSizes = {
     {"AH", 1},  {"AL", 1},  {"AX", 2},  {"BH", 1},  {"BL", 1}, {"BP", 2},  {"BX", 2},  {"CH", 1},  {"CL", 1},  {"CR0", 4},
@@ -21,6 +22,8 @@ std::map<std::string, std::string> SemanticAnalyzer::dataDirectiveToSizeStr = {{
 std::unordered_set<std::string> SemanticAnalyzer::builtinTypes = {"BYTE", "WORD", "DWORD", "QWORD"};
 
 std::unordered_set<std::string> SemanticAnalyzer::dataDirectives = {"DB", "DW", "DD", "DQ"};
+
+constexpr int32_t SemanticAnalyzer::bitsToBytesCeil(int32_t bits) noexcept { return (bits + CHAR_BIT - 1) / CHAR_BIT; }
 
 OperandSize SemanticAnalyzer::getSizeFromToken(const Token &dataTypeToken)
 {
@@ -42,7 +45,7 @@ OperandSize SemanticAnalyzer::getSizeFromToken(const Token &dataTypeToken)
         if (auto structSymbol = std::dynamic_pointer_cast<StructSymbol>(dataTypeSymbol)) {
             return {structSymbol->token.lexeme, structSymbol->size};
         } else if (auto recordSymbol = std::dynamic_pointer_cast<RecordSymbol>(dataTypeSymbol)) {
-            return {recordSymbol->token.lexeme, 4};
+            return {recordSymbol->token.lexeme, recordSymbol->sizeOf};
         }
     }
     return {"", -1};
@@ -698,6 +701,8 @@ bool SemanticAnalyzer::visitRecordDir(const std::shared_ptr<RecordDir> &recordDi
     recordSymbol->wasDefined = true;
     // NOLINTNEXTLINE(clang-analyzer-core.BitwiseShift)
     recordSymbol->mask = static_cast<int32_t>(1u << static_cast<uint32_t>(width - 1));
+    recordSymbol->size = recordSymbol->mask;
+    recordSymbol->sizeOf = bitsToBytesCeil(recordSymbol->width);
 
     return true;
 }

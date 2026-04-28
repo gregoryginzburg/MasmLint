@@ -167,6 +167,7 @@ private:
 
     static std::string getSymbolType(const std::shared_ptr<Symbol> &symbol);
 
+    constexpr int32_t bitsToBytesCeil(int32_t bits) noexcept;
     OperandSize getSizeFromToken(const Token &dataTypeToken);
     OperandSize getMinimumSizeForConstant(int64_t value);
 

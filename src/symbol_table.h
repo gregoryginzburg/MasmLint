@@ -20,6 +20,8 @@ struct Symbol {
     virtual ~Symbol() = default;
 };
 
+// IMPORTANT: ALL -1 values are to be set later (during semantic analysis)
+
 struct LabelSymbol : public Symbol {
     explicit LabelSymbol(Token token) { this->token = std::move(token); }
     int32_t value = -1;
@@ -43,7 +45,7 @@ struct ProcSymbol : public Symbol {
 struct DataVariableSymbol : public Symbol {
     DataVariableSymbol(Token token, Token dataType) : dataType(std::move(dataType)) { this->token = std::move(token); }
     Token dataType;
-    OperandSize dataTypeSize = OperandSize("", -1);
+    OperandSize dataTypeSize = OperandSize("", -1); // only set during semantic analysis
     int32_t value = -1;
 
     int32_t size = -1;
@@ -87,11 +89,11 @@ struct RecordSymbol : public Symbol {
     std::vector<std::shared_ptr<RecordField>> fields;
     std::shared_ptr<RecordDir> recordDir;
 
-    int32_t width = -1;
+    int32_t width = -1; // in bits
     int32_t mask = -1;
 
-    int32_t size = 4;
-    int32_t sizeOf = 4;
+    int32_t size = -1; // the same value as mask
+    int32_t sizeOf = -1; // size in bytes 
     // length and length of are not allowed
 };
 
