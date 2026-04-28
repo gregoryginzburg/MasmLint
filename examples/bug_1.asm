@@ -7,5 +7,6 @@ A TR<1, 1, 1>
 .CODE
 start:
     cmp A, AX
+    SARR eax, eax
 
 END

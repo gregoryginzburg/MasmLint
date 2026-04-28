@@ -25,10 +25,10 @@ static const std::unordered_set<std::string> operators = {"+",    "-",    "*",  
 static const std::unordered_set<std::string> types = {"BYTE", "WORD", "DWORD", "QWORD"};
 
 static const std::unordered_set<std::string> instructions = {
-    "ADC",   "ADD",   "AND", "CALL",  "CBW",  "CDQ", "CMP",    "CWD",   "DEC",  "DIV",    "IDIV", "IMUL",   "INC",     "JA",     "JAE",  "JB",
-    "JBE",   "JC",    "JE",  "JECXZ", "JG",   "JGE", "JL",     "JLE",   "JMP",  "JNC",    "JNE",  "JNZ",    "JZ",      "LEA",    "LOOP", "MOV",
-    "MOVSX", "MOVZX", "MUL", "NEG",   "NOT",  "OR",  "POP",    "POPFD", "PUSH", "PUSHFD", "RCL",  "RCR",    "RET",     "ROL",    "ROR",  "SBB",
-    "SHL",   "SHR",   "SUB", "TEST",  "XCHG", "XOR", "INCHAR", "ININT", "EXIT", "OUTI",   "OUTU", "OUTSTR", "OUTCHAR", "NEWLINE"};
+    "ADC",   "ADD",   "AND", "CALL",  "CBW", "CDQ",  "CMP",  "CWD",   "DEC",    "DIV",    "IDIV", "IMUL", "INC",  "JA",     "JAE",     "JB",
+    "JBE",   "JC",    "JE",  "JECXZ", "JG",  "JGE",  "JL",   "JLE",   "JMP",    "JNC",    "JNE",  "JNZ",  "JZ",   "LEA",    "LOOP",    "MOV",
+    "MOVSX", "MOVZX", "MUL", "NEG",   "NOT", "OR",   "POP",  "POPFD", "PUSH",   "PUSHFD", "RCL",  "RCR",  "RET",  "ROL",    "ROR",     "SAL",
+    "SAR",   "SBB",   "SHL", "SHR",   "SUB", "TEST", "XCHG", "XOR",   "INCHAR", "ININT",  "EXIT", "OUTI", "OUTU", "OUTSTR", "OUTCHAR", "NEWLINE"};
 
 // when changing this MUST change std::map<std::string, int> SemanticAnalyzer::registerSizes in semantic_analyzer.cpp
 static const std::unordered_set<std::string> registers = {

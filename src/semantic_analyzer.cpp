@@ -368,7 +368,8 @@ bool SemanticAnalyzer::visitInstruction(const std::shared_ptr<Instruction> &inst
             instruction->diagnostic = reportInvalidOperandSize(operand, "4", operandSize);
             return false;
         }
-    } else if (mnemonic == "RCL" || mnemonic == "RCR" || mnemonic == "ROL" || mnemonic == "ROR" || mnemonic == "SHL" || mnemonic == "SHR") {
+    } else if (mnemonic == "RCL" || mnemonic == "RCR" || mnemonic == "ROL" || mnemonic == "ROR" || mnemonic == "SHL" || mnemonic == "SHR" ||
+               mnemonic == "SAL" || mnemonic == "SAR") {
         if (instruction->operands.size() != 2) {
             instruction->diagnostic = reportInvalidNumberOfOperands(instruction, "2");
             return false;
